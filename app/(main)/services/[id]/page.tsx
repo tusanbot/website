@@ -109,6 +109,37 @@ export default function ServiceOrderPage() {
             );
 
             console.log(
+                "========== CONDITIONS DEBUG =========="
+            );
+
+            normalizedSchema.forEach((field, index) => {
+                console.log(
+                    `FIELD ${index + 1}:`,
+                    {
+                        id: field.id,
+                        name: field.name,
+                        label: field.label,
+                        type: field.type,
+                        conditions: field.conditions,
+                    }
+                );
+
+                console.log(
+                    `FIELD ${index + 1} CONDITIONS JSON:`,
+                    JSON.stringify(
+                        field.conditions,
+                        null,
+                        2
+                    )
+                );
+            });
+
+            console.log(
+                "======================================"
+            );
+
+
+            console.log(
                 "FORM SCHEMA LENGTH:",
                 normalizedSchema.length
             );
