@@ -22,10 +22,12 @@ function getInitialValue(field: FormField) {
         return field.defaultValue;
     }
 
-    if (
-        field.type === "boolean" ||
-        field.type === "checkbox"
-    ) {
+    if (field.type === "boolean") {
+        // null means the user has not selected Yes or No yet.
+        return null;
+    }
+
+    if (field.type === "checkbox") {
         return false;
     }
 
@@ -134,8 +136,6 @@ function areFieldConditionsMet(
     }
 
     return field.conditions.every((condition) => {
-        // اگر فیلد والد حذف شده یا دیگر وجود ندارد،
-        // فیلد شرطی نباید نمایش داده شود.
         if (!(condition.field in formData)) {
             return false;
         }
@@ -150,11 +150,6 @@ function getVisibleFields(
 ) {
     const visible: FormField[] = [];
 
-    /*
-     * شرط‌ها در Builder فقط می‌توانند به فیلدهای قبل‌تر
-     * وابسته باشند. بنابراین بررسی به ترتیب فیلدها انجام
-     * می‌شود و از وابستگی‌های حلقه‌ای جلوگیری می‌کند.
-     */
     for (const field of fields) {
         if (areFieldConditionsMet(field, formData)) {
             visible.push(field);
@@ -191,11 +186,6 @@ export default function DynamicServiceForm({
         [fields, formData]
     );
 
-    const visibleFieldNames = useMemo(
-        () => new Set(visibleFields.map((field) => field.name)),
-        [visibleFields]
-    );
-
     function updateValue(name: string, value: any) {
         setFormData((prev) => {
             const nextData = {
@@ -203,16 +193,11 @@ export default function DynamicServiceForm({
                 [name]: value,
             };
 
-            /*
-             * وقتی مقدار یک فیلد والد تغییر می‌کند، ممکن است
-             * چند فیلد دیگر مخفی شوند. مقدار فیلدهای مخفی را
-             * پاک می‌کنیم تا داده قدیمی و نامرتبط به سفارش
-             * ارسال نشود.
-             */
             const visibleAfterChange = getVisibleFields(
                 fields,
                 nextData
             );
+
             const nextVisibleNames = new Set(
                 visibleAfterChange.map((field) => field.name)
             );
@@ -238,8 +223,6 @@ export default function DynamicServiceForm({
     function validateForm() {
         const nextErrors: Record<string, string> = {};
 
-        /* فقط فیلدهایی که در حال حاضر قابل مشاهده‌اند
-         * باید Validation شوند. */
         visibleFields.forEach((field) => {
             if (!field.required) {
                 return;
@@ -247,10 +230,19 @@ export default function DynamicServiceForm({
 
             const value = formData[field.name];
 
-            if (
-                field.type === "boolean" ||
-                field.type === "checkbox"
-            ) {
+            // A boolean field has three states: unanswered, Yes, No.
+            // Therefore false is a valid answer and must not be treated
+            // as a validation error.
+            if (field.type === "boolean") {
+                if (value !== true && value !== false) {
+                    nextErrors[field.name] =
+                        "لطفاً گزینه بله یا خیر را انتخاب کنید.";
+                }
+
+                return;
+            }
+
+            if (field.type === "checkbox") {
                 if (value !== true) {
                     nextErrors[field.name] =
                         "این گزینه باید تأیید شود.";
@@ -297,11 +289,6 @@ export default function DynamicServiceForm({
 
         const cleanedData: Record<string, any> = {};
 
-        /*
-         * فقط فیلدهای قابل مشاهده به سفارش ارسال می‌شوند.
-         * این کار از ذخیره اطلاعات فیلدهای شرطی مخفی جلوگیری
-         * می‌کند.
-         */
         visibleFields.forEach((field) => {
             const value = formData[field.name];
 
@@ -549,8 +536,51 @@ export default function DynamicServiceForm({
                     </div>
                 )}
 
-                {(field.type === "boolean" ||
-                    field.type === "checkbox") && (
+                {field.type === "boolean" && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <label
+                            className={`flex items-center justify-center gap-2 border rounded-xl p-4 bg-white cursor-pointer transition ${
+                                value === true
+                                    ? "border-[#09967C] bg-[#09967C]/5 ring-2 ring-[#09967C]/20"
+                                    : "border-gray-200"
+                            }`}
+                        >
+                            <input
+                                type="radio"
+                                name={`boolean-${field.id}`}
+                                checked={value === true}
+                                disabled={submitting}
+                                onChange={() =>
+                                    updateValue(field.name, true)
+                                }
+                                className="w-5 h-5 accent-[#09967C]"
+                            />
+                            <span className="font-medium">بله</span>
+                        </label>
+
+                        <label
+                            className={`flex items-center justify-center gap-2 border rounded-xl p-4 bg-white cursor-pointer transition ${
+                                value === false
+                                    ? "border-[#09967C] bg-[#09967C]/5 ring-2 ring-[#09967C]/20"
+                                    : "border-gray-200"
+                            }`}
+                        >
+                            <input
+                                type="radio"
+                                name={`boolean-${field.id}`}
+                                checked={value === false}
+                                disabled={submitting}
+                                onChange={() =>
+                                    updateValue(field.name, false)
+                                }
+                                className="w-5 h-5 accent-[#09967C]"
+                            />
+                            <span className="font-medium">خیر</span>
+                        </label>
+                    </div>
+                )}
+
+                {field.type === "checkbox" && (
                     <label className="flex items-center gap-3 border rounded-xl p-4 bg-white cursor-pointer">
                         <input
                             type="checkbox"
@@ -584,12 +614,9 @@ export default function DynamicServiceForm({
         <form
             onSubmit={handleSubmit}
             className="space-y-6"
-            dir="rtl"
         >
-            {fields.map((field) =>
-                visibleFieldNames.has(field.name)
-                    ? renderField(field)
-                    : null
+            {visibleFields.map((field) =>
+                renderField(field)
             )}
 
             <div className="pt-3 border-t">
