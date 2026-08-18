@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-
 import {
     GlassPanel,
     TusanButton,
@@ -28,7 +27,8 @@ export default function AdminServicesPage() {
             .order("created_at", { ascending: false });
 
         if (error) {
-            console.log(error);
+            console.error(error);
+            setLoading(false);
             return;
         }
 
@@ -68,19 +68,10 @@ export default function AdminServicesPage() {
 
     if (loading) {
         return (
-            <div
-                dir="rtl"
-                className="min-h-screen page-background text-[var(--text)] p-6"
-            >
+            <div dir="rtl" className="min-h-screen page-background text-[var(--text)] p-6">
                 <div className="max-w-6xl mx-auto">
-                    <GlassPanel className="p-10 text-center">
-                        <div className="w-14 h-14 mx-auto rounded-2xl bg-[var(--primary)]/10 flex items-center justify-center text-2xl animate-pulse">
-                            🛠️
-                        </div>
-
-                        <p className="mt-4 text-[var(--text-muted)]">
-                            در حال دریافت خدمات...
-                        </p>
+                    <GlassPanel className="p-10 text-center text-[var(--text-muted)]">
+                        در حال دریافت خدمات...
                     </GlassPanel>
                 </div>
             </div>
@@ -88,45 +79,24 @@ export default function AdminServicesPage() {
     }
 
     return (
-        <div className="min-h-screen page-background text-[var(--text)] p-6 transition-colors duration-300">
+        <div dir="rtl" className="min-h-screen page-background text-[var(--text)] p-6 transition-colors duration-300">
             <div className="max-w-6xl mx-auto">
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
                     <SectionHeader
                         title="مدیریت خدمات"
-                        description="مدیریت خدمات، وضعیت نمایش، قیمت و ویرایش اطلاعات خدمات"
+                        description="مدیریت خدمات، وضعیت نمایش، قیمت و فرم‌های هر خدمت"
                     />
 
                     <Link href="/admin/services/new">
-                        <TusanButton icon={<span>＋</span>}>
-                            خدمت جدید
-                        </TusanButton>
+                        <TusanButton icon={<span>＋</span>}>خدمت جدید</TusanButton>
                     </Link>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <TusanStatCard
-                        title="کل خدمات"
-                        value={services.length.toLocaleString("fa-IR")}
-                        icon="🛠️"
-                    />
-
-                    <TusanStatCard
-                        title="فعال"
-                        value={services.filter((s) => s.is_active).length.toLocaleString("fa-IR")}
-                        icon="✅"
-                    />
-
-                    <TusanStatCard
-                        title="غیرفعال"
-                        value={services.filter((s) => !s.is_active).length.toLocaleString("fa-IR")}
-                        icon="⛔"
-                    />
-
-                    <TusanStatCard
-                        title="دارای قیمت"
-                        value={services.filter((s) => Number(s.price || 0) > 0).length.toLocaleString("fa-IR")}
-                        icon="💳"
-                    />
+                    <TusanStatCard title="کل خدمات" value={services.length.toLocaleString("fa-IR")} icon="🛠️" />
+                    <TusanStatCard title="فعال" value={services.filter((s) => s.is_active).length.toLocaleString("fa-IR")} icon="✅" />
+                    <TusanStatCard title="غیرفعال" value={services.filter((s) => !s.is_active).length.toLocaleString("fa-IR")} icon="⛔" />
+                    <TusanStatCard title="دارای قیمت" value={services.filter((s) => Number(s.price || 0) > 0).length.toLocaleString("fa-IR")} icon="💳" />
                 </div>
 
                 <TusanTable
@@ -139,52 +109,27 @@ export default function AdminServicesPage() {
                         { key: "actions", title: "عملیات", align: "left" },
                     ]}
                     rows={services.map((service) => ({
-                        icon: (
-                            <div className="flex items-center justify-center text-2xl">
-                                {service.icon || "🛠️"}
-                            </div>
-                        ),
-                        title: (
-                            <div className="font-bold text-[var(--text)]">
-                                {service.title}
-                            </div>
-                        ),
-                        category: (
-                            <span className="text-[var(--text-secondary)]">
-                                {service.category}
-                            </span>
-                        ),
-                        price: Number(service.price || 0) > 0
-                            ? `${Number(service.price).toLocaleString("fa-IR")} تومان`
-                            : "—",
+                        icon: <div className="flex items-center justify-center text-2xl">{service.icon || "🛠️"}</div>,
+                        title: <div className="font-bold text-[var(--text)]">{service.title}</div>,
+                        category: <span className="text-[var(--text-secondary)]">{service.category || "—"}</span>,
+                        price: Number(service.price || 0) > 0 ? `${Number(service.price).toLocaleString("fa-IR")} تومان` : "—",
                         status: (
-                            <TusanBadge
-                                variant={service.is_active ? "success" : "danger"}
-                            >
+                            <TusanBadge variant={service.is_active ? "success" : "danger"}>
                                 {service.is_active ? "فعال" : "غیرفعال"}
                             </TusanBadge>
                         ),
                         actions: (
                             <div className="flex flex-wrap justify-end gap-2">
-                                <Link href={`/admin/services/${service.id}`}>
-                                    <TusanButton size="sm" variant="outline">
-                                        ویرایش
-                                    </TusanButton>
+                                <Link href={`/admin/services/${service.id}/forms`}>
+                                    <TusanButton size="sm" variant="outline">فرم‌ها</TusanButton>
                                 </Link>
-
-                                <TusanButton
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => toggleActive(service.id, service.is_active)}
-                                >
+                                <Link href={`/admin/services/${service.id}`}>
+                                    <TusanButton size="sm" variant="outline">ویرایش</TusanButton>
+                                </Link>
+                                <TusanButton size="sm" variant="secondary" onClick={() => toggleActive(service.id, service.is_active)}>
                                     {service.is_active ? "غیرفعال" : "فعال"}
                                 </TusanButton>
-
-                                <TusanButton
-                                    size="sm"
-                                    variant="danger"
-                                    onClick={() => deleteService(service.id)}
-                                >
+                                <TusanButton size="sm" variant="danger" onClick={() => deleteService(service.id)}>
                                     حذف
                                 </TusanButton>
                             </div>
