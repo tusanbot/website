@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Instagram, MessageCircle, Play, Search, Send, Sparkles, Users, Music2, AtSign } from "lucide-react";
+import { ArrowLeft, CheckCircle2, MessageCircle, Play, Search, Send, Sparkles, Users } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { SocialCategory, SocialPlatform, SocialService } from "@/lib/social/types";
 
-const iconMap: Record<string, typeof Instagram> = {
-    instagram: Instagram,
+const iconMap: Record<string, LucideIcon> = {
+    instagram: MessageCircle,
     youtube: Play,
     send: Send,
-    "music-2": Music2,
-    "at-sign": AtSign,
+    "music-2": Play,
+    "at-sign": MessageCircle,
     "message-circle": MessageCircle,
     "message-square": MessageCircle,
     "play-square": Play,
