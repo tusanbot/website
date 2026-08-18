@@ -63,6 +63,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_forms_unique_child_title
     ON public.custom_forms(parent_form_id, lower(title))
     WHERE parent_form_id IS NOT NULL;
 
+-- Keep track of which child/normal form was used for an order.
+ALTER TABLE public.orders
+    ADD COLUMN IF NOT EXISTS form_id uuid NULL;
+
+ALTER TABLE public.orders
+    DROP CONSTRAINT IF EXISTS orders_form_id_fkey;
+
+ALTER TABLE public.orders
+    ADD CONSTRAINT orders_form_id_fkey
+    FOREIGN KEY (form_id)
+    REFERENCES public.custom_forms(id)
+    ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_orders_form_id
+    ON public.orders(form_id);
+
 COMMENT ON COLUMN public.custom_forms.form_type IS
     'normal = standalone or child form; parent = container/root form';
 
@@ -74,3 +90,6 @@ COMMENT ON COLUMN public.custom_forms.service_id IS
 
 COMMENT ON COLUMN public.custom_forms.sort_order IS
     'Display order of child forms inside the parent.';
+
+COMMENT ON COLUMN public.orders.form_id IS
+    'The exact custom form used to create this order.';
