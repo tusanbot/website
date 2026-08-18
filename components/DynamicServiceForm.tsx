@@ -1,7 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { FormField } from "@/components/ServiceFormBuilder";
+import { useEffect, useMemo, useState } from "react";
+import type {
+    ConditionOperator,
+    FieldCondition,
+    FormField,
+} from "@/components/ServiceFormBuilder";
 
 import DatePicker from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -12,6 +16,153 @@ type Props = {
     onSubmit: (formData: Record<string, any>) => void;
     submitting?: boolean;
 };
+
+function getInitialValue(field: FormField) {
+    if (field.defaultValue !== undefined) {
+        return field.defaultValue;
+    }
+
+    if (
+        field.type === "boolean" ||
+        field.type === "checkbox"
+    ) {
+        return false;
+    }
+
+    if (field.type === "multiselect") {
+        return [];
+    }
+
+    return "";
+}
+
+function normalizeConditionValue(value: any) {
+    if (value === undefined || value === null) {
+        return "";
+    }
+
+    return String(value).trim();
+}
+
+function evaluateCondition(
+    condition: FieldCondition,
+    formData: Record<string, any>
+) {
+    const actualValue = formData[condition.field];
+    const expectedValue = condition.value;
+
+    switch (condition.operator as ConditionOperator) {
+        case "equals": {
+            if (Array.isArray(actualValue)) {
+                return actualValue.some(
+                    (item) =>
+                        normalizeConditionValue(item) ===
+                        normalizeConditionValue(expectedValue)
+                );
+            }
+
+            return (
+                normalizeConditionValue(actualValue) ===
+                normalizeConditionValue(expectedValue)
+            );
+        }
+
+        case "not_equals": {
+            if (Array.isArray(actualValue)) {
+                return !actualValue.some(
+                    (item) =>
+                        normalizeConditionValue(item) ===
+                        normalizeConditionValue(expectedValue)
+                );
+            }
+
+            return (
+                normalizeConditionValue(actualValue) !==
+                normalizeConditionValue(expectedValue)
+            );
+        }
+
+        case "contains": {
+            if (Array.isArray(actualValue)) {
+                return actualValue.some(
+                    (item) =>
+                        normalizeConditionValue(item) ===
+                        normalizeConditionValue(expectedValue)
+                );
+            }
+
+            return normalizeConditionValue(actualValue)
+                .toLowerCase()
+                .includes(
+                    normalizeConditionValue(expectedValue).toLowerCase()
+                );
+        }
+
+        case "not_contains": {
+            if (Array.isArray(actualValue)) {
+                return !actualValue.some(
+                    (item) =>
+                        normalizeConditionValue(item) ===
+                        normalizeConditionValue(expectedValue)
+                );
+            }
+
+            return !normalizeConditionValue(actualValue)
+                .toLowerCase()
+                .includes(
+                    normalizeConditionValue(expectedValue).toLowerCase()
+                );
+        }
+
+        case "is_true":
+            return actualValue === true;
+
+        case "is_false":
+            return actualValue === false;
+
+        default:
+            return false;
+    }
+}
+
+function areFieldConditionsMet(
+    field: FormField,
+    formData: Record<string, any>
+) {
+    if (!field.conditions || field.conditions.length === 0) {
+        return true;
+    }
+
+    return field.conditions.every((condition) => {
+        // اگر فیلد والد حذف شده یا دیگر وجود ندارد،
+        // فیلد شرطی نباید نمایش داده شود.
+        if (!(condition.field in formData)) {
+            return false;
+        }
+
+        return evaluateCondition(condition, formData);
+    });
+}
+
+function getVisibleFields(
+    fields: FormField[],
+    formData: Record<string, any>
+) {
+    const visible: FormField[] = [];
+
+    /*
+     * شرط‌ها در Builder فقط می‌توانند به فیلدهای قبل‌تر
+     * وابسته باشند. بنابراین بررسی به ترتیب فیلدها انجام
+     * می‌شود و از وابستگی‌های حلقه‌ای جلوگیری می‌کند.
+     */
+    for (const field of fields) {
+        if (areFieldConditionsMet(field, formData)) {
+            visible.push(field);
+        }
+    }
+
+    return visible;
+}
 
 export default function DynamicServiceForm({
     fields,
@@ -28,27 +179,55 @@ export default function DynamicServiceForm({
         const initialData: Record<string, any> = {};
 
         fields.forEach((field) => {
-            if (field.type === "boolean") {
-                initialData[field.name] = false;
-            } else if (field.type === "multiselect") {
-                initialData[field.name] = [];
-            } else {
-                initialData[field.name] = "";
-            }
+            initialData[field.name] = getInitialValue(field);
         });
 
         setFormData(initialData);
         setErrors({});
     }, [fields]);
 
-    function updateValue(
-        name: string,
-        value: any
-    ) {
-        setFormData((prev) => ({
-            ...prev,
-            [name]: value,
-        }));
+    const visibleFields = useMemo(
+        () => getVisibleFields(fields, formData),
+        [fields, formData]
+    );
+
+    const visibleFieldNames = useMemo(
+        () => new Set(visibleFields.map((field) => field.name)),
+        [visibleFields]
+    );
+
+    function updateValue(name: string, value: any) {
+        setFormData((prev) => {
+            const nextData = {
+                ...prev,
+                [name]: value,
+            };
+
+            /*
+             * وقتی مقدار یک فیلد والد تغییر می‌کند، ممکن است
+             * چند فیلد دیگر مخفی شوند. مقدار فیلدهای مخفی را
+             * پاک می‌کنیم تا داده قدیمی و نامرتبط به سفارش
+             * ارسال نشود.
+             */
+            const visibleAfterChange = getVisibleFields(
+                fields,
+                nextData
+            );
+            const nextVisibleNames = new Set(
+                visibleAfterChange.map((field) => field.name)
+            );
+
+            for (const field of fields) {
+                if (
+                    !nextVisibleNames.has(field.name) &&
+                    field.name !== name
+                ) {
+                    nextData[field.name] = getInitialValue(field);
+                }
+            }
+
+            return nextData;
+        });
 
         setErrors((prev) => ({
             ...prev,
@@ -59,15 +238,20 @@ export default function DynamicServiceForm({
     function validateForm() {
         const nextErrors: Record<string, string> = {};
 
-        fields.forEach((field) => {
+        /* فقط فیلدهایی که در حال حاضر قابل مشاهده‌اند
+         * باید Validation شوند. */
+        visibleFields.forEach((field) => {
             if (!field.required) {
                 return;
             }
 
             const value = formData[field.name];
 
-            if (field.type === "boolean") {
-                if (!value) {
+            if (
+                field.type === "boolean" ||
+                field.type === "checkbox"
+            ) {
+                if (value !== true) {
                     nextErrors[field.name] =
                         "این گزینه باید تأیید شود.";
                 }
@@ -113,19 +297,20 @@ export default function DynamicServiceForm({
 
         const cleanedData: Record<string, any> = {};
 
-        fields.forEach((field) => {
+        /*
+         * فقط فیلدهای قابل مشاهده به سفارش ارسال می‌شوند.
+         * این کار از ذخیره اطلاعات فیلدهای شرطی مخفی جلوگیری
+         * می‌کند.
+         */
+        visibleFields.forEach((field) => {
             const value = formData[field.name];
 
             if (field.type === "multiselect") {
                 cleanedData[field.name] =
-                    Array.isArray(value)
-                        ? value
-                        : [];
+                    Array.isArray(value) ? value : [];
             } else if (field.type === "number") {
                 cleanedData[field.name] =
-                    value === ""
-                        ? null
-                        : Number(value);
+                    value === "" ? null : Number(value);
             } else {
                 cleanedData[field.name] = value;
             }
@@ -135,11 +320,8 @@ export default function DynamicServiceForm({
     }
 
     function renderField(field: FormField) {
-        const value =
-            formData[field.name];
-
-        const error =
-            errors[field.name];
+        const value = formData[field.name];
+        const error = errors[field.name];
 
         const baseInputClass =
             "w-full border rounded-xl px-4 py-3 bg-white outline-none transition focus:ring-2 focus:ring-[#09967C]";
@@ -170,14 +352,9 @@ export default function DynamicServiceForm({
                         type="text"
                         value={value ?? ""}
                         onChange={(e) =>
-                            updateValue(
-                                field.name,
-                                e.target.value
-                            )
+                            updateValue(field.name, e.target.value)
                         }
-                        placeholder={
-                            field.placeholder || ""
-                        }
+                        placeholder={field.placeholder || ""}
                         disabled={submitting}
                         className={baseInputClass}
                     />
@@ -187,14 +364,9 @@ export default function DynamicServiceForm({
                     <textarea
                         value={value ?? ""}
                         onChange={(e) =>
-                            updateValue(
-                                field.name,
-                                e.target.value
-                            )
+                            updateValue(field.name, e.target.value)
                         }
-                        placeholder={
-                            field.placeholder || ""
-                        }
+                        placeholder={field.placeholder || ""}
                         rows={5}
                         disabled={submitting}
                         className={`${baseInputClass} resize-none`}
@@ -206,14 +378,9 @@ export default function DynamicServiceForm({
                         type="number"
                         value={value ?? ""}
                         onChange={(e) =>
-                            updateValue(
-                                field.name,
-                                e.target.value
-                            )
+                            updateValue(field.name, e.target.value)
                         }
-                        placeholder={
-                            field.placeholder || ""
-                        }
+                        placeholder={field.placeholder || ""}
                         disabled={submitting}
                         className={baseInputClass}
                     />
@@ -224,18 +391,48 @@ export default function DynamicServiceForm({
                         type="tel"
                         value={value ?? ""}
                         onChange={(e) =>
-                            updateValue(
-                                field.name,
-                                e.target.value
-                            )
+                            updateValue(field.name, e.target.value)
                         }
                         placeholder={
-                            field.placeholder ||
-                            "مثلاً 09123456789"
+                            field.placeholder || "مثلاً 09123456789"
                         }
                         dir="ltr"
                         disabled={submitting}
                         className={`${baseInputClass} text-right`}
+                    />
+                )}
+
+                {field.type === "national_code" && (
+                    <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={value ?? ""}
+                        onChange={(e) =>
+                            updateValue(
+                                field.name,
+                                e.target.value.replace(/\D/g, "")
+                            )
+                        }
+                        placeholder={
+                            field.placeholder || "مثلاً 0012345678"
+                        }
+                        dir="ltr"
+                        disabled={submitting}
+                        className={`${baseInputClass} text-right`}
+                    />
+                )}
+
+                {field.type === "password" && (
+                    <input
+                        type="password"
+                        value={value ?? ""}
+                        onChange={(e) =>
+                            updateValue(field.name, e.target.value)
+                        }
+                        placeholder={field.placeholder || ""}
+                        disabled={submitting}
+                        className={baseInputClass}
                     />
                 )}
 
@@ -244,14 +441,10 @@ export default function DynamicServiceForm({
                         type="email"
                         value={value ?? ""}
                         onChange={(e) =>
-                            updateValue(
-                                field.name,
-                                e.target.value
-                            )
+                            updateValue(field.name, e.target.value)
                         }
                         placeholder={
-                            field.placeholder ||
-                            "example@email.com"
+                            field.placeholder || "example@email.com"
                         }
                         dir="ltr"
                         disabled={submitting}
@@ -259,7 +452,6 @@ export default function DynamicServiceForm({
                     />
                 )}
 
-                {/* تقویم شمسی */}
                 {field.type === "date" && (
                     <DatePicker
                         value={value || ""}
@@ -267,9 +459,7 @@ export default function DynamicServiceForm({
                             updateValue(
                                 field.name,
                                 date
-                                    ? date.format(
-                                        "YYYY/MM/DD"
-                                    )
+                                    ? date.format("YYYY/MM/DD")
                                     : ""
                             );
                         }}
@@ -278,8 +468,7 @@ export default function DynamicServiceForm({
                         calendarPosition="bottom-right"
                         format="YYYY/MM/DD"
                         placeholder={
-                            field.placeholder ||
-                            "تاریخ را انتخاب کنید"
+                            field.placeholder || "تاریخ را انتخاب کنید"
                         }
                         disabled={submitting}
                         inputClass={`${baseInputClass} cursor-pointer`}
@@ -291,112 +480,77 @@ export default function DynamicServiceForm({
                     <select
                         value={value ?? ""}
                         onChange={(e) =>
-                            updateValue(
-                                field.name,
-                                e.target.value
-                            )
+                            updateValue(field.name, e.target.value)
                         }
                         disabled={submitting}
                         className={baseInputClass}
                     >
                         <option value="">
-                            {field.placeholder ||
-                                "انتخاب کنید"}
+                            {field.placeholder || "انتخاب کنید"}
                         </option>
 
-                        {(field.options || []).map(
-                            (option) => (
-                                <option
-                                    key={option.value}
-                                    value={option.value}
-                                >
-                                    {option.label}
-                                </option>
-                            )
-                        )}
+                        {(field.options || []).map((option) => (
+                            <option
+                                key={option.value}
+                                value={option.value}
+                            >
+                                {option.label}
+                            </option>
+                        ))}
                     </select>
                 )}
 
                 {field.type === "multiselect" && (
                     <div className="space-y-2 border rounded-xl p-4 bg-white">
-                        {(field.options || []).length ===
-                            0 ? (
+                        {(field.options || []).length === 0 ? (
                             <p className="text-sm text-gray-500">
                                 گزینه‌ای برای انتخاب وجود ندارد.
                             </p>
                         ) : (
-                            (field.options || []).map(
-                                (option) => {
-                                    const selected =
-                                        Array.isArray(
-                                            value
-                                        ) &&
-                                        value.includes(
-                                            option.value
-                                        );
+                            (field.options || []).map((option) => {
+                                const selected =
+                                    Array.isArray(value) &&
+                                    value.includes(option.value);
 
-                                    return (
-                                        <label
-                                            key={
-                                                option.value
-                                            }
-                                            className="flex items-center gap-3 cursor-pointer"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={
-                                                    selected
-                                                }
-                                                disabled={
-                                                    submitting
-                                                }
-                                                onChange={(
-                                                    e
-                                                ) => {
-                                                    const current =
-                                                        Array.isArray(
-                                                            value
-                                                        )
-                                                            ? value
-                                                            : [];
+                                return (
+                                    <label
+                                        key={option.value}
+                                        className="flex items-center gap-3 cursor-pointer"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={selected}
+                                            disabled={submitting}
+                                            onChange={(e) => {
+                                                const current =
+                                                    Array.isArray(value)
+                                                        ? value
+                                                        : [];
 
-                                                    const next =
-                                                        e.target
-                                                            .checked
-                                                            ? [
-                                                                ...current,
-                                                                option.value,
-                                                            ]
-                                                            : current.filter(
-                                                                (
-                                                                    item: string
-                                                                ) =>
-                                                                    item !==
-                                                                    option.value
-                                                            );
-
-                                                    updateValue(
-                                                        field.name,
-                                                        next
+                                                const next = e.target.checked
+                                                    ? current.includes(option.value)
+                                                        ? current
+                                                        : [...current, option.value]
+                                                    : current.filter(
+                                                        (item: string) =>
+                                                            item !== option.value
                                                     );
-                                                }}
-                                                className="w-4 h-4 accent-[#09967C]"
-                                            />
 
-                                            <span>
-                                                {
-                                                    option.label
-                                                }
-                                            </span>
-                                        </label>
-                                    );
-                                }
-                            )
+                                                updateValue(field.name, next);
+                                            }}
+                                            className="w-4 h-4 accent-[#09967C]"
+                                        />
+
+                                        <span>{option.label}</span>
+                                    </label>
+                                );
+                            })
                         )}
                     </div>
                 )}
 
-                {field.type === "boolean" && (
+                {(field.type === "boolean" ||
+                    field.type === "checkbox") && (
                     <label className="flex items-center gap-3 border rounded-xl p-4 bg-white cursor-pointer">
                         <input
                             type="checkbox"
@@ -412,8 +566,7 @@ export default function DynamicServiceForm({
                         />
 
                         <span>
-                            {field.placeholder ||
-                                field.label}
+                            {field.placeholder || field.label}
                         </span>
                     </label>
                 )}
@@ -431,9 +584,12 @@ export default function DynamicServiceForm({
         <form
             onSubmit={handleSubmit}
             className="space-y-6"
+            dir="rtl"
         >
             {fields.map((field) =>
-                renderField(field)
+                visibleFieldNames.has(field.name)
+                    ? renderField(field)
+                    : null
             )}
 
             <div className="pt-3 border-t">
