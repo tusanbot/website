@@ -32,7 +32,6 @@ ALTER TABLE public.custom_forms
     REFERENCES public.services(id)
     ON DELETE CASCADE;
 
--- A child form must belong to a parent. A parent form must not have a parent.
 ALTER TABLE public.custom_forms
     DROP CONSTRAINT IF EXISTS custom_forms_hierarchy_check;
 
@@ -53,12 +52,10 @@ CREATE INDEX IF NOT EXISTS idx_custom_forms_service_id
 CREATE INDEX IF NOT EXISTS idx_custom_forms_service_parent_sort
     ON public.custom_forms(service_id, parent_form_id, sort_order);
 
--- Only one root/parent form is allowed per service.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_forms_one_parent_per_service
     ON public.custom_forms(service_id)
     WHERE form_type = 'parent' AND parent_form_id IS NULL;
 
--- Child form names are unique inside a parent.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_forms_unique_child_title
     ON public.custom_forms(parent_form_id, lower(title))
     WHERE parent_form_id IS NOT NULL;
@@ -78,6 +75,46 @@ ALTER TABLE public.orders
 
 CREATE INDEX IF NOT EXISTS idx_orders_form_id
     ON public.orders(form_id);
+
+-- RLS: customers can read public forms; admins can manage the hierarchy.
+ALTER TABLE public.custom_forms ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS custom_forms_public_select ON public.custom_forms;
+CREATE POLICY custom_forms_public_select
+ON public.custom_forms
+FOR SELECT
+TO authenticated
+USING (
+    is_public = true
+    OR EXISTS (
+        SELECT 1
+        FROM public.profiles p
+        WHERE p.id = auth.uid()
+          AND p.role = 'admin'
+    )
+);
+
+DROP POLICY IF EXISTS custom_forms_admin_all ON public.custom_forms;
+CREATE POLICY custom_forms_admin_all
+ON public.custom_forms
+FOR ALL
+TO authenticated
+USING (
+    EXISTS (
+        SELECT 1
+        FROM public.profiles p
+        WHERE p.id = auth.uid()
+          AND p.role = 'admin'
+    )
+)
+WITH CHECK (
+    EXISTS (
+        SELECT 1
+        FROM public.profiles p
+        WHERE p.id = auth.uid()
+          AND p.role = 'admin'
+    )
+);
 
 COMMENT ON COLUMN public.custom_forms.form_type IS
     'normal = standalone or child form; parent = container/root form';
