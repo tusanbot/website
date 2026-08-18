@@ -31,11 +31,9 @@ export default function EditServicePage() {
     const [icon, setIcon] = useState("");
     const [isActive, setIsActive] = useState(true);
 
-    // فرم اصلی این خدمت؛ همان‌جا با ServiceFormBuilder ویرایش می‌شود.
     const [formSchema, setFormSchema] = useState<FormField[]>([]);
     const [formId, setFormId] = useState<string | null>(null);
 
-    // فرم مادر کاملاً اختیاری است.
     const [parentForms, setParentForms] = useState<ParentForm[]>([]);
     const [selectedParentId, setSelectedParentId] = useState<string>("");
     const [showParentOptions, setShowParentOptions] = useState(false);
@@ -91,27 +89,34 @@ export default function EditServicePage() {
             setIsActive(service.is_active ?? true);
             setFormSchema(Array.isArray(service.form_schema) ? service.form_schema : []);
 
-            // فرم‌های جدید hierarchy.
             const { data: forms, error: formsError } = await supabase
                 .from("custom_forms")
-                .select("id,title,description,schema,form_type,parent_form_id")
+                .select("id,title,description,schema,form_type,parent_form_id,created_at")
                 .eq("service_id", serviceId)
                 .order("created_at", { ascending: true });
 
-            if (!formsError && forms) {
+            if (formsError) throw new Error(formsError.message);
+
+            if (forms) {
                 const parents = forms.filter(
                     (form: any) => form.form_type === "parent" && !form.parent_form_id
                 );
                 setParentForms(parents);
 
-                // ترجیح با فرم عادیِ بدون والد است؛ در غیر این صورت اولین فرم عادی.
-                const normalForms = forms.filter((form: any) => form.form_type !== "parent");
+                // The service itself is not a custom form. Load the first standalone
+                // normal form only for backwards compatibility with old services.
+                const normalForms = forms.filter((form: any) => form.form_type === "normal");
                 const mainForm = normalForms.find((form: any) => !form.parent_form_id) || normalForms[0];
 
                 if (mainForm) {
                     setFormId(mainForm.id);
                     setFormSchema(Array.isArray(mainForm.schema) ? mainForm.schema : []);
                     setSelectedParentId(mainForm.parent_form_id || "");
+                    setShowParentOptions(Boolean(mainForm.parent_form_id));
+                } else {
+                    setFormId(null);
+                    setSelectedParentId("");
+                    setShowParentOptions(false);
                 }
             }
         } catch (err: any) {
@@ -206,29 +211,28 @@ export default function EditServicePage() {
                     price: price ? Number(price) : 0,
                     icon: icon.trim() || null,
                     is_active: isActive,
-                    // سازگاری با نسخه قدیمی DynamicServiceForm.
                     form_schema: formSchema,
                 })
                 .eq("id", serviceId);
 
             if (updateError) throw new Error(updateError.message);
 
-            // اگر این خدمت قبلاً فرم hierarchy داشته، همان فرم عادی فعلی را بروزرسانی می‌کنیم.
+            // IMPORTANT: the service is not itself a custom form.
+            // A normal custom form is created/updated separately and can optionally
+            // point to a parent form through parent_form_id.
             if (formId) {
                 const { error: formError } = await supabase
                     .from("custom_forms")
                     .update({
-                        title: title.trim(),
-                        description: description.trim() || null,
                         schema: formSchema,
                         parent_form_id: selectedParentId || null,
                         form_type: "normal",
                     })
-                    .eq("id", formId);
+                    .eq("id", formId)
+                    .eq("service_id", serviceId);
 
                 if (formError) throw new Error(formError.message);
-            } else {
-                // برای خدمات قدیمی، اولین ذخیره فرم را به hierarchy منتقل می‌کنیم.
+            } else if (formSchema.length > 0 || selectedParentId) {
                 const { data: newForm, error: formError } = await supabase
                     .from("custom_forms")
                     .insert({
@@ -324,7 +328,6 @@ export default function EditServicePage() {
                             <ServiceFormBuilder value={formSchema} onChange={setFormSchema} />
                         </GlassPanel>
 
-                        {/* Parent selector — optional and directly below the form builder. */}
                         <TusanCard className="p-5 space-y-4">
                             <div>
                                 <h3 className="font-bold text-lg">فرم مادر</h3>
@@ -364,44 +367,32 @@ export default function EditServicePage() {
                                         <div className="text-sm text-gray-500 border border-dashed rounded-xl p-4">برای این خدمت هنوز فرم مادری ایجاد نشده است.</div>
                                     )}
 
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowCreateParent((value) => !value)}
-                                        className="text-[#09967C] font-bold text-sm"
-                                    >
-                                        {showCreateParent ? "− بستن ایجاد فرم مادر" : "+ ایجاد فرم مادر برای این خدمت"}
-                                    </button>
-
-                                    {showCreateParent && (
-                                        <div className="rounded-xl bg-gray-50 p-4 space-y-4">
-                                            <div className="grid md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-bold mb-2">عنوان فرم مادر</label>
-                                                    <TusanInput value={newParentTitle} onChange={(e) => setNewParentTitle(e.target.value)} placeholder="مثلاً ثبت نام خودرو" />
-                                                </div>
-                                                <div>
-                                                    <label className="block text-sm font-bold mb-2">توضیحات</label>
-                                                    <TusanInput value={newParentDescription} onChange={(e) => setNewParentDescription(e.target.value)} placeholder="انتخاب نوع خودرو" />
-                                                </div>
+                                    {!showCreateParent ? (
+                                        <button type="button" onClick={() => setShowCreateParent(true)} className="w-full border border-dashed border-[#09967C]/50 text-[#09967C] rounded-xl p-4 font-bold hover:bg-[#09967C]/5 transition">
+                                            + ایجاد فرم مادر جدید
+                                        </button>
+                                    ) : (
+                                        <div className="border rounded-xl p-4 space-y-3">
+                                            <div className="font-bold">ایجاد فرم مادر جدید</div>
+                                            <TusanInput value={newParentTitle} onChange={(e) => setNewParentTitle(e.target.value)} placeholder="مثلاً ثبت نام خودرو" />
+                                            <textarea value={newParentDescription} onChange={(e) => setNewParentDescription(e.target.value)} rows={3} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none resize-none" placeholder="توضیحات اختیاری" />
+                                            <div className="flex gap-2">
+                                                <TusanButton type="button" onClick={createParentInline} disabled={saving}>ایجاد فرم مادر</TusanButton>
+                                                <TusanButton type="button" variant="secondary" onClick={() => setShowCreateParent(false)}>انصراف</TusanButton>
                                             </div>
-                                            <TusanButton type="button" onClick={createParentInline} disabled={saving}>
-                                                {saving ? "در حال ایجاد..." : "ایجاد و انتخاب فرم مادر"}
-                                            </TusanButton>
                                         </div>
                                     )}
                                 </div>
                             )}
                         </TusanCard>
 
-                        {error && <GlassPanel className="p-4 border border-red-200 bg-red-50 text-red-700">{error}</GlassPanel>}
+                        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">{error}</div>}
 
-                        <div className="flex gap-3 pt-2">
-                            <TusanButton type="submit" disabled={saving} fullWidth>
-                                {saving ? "در حال ذخیره..." : "ذخیره تغییرات"}
-                            </TusanButton>
+                        <div className="flex justify-end gap-3 pt-2">
                             <Link href="/admin/services">
-                                <TusanButton variant="secondary">انصراف</TusanButton>
+                                <TusanButton type="button" variant="secondary">انصراف</TusanButton>
                             </Link>
+                            <TusanButton type="submit" disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره تغییرات"}</TusanButton>
                         </div>
                     </form>
                 </GlassPanel>
