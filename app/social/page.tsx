@@ -18,6 +18,13 @@ const iconMap: Record<string, LucideIcon> = {
     "play-square": Play,
 };
 
+const featureItems: Array<{ label: string; Icon: LucideIcon }> = [
+    { label: "ثبت سفارش آنلاین", Icon: CheckCircle2 },
+    { label: "تنوع سرویس", Icon: Users },
+    { label: "پیگیری سفارش", Icon: Search },
+    { label: "پرداخت امن", Icon: CheckCircle2 },
+];
+
 export default function SocialServicesPage() {
     const [platforms, setPlatforms] = useState<SocialPlatform[]>([]);
     const [categories, setCategories] = useState<SocialCategory[]>([]);
@@ -75,15 +82,12 @@ export default function SocialServicesPage() {
                     </div>
 
                     <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {[
-                            ["ثبت سفارش آنلاین", CheckCircle2],
-                            ["تنوع سرویس", Users],
-                            ["پیگیری سفارش", Search],
-                            ["پرداخت امن", CheckCircle2],
-                        ].map(([label, Icon]) => {
-                            const ItemIcon = Icon as typeof CheckCircle2;
-                            return <div key={String(label)} className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4 text-sm font-bold flex items-center gap-2"><ItemIcon size={18} className="text-[var(--primary)]" />{label}</div>;
-                        })}
+                        {featureItems.map(({ label, Icon }) => (
+                            <div key={label} className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4 text-sm font-bold flex items-center gap-2">
+                                <Icon size={18} className="text-[var(--primary)]" />
+                                {label}
+                            </div>
+                        ))}
                     </div>
                 </div>
 
