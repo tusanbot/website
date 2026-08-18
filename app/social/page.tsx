@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle2, Instagram, MessageCircle, Play, Search, Send, Sparkles, Users, Youtube, Music2, AtSign } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Instagram, MessageCircle, Play, Search, Send, Sparkles, Users, Music2, AtSign } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { SocialCategory, SocialPlatform, SocialService } from "@/lib/social/types";
 
 const iconMap: Record<string, typeof Instagram> = {
     instagram: Instagram,
-    youtube: Youtube,
+    youtube: Play,
     send: Send,
     "music-2": Music2,
     "at-sign": AtSign,
@@ -34,139 +34,99 @@ export default function SocialServicesPage() {
                 supabase.from("social_categories").select("*").eq("is_active", true).order("sort_order"),
                 supabase.from("social_services").select("*").eq("is_active", true).order("sort_order"),
             ]);
-            const nextPlatforms = (platformData || []) as SocialPlatform[];
-            setPlatforms(nextPlatforms);
+            setPlatforms((platformData || []) as SocialPlatform[]);
             setCategories((categoryData || []) as SocialCategory[]);
             setServices((serviceData || []) as SocialService[]);
-            if (nextPlatforms[0]) setSelectedPlatform(nextPlatforms[0].id);
             setLoading(false);
         }
         loadCatalog();
     }, []);
 
-    const platformCategories = useMemo(
-        () => categories.filter((category) => category.platform_id === selectedPlatform),
-        [categories, selectedPlatform]
-    );
-
-    useEffect(() => {
-        setSelectedCategory("");
-    }, [selectedPlatform]);
+    const visibleCategories = useMemo(() => {
+        if (!selectedPlatform) return categories;
+        return categories.filter((category) => category.platform_id === selectedPlatform);
+    }, [categories, selectedPlatform]);
 
     const visibleServices = useMemo(() => {
-        const query = search.trim().toLocaleLowerCase("fa-IR");
         return services.filter((service) => {
-            const matchesPlatform = service.platform_id === selectedPlatform;
-            const matchesCategory = !selectedCategory || service.category_id === selectedCategory;
-            const matchesSearch = !query || `${service.name} ${service.description || ""}`.toLocaleLowerCase("fa-IR").includes(query);
-            return matchesPlatform && matchesCategory && matchesSearch;
+            const platformMatch = !selectedPlatform || service.platform_id === selectedPlatform;
+            const categoryMatch = !selectedCategory || service.category_id === selectedCategory;
+            const searchMatch = !search.trim() || service.name.toLowerCase().includes(search.trim().toLowerCase());
+            return platformMatch && categoryMatch && searchMatch;
         });
     }, [services, selectedPlatform, selectedCategory, search]);
 
+    function selectPlatform(id: string) {
+        setSelectedPlatform(id);
+        setSelectedCategory("");
+    }
+
     return (
         <main dir="rtl" className="min-h-screen page-background text-[var(--text)]">
-            <section className="relative overflow-hidden border-b border-[var(--border)]">
-                <div className="absolute inset-0 bg-gradient-to-br from-[var(--primary)]/15 via-transparent to-blue-500/10" />
-                <div className="relative max-w-7xl mx-auto px-4 sm:px-6 py-10 sm:py-14">
-                    <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8">
-                        <div className="max-w-3xl">
-                            <div className="inline-flex items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/10 px-3 py-1.5 text-sm font-bold text-[var(--primary)]">
-                                <Sparkles size={16} />
-                                خدمات دیجیتال توسن
+            <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-10">
+                <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-6 sm:p-10 shadow-sm">
+                    <div className="max-w-3xl">
+                        <div className="inline-flex items-center gap-2 rounded-full bg-[var(--primary)]/10 px-4 py-2 text-sm font-bold text-[var(--primary)]">
+                            <Sparkles size={17} /> خدمات شبکه‌های اجتماعی
+                        </div>
+                        <h1 className="mt-5 text-3xl sm:text-5xl font-black leading-tight">رشد و مدیریت شبکه‌های اجتماعی، ساده و سریع</h1>
+                        <p className="mt-4 text-[var(--text-muted)] leading-8">سرویس موردنظر را انتخاب کنید، مشخصات سفارش را وارد کنید و در ادامه سفارش خود را پیگیری کنید.</p>
+                    </div>
+
+                    <div className="mt-8 grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[
+                            ["ثبت سفارش آنلاین", CheckCircle2],
+                            ["تنوع سرویس", Users],
+                            ["پیگیری سفارش", Search],
+                            ["پرداخت امن", CheckCircle2],
+                        ].map(([label, Icon]) => {
+                            const ItemIcon = Icon as typeof CheckCircle2;
+                            return <div key={String(label)} className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4 text-sm font-bold flex items-center gap-2"><ItemIcon size={18} className="text-[var(--primary)]" />{label}</div>;
+                        })}
+                    </div>
+                </div>
+
+                <div className="mt-8 flex flex-col lg:flex-row gap-6">
+                    <aside className="lg:w-72 shrink-0 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 h-fit">
+                        <h2 className="font-black text-lg px-2 mb-3">شبکه اجتماعی</h2>
+                        <div className="space-y-2">
+                            <button type="button" onClick={() => selectPlatform("")} className={`w-full rounded-2xl px-4 py-3 text-right font-bold transition ${!selectedPlatform ? "bg-[var(--primary)] text-white" : "hover:bg-[var(--background)]"}`}>همه شبکه‌ها</button>
+                            {platforms.map((platform) => {
+                                const Icon = iconMap[platform.icon || ""] || MessageCircle;
+                                return <button key={platform.id} type="button" onClick={() => selectPlatform(platform.id)} className={`w-full rounded-2xl px-4 py-3 text-right font-bold flex items-center gap-3 transition ${selectedPlatform === platform.id ? "bg-[var(--primary)] text-white" : "hover:bg-[var(--background)]"}`}><Icon size={20} /><span>{platform.name}</span></button>;
+                            })}
+                        </div>
+                    </aside>
+
+                    <section className="flex-1 min-w-0">
+                        <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
+                            <div className="relative">
+                                <Search size={19} className="absolute right-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="جستجوی سرویس..." className="w-full rounded-2xl border border-[var(--border)] bg-[var(--background)] py-3.5 pr-11 pl-4 outline-none focus:border-[var(--primary)]" />
                             </div>
-                            <h1 className="mt-4 text-3xl sm:text-5xl font-black tracking-tight">خدمات شبکه‌های اجتماعی</h1>
-                            <p className="mt-4 text-[var(--text-muted)] text-base sm:text-lg leading-8">
-                                سرویس‌های منتخب شبکه‌های اجتماعی را از یکجا انتخاب کنید، سفارش دهید و بعداً وضعیت سفارش را از حساب توسن پیگیری کنید.
-                            </p>
-                            <div className="mt-6 flex flex-wrap gap-3 text-sm">
-                                {[
-                                    "ثبت سفارش آنلاین",
-                                    "حساب کاربری مشترک توسن",
-                                    "پیگیری سفارش",
-                                ].map((item) => (
-                                    <span key={item} className="inline-flex items-center gap-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] px-3 py-2">
-                                        <CheckCircle2 size={16} className="text-[var(--primary)]" />
-                                        {item}
-                                    </span>
-                                ))}
+                            <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+                                <button type="button" onClick={() => setSelectedCategory("")} className={`shrink-0 rounded-xl px-4 py-2 text-sm font-bold ${!selectedCategory ? "bg-[var(--primary)] text-white" : "bg-[var(--background)]"}`}>همه دسته‌ها</button>
+                                {visibleCategories.map((category) => <button key={category.id} type="button" onClick={() => setSelectedCategory(category.id)} className={`shrink-0 rounded-xl px-4 py-2 text-sm font-bold ${selectedCategory === category.id ? "bg-[var(--primary)] text-white" : "bg-[var(--background)]"}`}>{category.name}</button>)}
                             </div>
                         </div>
-                        <Link href="/social/orders" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] text-white px-5 py-3 font-bold shadow-lg hover:opacity-90 transition">
-                            سفارش‌های من
-                            <ArrowLeft size={18} />
-                        </Link>
-                    </div>
-                </div>
-            </section>
 
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-                    {platforms.map((platform) => {
-                        const Icon = iconMap[platform.icon || ""] || Users;
-                        const active = selectedPlatform === platform.id;
-                        return (
-                            <button key={platform.id} type="button" onClick={() => setSelectedPlatform(platform.id)} className={`group rounded-2xl border p-4 text-center transition ${active ? "border-[var(--primary)] bg-[var(--primary)]/10 shadow-sm" : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--primary)]/40"}`}>
-                                <span className={`mx-auto flex h-11 w-11 items-center justify-center rounded-xl ${active ? "bg-[var(--primary)] text-white" : "bg-[var(--primary)]/10 text-[var(--primary)]"}`}>
-                                    <Icon size={22} />
-                                </span>
-                                <span className="mt-2 block text-sm font-bold">{platform.name}</span>
-                            </button>
-                        );
-                    })}
-                </div>
-            </section>
-
-            <section className="max-w-7xl mx-auto px-4 sm:px-6 pb-14">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-5">
-                    <div className="flex-1 flex gap-2 overflow-x-auto pb-1">
-                        <button type="button" onClick={() => setSelectedCategory("")} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold border ${!selectedCategory ? "bg-[var(--primary)] text-white border-[var(--primary)]" : "border-[var(--border)] bg-[var(--surface)]"}`}>
-                            همه خدمات
-                        </button>
-                        {platformCategories.map((category) => (
-                            <button key={category.id} type="button" onClick={() => setSelectedCategory(category.id)} className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold border ${selectedCategory === category.id ? "bg-[var(--primary)] text-white border-[var(--primary)]" : "border-[var(--border)] bg-[var(--surface)]"}`}>
-                                {category.name}
-                            </button>
-                        ))}
-                    </div>
-                    <div className="relative w-full lg:w-80">
-                        <Search size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
-                        <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="جستجوی سرویس..." className="w-full rounded-2xl border border-[var(--border)] bg-[var(--surface)] py-3 pr-10 pl-4 outline-none focus:border-[var(--primary)]" />
-                    </div>
-                </div>
-
-                {loading ? (
-                    <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-12 text-center text-[var(--text-muted)]">در حال دریافت خدمات...</div>
-                ) : visibleServices.length === 0 ? (
-                    <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-12 text-center">
-                        <div className="text-4xl">🔎</div>
-                        <p className="mt-3 font-bold">سرویسی با این مشخصات پیدا نشد.</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {visibleServices.map((service) => (
-                            <article key={service.id} className="group rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm hover:-translate-y-0.5 hover:shadow-lg transition">
-                                <div className="flex items-start justify-between gap-4">
-                                    <div>
-                                        <h2 className="font-black text-lg leading-8">{service.name}</h2>
-                                        <p className="mt-1 text-sm leading-6 text-[var(--text-muted)]">{service.description}</p>
+                        {loading ? (
+                            <div className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-12 text-center text-[var(--text-muted)]">در حال دریافت سرویس‌ها...</div>
+                        ) : visibleServices.length === 0 ? (
+                            <div className="mt-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-12 text-center"><div className="text-4xl">🔎</div><h3 className="mt-4 font-black text-xl">سرویسی پیدا نشد</h3><p className="mt-2 text-[var(--text-muted)]">فیلترها یا عبارت جستجو را تغییر دهید.</p></div>
+                        ) : (
+                            <div className="mt-6 grid sm:grid-cols-2 gap-4">
+                                {visibleServices.map((service) => (
+                                    <div key={service.id} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:-translate-y-0.5 transition shadow-sm">
+                                        <div className="flex items-start justify-between gap-4"><div><h3 className="font-black text-lg leading-7">{service.name}</h3>{service.description && <p className="mt-2 text-sm text-[var(--text-muted)] leading-6">{service.description}</p>}</div><div className="shrink-0 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)] p-3"><Users size={20} /></div></div>
+                                        <div className="mt-5 grid grid-cols-2 gap-2 text-xs"><div className="rounded-xl bg-[var(--background)] p-3"><span className="text-[var(--text-muted)] block">حداقل</span><strong className="mt-1 block">{service.min_quantity.toLocaleString("fa-IR")}</strong></div><div className="rounded-xl bg-[var(--background)] p-3"><span className="text-[var(--text-muted)] block">حداکثر</span><strong className="mt-1 block">{service.max_quantity.toLocaleString("fa-IR")}</strong></div></div>
+                                        <Link href={`/social/order?service=${service.id}`} className="mt-4 flex items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] text-white py-3 font-black hover:opacity-90 transition">سفارش سرویس <ArrowLeft size={18} /></Link>
                                     </div>
-                                    <span className="rounded-xl bg-[var(--primary)]/10 p-2.5 text-[var(--primary)]"><Users size={20} /></span>
-                                </div>
-                                <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                                    <div className="rounded-2xl bg-[var(--background)] p-3"><span className="block text-[var(--text-muted)]">حداقل</span><strong>{service.min_quantity.toLocaleString("fa-IR")}</strong></div>
-                                    <div className="rounded-2xl bg-[var(--background)] p-3"><span className="block text-[var(--text-muted)]">حداکثر</span><strong>{service.max_quantity.toLocaleString("fa-IR")}</strong></div>
-                                </div>
-                                <div className="mt-5 flex items-center justify-between gap-3">
-                                    <span className="text-xs text-[var(--text-muted)]">قیمت پس از اتصال سرویس‌دهنده محاسبه می‌شود</span>
-                                    <Link href={`/social/order?service=${service.id}`} className="shrink-0 inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] text-white px-4 py-2.5 text-sm font-bold hover:opacity-90 transition">
-                                        سفارش
-                                        <ArrowLeft size={16} />
-                                    </Link>
-                                </div>
-                            </article>
-                        ))}
-                    </div>
-                )}
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
             </section>
         </main>
     );
