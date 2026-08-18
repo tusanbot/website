@@ -3,18 +3,21 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Link2, ShoppingCart } from "lucide-react";
-import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import type { SocialService } from "@/lib/social/types";
 
 export default function SocialOrderPage() {
-    const searchParams = useSearchParams();
-    const serviceId = searchParams.get("service");
+    const [serviceId, setServiceId] = useState<string | null>(null);
     const [service, setService] = useState<SocialService | null>(null);
     const [link, setLink] = useState("");
     const [quantity, setQuantity] = useState("");
     const [loading, setLoading] = useState(true);
     const [userEmail, setUserEmail] = useState<string | null>(null);
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        setServiceId(params.get("service"));
+    }, []);
 
     useEffect(() => {
         async function load() {
