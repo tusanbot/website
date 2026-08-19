@@ -10,7 +10,7 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: "64905850",
+  title: "ربات کافی‌نت توسن",
   description: "سامانه خدمات آنلاین کافی‌نت توسن",
 };
 
