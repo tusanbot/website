@@ -7,66 +7,42 @@ import { supabase } from "@/lib/supabase";
 import ServiceFormBuilder, { FormField } from "@/components/ServiceFormBuilder";
 import { GlassPanel, TusanCard, TusanButton, TusanInput, SectionHeader } from "@/components/ui";
 
-type Service = {
-  id: string;
-  title: string;
-  category: string | null;
-};
+type Service = { id: string; title: string; category: string | null };
 
 export default function NewServicePage() {
   const router = useRouter();
   const [mode, setMode] = useState<"normal" | "parent">("normal");
-  const [title, setTitle] = useState("");
-  const [category, setCategory] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [icon, setIcon] = useState("");
-  const [isActive, setIsActive] = useState(true);
+  const [title, setTitle] = useState(""); const [category, setCategory] = useState("");
+  const [description, setDescription] = useState(""); const [price, setPrice] = useState("");
+  const [icon, setIcon] = useState(""); const [isActive, setIsActive] = useState(true);
   const [formSchema, setFormSchema] = useState<FormField[]>([]);
-  const [useParent, setUseParent] = useState(false);
-  const [parentServiceId, setParentServiceId] = useState("");
-  const [parentServices, setParentServices] = useState<Service[]>([]);
-  const [loadingParents, setLoadingParents] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [useParent, setUseParent] = useState(false); const [parentServiceId, setParentServiceId] = useState("");
+  const [parentServices, setParentServices] = useState<Service[]>([]); const [loadingParents, setLoadingParents] = useState(false);
+  const [saving, setSaving] = useState(false); const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (mode === "normal" && useParent) loadParentServices();
-  }, [mode, useParent]);
+  useEffect(() => { if (mode === "normal" && useParent) loadParentServices(); }, [mode, useParent]);
 
   async function getAdminId() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("ابتدا وارد حساب مدیریت شوید.");
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles").select("role").eq("id", user.id).single();
+    const { data: profile, error: profileError } = await supabase.from("profiles").select("role").eq("id", user.id).single();
     if (profileError || profile?.role !== "admin") throw new Error("دسترسی مدیریت مجاز نیست.");
     return user.id;
   }
 
   async function loadParentServices() {
-    setLoadingParents(true);
+    setLoadingParents(true); setError("");
     try {
-      const { data, error: parentsError } = await supabase
-        .from("services")
-        .select("id,title,category")
-        .eq("is_active", true)
-        .is("parent_service_id", null)
-        .order("title", { ascending: true });
-      if (parentsError) throw new Error(parentsError.message);
+      const { data, error } = await supabase.from("services").select("id,title,category").eq("is_active", true).is("parent_service_id", null).order("title", { ascending: true });
+      if (error) throw new Error(error.message);
       setParentServices(data || []);
-      if (parentServiceId && !(data || []).some((item) => item.id === parentServiceId)) {
-        setParentServiceId("");
-      }
-    } catch (err: any) {
-      console.error(err);
-      setError(err?.message || "دریافت فهرست خدمات مادر انجام نشد.");
-    } finally { setLoadingParents(false); }
+      if (parentServiceId && !(data || []).some(item => item.id === parentServiceId)) setParentServiceId("");
+    } catch (err: any) { setError(err?.message || "دریافت فهرست خدمات مادر انجام نشد."); }
+    finally { setLoadingParents(false); }
   }
 
-  function resetFormForMode(nextMode: "normal" | "parent") {
-    setMode(nextMode);
-    setError("");
-    setTitle(""); setCategory(""); setDescription(""); setPrice(""); setIcon("");
+  function resetForMode(next: "normal" | "parent") {
+    setMode(next); setError(""); setTitle(""); setCategory(""); setDescription(""); setPrice(""); setIcon("");
     setFormSchema([]); setUseParent(false); setParentServiceId("");
   }
 
@@ -77,23 +53,17 @@ export default function NewServicePage() {
       if (!title.trim()) throw new Error("عنوان خدمت را وارد کنید.");
 
       if (mode === "parent") {
-        const { error: parentError } = await supabase.from("services").insert({
-          title: title.trim(), category: category.trim() || null,
-          description: description.trim() || null, price: 0, icon: icon.trim() || null,
-          is_active: isActive, form_schema: [], parent_service_id: null,
-        });
-        if (parentError) throw new Error(parentError.message);
+        const { data: service, error: serviceError } = await supabase.from("services").insert({
+          title: title.trim(), category: category.trim() || null, description: description.trim() || null,
+          price: 0, icon: icon.trim() || null, is_active: isActive, form_schema: [], parent_service_id: null,
+        }).select("id").single();
+        if (serviceError || !service) throw new Error(serviceError?.message || "خدمت مادر ایجاد نشد.");
 
-        // Keep a root custom_form for backward compatibility with the existing form hierarchy.
-        const { data: createdService } = await supabase.from("services")
-          .select("id").eq("title", title.trim()).order("created_at", { ascending: false }).limit(1).maybeSingle();
-        if (createdService?.id) {
-          const { error: formError } = await supabase.from("custom_forms").insert({
-            title: title.trim(), description: description.trim() || null, schema: [], created_by: userId,
-            is_public: true, form_type: "parent", parent_form_id: null, service_id: createdService.id, sort_order: 0,
-          });
-          if (formError) throw new Error(formError.message);
-        }
+        const { error: formError } = await supabase.from("custom_forms").insert({
+          title: title.trim(), description: description.trim() || null, schema: [], created_by: userId,
+          is_public: true, form_type: "parent", parent_form_id: null, service_id: service.id, sort_order: 0,
+        });
+        if (formError) throw new Error(formError.message);
       } else {
         const servicePrice = price.trim() === "" ? 0 : Number(price);
         if (!Number.isFinite(servicePrice) || servicePrice < 0) throw new Error("قیمت خدمت معتبر نیست.");
@@ -101,17 +71,14 @@ export default function NewServicePage() {
 
         const { data: service, error: serviceError } = await supabase.from("services").insert({
           title: title.trim(), category: category.trim() || null, description: description.trim() || null,
-          price: servicePrice, icon: icon.trim() || null, is_active: isActive,
-          form_schema: formSchema, parent_service_id: useParent ? parentServiceId : null,
+          price: servicePrice, icon: icon.trim() || null, is_active: isActive, form_schema: formSchema,
+          parent_service_id: useParent ? parentServiceId : null,
         }).select("id").single();
         if (serviceError || !service) throw new Error(serviceError?.message || "خدمت ایجاد نشد.");
 
-        // Create a normal custom form owned by this service. The service hierarchy is authoritative;
-        // parent_form_id is intentionally left NULL so old form hierarchy code cannot misclassify it.
         const { error: formError } = await supabase.from("custom_forms").insert({
-          title: title.trim(), description: description.trim() || null, schema: formSchema,
-          created_by: userId, is_public: true, form_type: "normal", parent_form_id: null,
-          service_id: service.id, sort_order: 0,
+          title: title.trim(), description: description.trim() || null, schema: formSchema, created_by: userId,
+          is_public: true, form_type: "normal", parent_form_id: null, service_id: service.id, sort_order: 0,
         });
         if (formError) throw new Error(formError.message);
       }
@@ -121,62 +88,31 @@ export default function NewServicePage() {
     finally { setSaving(false); }
   }
 
-  return <div dir="rtl" className="min-h-screen page-background p-6 text-[var(--text)]">
-    <div className="max-w-4xl mx-auto">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <SectionHeader title="ایجاد خدمت" description="خدمت مادر و خدمت معمولی به‌صورت جداگانه مدیریت می‌شوند." />
-        <Link href="/admin/services"><TusanButton variant="secondary">بازگشت</TusanButton></Link>
-      </div>
-
-      <div className="grid sm:grid-cols-2 gap-3 mb-6">
-        <button type="button" onClick={() => resetFormForMode("normal")}
-          className={`rounded-2xl border p-5 text-right transition ${mode === "normal" ? "border-[#09967C] bg-[#09967C]/5 ring-2 ring-[#09967C]/20" : "border-[var(--border)] bg-[var(--surface)]"}`}>
-          <div className="font-black text-lg">ایجاد خدمت معمولی</div>
-          <div className="text-sm text-[var(--muted)] mt-1">یک خدمت مستقل یا زیرمجموعه خدمت مادر</div>
-        </button>
-        <button type="button" onClick={() => resetFormForMode("parent")}
-          className={`rounded-2xl border p-5 text-right transition ${mode === "parent" ? "border-[#09967C] bg-[#09967C]/5 ring-2 ring-[#09967C]/20" : "border-[var(--border)] bg-[var(--surface)]"}`}>
-          <div className="font-black text-lg">ایجاد خدمت مادر</div>
-          <div className="text-sm text-[var(--muted)] mt-1">دسته اصلی خدمات که مشتری فرزندان را از داخل آن انتخاب می‌کند</div>
-        </button>
-      </div>
-
-      <GlassPanel className="p-6">
-        {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-        <form onSubmit={submit} className="space-y-6">
-          <TusanCard className="p-5 space-y-5">
-            <div><h2 className="text-lg font-bold">اطلاعات {mode === "parent" ? "خدمت مادر" : "خدمت"}</h2></div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div><label className="block text-sm font-bold mb-2">عنوان *</label><TusanInput value={title} onChange={e => setTitle(e.target.value)} placeholder={mode === "parent" ? "مثلاً ثبت نام خودرو" : "مثلاً ثبت نام سایپا"} /></div>
-              <div><label className="block text-sm font-bold mb-2">دسته‌بندی</label><TusanInput value={category} onChange={e => setCategory(e.target.value)} placeholder="مثلاً خودرو" /></div>
-              {mode === "normal" && <div><label className="block text-sm font-bold mb-2">قیمت (تومان)</label><TusanInput type="number" min="0" value={price} onChange={e => setPrice(e.target.value)} placeholder="مثلاً 150000" /></div>}
-              <div><label className="block text-sm font-bold mb-2">آیکون</label><TusanInput value={icon} onChange={e => setIcon(e.target.value)} placeholder="مثلاً 🚗" /></div>
-            </div>
-            <div><label className="block text-sm font-bold mb-2">توضیحات</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none resize-none" /></div>
-            <label className="flex items-center gap-3"><input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-5 h-5 accent-[#09967C]" /><span className="font-bold">فعال باشد</span></label>
-          </TusanCard>
-
-          {mode === "normal" && <>
-            <TusanCard className="p-5 space-y-5">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input type="checkbox" checked={useParent} onChange={e => { setUseParent(e.target.checked); if (!e.target.checked) setParentServiceId(""); }} className="mt-1 w-5 h-5 accent-[#09967C]" />
-                <span><div className="font-bold">انتخاب خدمت مادر</div><div className="text-sm text-[var(--muted)] mt-1">در صورت فعال‌سازی، این خدمت داخل خدمت مادر نمایش داده می‌شود و در لیست اصلی خدمات مشتری نمایش داده نمی‌شود.</div></span>
-              </label>
-              {useParent && <div className="border-t border-[var(--border)] pt-5">
-                <label className="block text-sm font-bold mb-2">خدمت مادر *</label>
-                <select value={parentServiceId} onChange={e => setParentServiceId(e.target.value)} disabled={loadingParents} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none">
-                  <option value="">{loadingParents ? "در حال دریافت..." : "انتخاب خدمت مادر"}</option>
-                  {parentServices.map(parent => <option key={parent.id} value={parent.id}>{parent.title}{parent.category ? ` — ${parent.category}` : ""}</option>)}
-                </select>
-                {!loadingParents && parentServices.length === 0 && <p className="text-sm text-amber-600 mt-2">هنوز خدمت مادری ایجاد نشده است.</p>}
-              </div>}
-            </TusanCard>
-            <TusanCard className="p-5"><ServiceFormBuilder value={formSchema} onChange={setFormSchema} /></TusanCard>
-          </>}
-
-          <TusanButton type="submit" disabled={saving} fullWidth>{saving ? "در حال ذخیره..." : mode === "parent" ? "ایجاد خدمت مادر" : "ایجاد خدمت معمولی"}</TusanButton>
-        </form>
-      </GlassPanel>
+  return <div dir="rtl" className="min-h-screen page-background p-6 text-[var(--text)]"><div className="max-w-4xl mx-auto">
+    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6"><SectionHeader title="ایجاد خدمت" description="خدمت مادر و خدمت معمولی به‌صورت جداگانه مدیریت می‌شوند." /><Link href="/admin/services"><TusanButton variant="secondary">بازگشت</TusanButton></Link></div>
+    <div className="grid sm:grid-cols-2 gap-3 mb-6">
+      <button type="button" onClick={() => resetForMode("normal")} className={`rounded-2xl border p-5 text-right transition ${mode === "normal" ? "border-[#09967C] bg-[#09967C]/5 ring-2 ring-[#09967C]/20" : "border-[var(--border)] bg-[var(--surface)]"}`}><div className="font-black text-lg">ایجاد خدمت معمولی</div><div className="text-sm text-[var(--muted)] mt-1">خدمت مستقل یا زیرمجموعه یک خدمت مادر</div></button>
+      <button type="button" onClick={() => resetForMode("parent")} className={`rounded-2xl border p-5 text-right transition ${mode === "parent" ? "border-[#09967C] bg-[#09967C]/5 ring-2 ring-[#09967C]/20" : "border-[var(--border)] bg-[var(--surface)]"}`}><div className="font-black text-lg">ایجاد خدمت مادر</div><div className="text-sm text-[var(--muted)] mt-1">خدمت ریشه‌ای که فرزندان داخل آن نمایش داده می‌شوند</div></button>
     </div>
-  </div>;
+    <GlassPanel className="p-6">{error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      <form onSubmit={submit} className="space-y-6">
+        <TusanCard className="p-5 space-y-5"><div><h2 className="text-lg font-bold">اطلاعات {mode === "parent" ? "خدمت مادر" : "خدمت"}</h2></div>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div><label className="block text-sm font-bold mb-2">عنوان *</label><TusanInput value={title} onChange={e => setTitle(e.target.value)} placeholder={mode === "parent" ? "مثلاً ثبت نام خودرو" : "مثلاً ثبت نام سایپا"} /></div>
+            <div><label className="block text-sm font-bold mb-2">دسته‌بندی</label><TusanInput value={category} onChange={e => setCategory(e.target.value)} placeholder="مثلاً خودرو" /></div>
+            {mode === "normal" && <div><label className="block text-sm font-bold mb-2">قیمت (تومان)</label><TusanInput type="number" min="0" value={price} onChange={e => setPrice(e.target.value)} /></div>}
+            <div><label className="block text-sm font-bold mb-2">آیکون</label><TusanInput value={icon} onChange={e => setIcon(e.target.value)} placeholder="مثلاً 🚗" /></div>
+          </div>
+          <div><label className="block text-sm font-bold mb-2">توضیحات</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none resize-none" /></div>
+          <label className="flex items-center gap-3"><input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-5 h-5 accent-[#09967C]" /><span className="font-bold">فعال باشد</span></label>
+        </TusanCard>
+        {mode === "normal" && <>
+          <TusanCard className="p-5 space-y-5"><label className="flex items-start gap-3 cursor-pointer"><input type="checkbox" checked={useParent} onChange={e => { setUseParent(e.target.checked); if (!e.target.checked) setParentServiceId(""); }} className="mt-1 w-5 h-5 accent-[#09967C]" /><span><div className="font-bold">انتخاب خدمت مادر</div><div className="text-sm text-[var(--muted)] mt-1">در صورت اتصال، خدمت در لیست اصلی مشتری نمایش داده نمی‌شود و داخل خدمت مادر قرار می‌گیرد.</div></span></label>
+            {useParent && <div className="border-t border-[var(--border)] pt-5"><label className="block text-sm font-bold mb-2">خدمت مادر *</label><select value={parentServiceId} onChange={e => setParentServiceId(e.target.value)} disabled={loadingParents} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none"><option value="">{loadingParents ? "در حال دریافت..." : "انتخاب خدمت مادر"}</option>{parentServices.map(parent => <option key={parent.id} value={parent.id}>{parent.title}{parent.category ? ` — ${parent.category}` : ""}</option>)}</select>{!loadingParents && parentServices.length === 0 && <p className="text-sm text-amber-600 mt-2">هنوز خدمت مادری ایجاد نشده است.</p>}</div>}
+          </TusanCard><TusanCard className="p-5"><ServiceFormBuilder value={formSchema} onChange={setFormSchema} /></TusanCard>
+        </>}
+        <TusanButton type="submit" disabled={saving} fullWidth>{saving ? "در حال ذخیره..." : mode === "parent" ? "ایجاد خدمت مادر" : "ایجاد خدمت معمولی"}</TusanButton>
+      </form>
+    </GlassPanel>
+  </div></div>;
 }
