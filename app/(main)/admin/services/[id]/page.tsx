@@ -5,398 +5,95 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import ServiceFormBuilder, { FormField } from "@/components/ServiceFormBuilder";
-import {
-    GlassPanel,
-    TusanCard,
-    TusanButton,
-    TusanInput,
-    SectionHeader,
-} from "@/components/ui";
-
-type ParentForm = {
-    id: string;
-    title: string;
-    description: string | null;
-};
+import FormHierarchyManager from "@/components/FormHierarchyManager";
+import { GlassPanel, TusanCard, TusanButton, TusanInput, SectionHeader } from "@/components/ui";
 
 export default function EditServicePage() {
-    const params = useParams();
-    const router = useRouter();
-    const serviceId = params.id as string;
+  const params = useParams();
+  const router = useRouter();
+  const serviceId = params.id as string;
+  const [title, setTitle] = useState("");
+  const [category, setCategory] = useState("");
+  const [description, setDescription] = useState("");
+  const [price, setPrice] = useState("");
+  const [icon, setIcon] = useState("");
+  const [isActive, setIsActive] = useState(true);
+  const [formSchema, setFormSchema] = useState<FormField[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-    const [title, setTitle] = useState("");
-    const [category, setCategory] = useState("");
-    const [description, setDescription] = useState("");
-    const [price, setPrice] = useState("");
-    const [icon, setIcon] = useState("");
-    const [isActive, setIsActive] = useState(true);
+  useEffect(() => { if (serviceId) loadService(); }, [serviceId]);
 
-    const [formSchema, setFormSchema] = useState<FormField[]>([]);
-    const [formId, setFormId] = useState<string | null>(null);
+  async function loadService() {
+    setLoading(true); setError("");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { router.push("/login"); return; }
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      if (profile?.role !== "admin") { router.push("/dashboard"); return; }
+      const { data: service, error: serviceError } = await supabase.from("services").select("*").eq("id", serviceId).single();
+      if (serviceError || !service) throw new Error("خدمت موردنظر پیدا نشد.");
+      setTitle(service.title || "");
+      setCategory(service.category || "");
+      setDescription(service.description || "");
+      setPrice(service.price == null ? "" : String(service.price));
+      setIcon(service.icon || "");
+      setIsActive(service.is_active ?? true);
+      setFormSchema(Array.isArray(service.form_schema) ? service.form_schema : []);
+    } catch (err: any) { setError(err?.message || "خطایی هنگام دریافت اطلاعات خدمت رخ داد."); }
+    finally { setLoading(false); }
+  }
 
-    const [parentForms, setParentForms] = useState<ParentForm[]>([]);
-    const [selectedParentId, setSelectedParentId] = useState<string>("");
-    const [showParentOptions, setShowParentOptions] = useState(false);
-    const [showCreateParent, setShowCreateParent] = useState(false);
-    const [newParentTitle, setNewParentTitle] = useState("");
-    const [newParentDescription, setNewParentDescription] = useState("");
+  async function updateService(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) { setError("عنوان خدمت را وارد کنید."); return; }
+    setSaving(true); setError("");
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("ابتدا وارد حساب مدیریت شوید.");
+      const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
+      if (profile?.role !== "admin") throw new Error("دسترسی مدیریت مجاز نیست.");
+      const parsedPrice = price.trim() === "" ? 0 : Number(price);
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) throw new Error("قیمت خدمت معتبر نیست.");
+      const { error: updateError } = await supabase.from("services").update({
+        title: title.trim(), category: category.trim() || null, description: description.trim() || null,
+        price: parsedPrice, icon: icon.trim() || null, is_active: isActive, form_schema: formSchema,
+      }).eq("id", serviceId);
+      if (updateError) throw new Error(updateError.message);
+      router.push("/admin/services"); router.refresh();
+    } catch (err: any) { setError(err?.message || "خطایی هنگام بروزرسانی خدمت رخ داد."); }
+    finally { setSaving(false); }
+  }
 
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState("");
+  if (loading) return <div dir="rtl" className="min-h-screen page-background flex items-center justify-center"><GlassPanel className="p-10">در حال دریافت اطلاعات خدمت...</GlassPanel></div>;
 
-    useEffect(() => {
-        if (serviceId) loadService();
-    }, [serviceId]);
-
-    async function loadService() {
-        setLoading(true);
-        setError("");
-
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            const { data: profile, error: profileError } = await supabase
-                .from("profiles")
-                .select("role")
-                .eq("id", user.id)
-                .single();
-
-            if (profileError || profile?.role !== "admin") {
-                router.push("/dashboard");
-                return;
-            }
-
-            const { data: service, error: serviceError } = await supabase
-                .from("services")
-                .select("*")
-                .eq("id", serviceId)
-                .single();
-
-            if (serviceError || !service) {
-                throw new Error("خدمت موردنظر پیدا نشد.");
-            }
-
-            setTitle(service.title || "");
-            setCategory(service.category || "");
-            setDescription(service.description || "");
-            setPrice(service.price !== null && service.price !== undefined ? String(service.price) : "");
-            setIcon(service.icon || "");
-            setIsActive(service.is_active ?? true);
-            setFormSchema(Array.isArray(service.form_schema) ? service.form_schema : []);
-
-            const { data: forms, error: formsError } = await supabase
-                .from("custom_forms")
-                .select("id,title,description,schema,form_type,parent_form_id,created_at")
-                .eq("service_id", serviceId)
-                .order("created_at", { ascending: true });
-
-            if (formsError) throw new Error(formsError.message);
-
-            if (forms) {
-                const parents = forms.filter(
-                    (form: any) => form.form_type === "parent" && !form.parent_form_id
-                );
-                setParentForms(parents);
-
-                // The service itself is not a custom form. Load the first standalone
-                // normal form only for backwards compatibility with old services.
-                const normalForms = forms.filter((form: any) => form.form_type === "normal");
-                const mainForm = normalForms.find((form: any) => !form.parent_form_id) || normalForms[0];
-
-                if (mainForm) {
-                    setFormId(mainForm.id);
-                    setFormSchema(Array.isArray(mainForm.schema) ? mainForm.schema : []);
-                    setSelectedParentId(mainForm.parent_form_id || "");
-                    setShowParentOptions(Boolean(mainForm.parent_form_id));
-                } else {
-                    setFormId(null);
-                    setSelectedParentId("");
-                    setShowParentOptions(false);
-                }
-            }
-        } catch (err: any) {
-            console.error(err);
-            setError(err?.message || "خطایی هنگام دریافت اطلاعات خدمت رخ داد.");
-        } finally {
-            setLoading(false);
-        }
-    }
-
-    async function createParentInline() {
-        if (!newParentTitle.trim()) {
-            setError("عنوان فرم مادر را وارد کنید.");
-            return;
-        }
-
-        setSaving(true);
-        setError("");
-
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error("برای مدیریت فرم باید وارد حساب کاربری شوید.");
-
-            const { data: parent, error: parentError } = await supabase
-                .from("custom_forms")
-                .insert({
-                    title: newParentTitle.trim(),
-                    description: newParentDescription.trim() || null,
-                    schema: [],
-                    created_by: user.id,
-                    is_public: true,
-                    form_type: "parent",
-                    parent_form_id: null,
-                    service_id: serviceId,
-                    sort_order: 0,
-                })
-                .select("id,title,description")
-                .single();
-
-            if (parentError || !parent) {
-                throw new Error(parentError?.message || "فرم مادر ایجاد نشد.");
-            }
-
-            setParentForms((items) => [...items, parent]);
-            setSelectedParentId(parent.id);
-            setShowCreateParent(false);
-            setShowParentOptions(true);
-            setNewParentTitle("");
-            setNewParentDescription("");
-        } catch (err: any) {
-            setError(err?.message || "ایجاد فرم مادر انجام نشد.");
-        } finally {
-            setSaving(false);
-        }
-    }
-
-    async function updateService(e: React.FormEvent) {
-        e.preventDefault();
-
-        if (!title.trim()) {
-            setError("عنوان خدمت را وارد کنید.");
-            return;
-        }
-
-        setError("");
-        setSaving(true);
-
-        try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            const { data: profile, error: profileError } = await supabase
-                .from("profiles")
-                .select("role")
-                .eq("id", user.id)
-                .single();
-
-            if (profileError || profile?.role !== "admin") {
-                router.push("/dashboard");
-                return;
-            }
-
-            const { error: updateError } = await supabase
-                .from("services")
-                .update({
-                    title: title.trim(),
-                    category: category.trim() || null,
-                    description: description.trim() || null,
-                    price: price ? Number(price) : 0,
-                    icon: icon.trim() || null,
-                    is_active: isActive,
-                    form_schema: formSchema,
-                })
-                .eq("id", serviceId);
-
-            if (updateError) throw new Error(updateError.message);
-
-            // IMPORTANT: the service is not itself a custom form.
-            // A normal custom form is created/updated separately and can optionally
-            // point to a parent form through parent_form_id.
-            if (formId) {
-                const { error: formError } = await supabase
-                    .from("custom_forms")
-                    .update({
-                        schema: formSchema,
-                        parent_form_id: selectedParentId || null,
-                        form_type: "normal",
-                    })
-                    .eq("id", formId)
-                    .eq("service_id", serviceId);
-
-                if (formError) throw new Error(formError.message);
-            } else if (formSchema.length > 0 || selectedParentId) {
-                const { data: newForm, error: formError } = await supabase
-                    .from("custom_forms")
-                    .insert({
-                        title: title.trim(),
-                        description: description.trim() || null,
-                        schema: formSchema,
-                        created_by: user.id,
-                        is_public: true,
-                        form_type: "normal",
-                        parent_form_id: selectedParentId || null,
-                        service_id: serviceId,
-                        sort_order: 0,
-                    })
-                    .select("id")
-                    .single();
-
-                if (formError) throw new Error(formError.message);
-                setFormId(newForm?.id || null);
-            }
-
-            router.push("/admin/services");
-            router.refresh();
-        } catch (err: any) {
-            console.error(err);
-            setError(err?.message || "خطایی هنگام بروزرسانی خدمت رخ داد.");
-        } finally {
-            setSaving(false);
-        }
-    }
-
-    if (loading) {
-        return (
-            <div dir="rtl" className="min-h-screen page-background flex items-center justify-center text-[var(--text)]">
-                <GlassPanel className="p-10 text-center text-[var(--text-muted)]">در حال دریافت اطلاعات خدمت...</GlassPanel>
+  return <div dir="rtl" className="min-h-screen page-background p-6 text-[var(--text)]">
+    <div className="max-w-5xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <SectionHeader title="ویرایش خدمت" description="اطلاعات خدمت و ساختار فرم مادر و فرزند را مدیریت کنید." />
+        <Link href="/admin/services"><TusanButton variant="secondary">بازگشت</TusanButton></Link>
+      </div>
+      {error && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      <GlassPanel className="p-6">
+        <form onSubmit={updateService} className="space-y-6">
+          <TusanCard className="p-5 space-y-5">
+            <div className="grid md:grid-cols-2 gap-5">
+              <div><label className="block font-bold mb-2">عنوان خدمت</label><TusanInput value={title} onChange={e => setTitle(e.target.value)} /></div>
+              <div><label className="block font-bold mb-2">دسته‌بندی</label><TusanInput value={category} onChange={e => setCategory(e.target.value)} /></div>
+              <div><label className="block font-bold mb-2">قیمت (تومان)</label><TusanInput type="number" min="0" value={price} onChange={e => setPrice(e.target.value)} /></div>
+              <div><label className="block font-bold mb-2">آیکون</label><TusanInput value={icon} onChange={e => setIcon(e.target.value)} /></div>
             </div>
-        );
-    }
+            <div><label className="block font-bold mb-2">توضیحات خدمت</label><textarea value={description} onChange={e => setDescription(e.target.value)} rows={4} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3" /></div>
+            <label className="flex items-center gap-3"><input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-5 h-5 accent-[#09967C]" /><span className="font-bold">خدمت فعال باشد</span></label>
+          </TusanCard>
 
-    return (
-        <div dir="rtl" className="min-h-screen page-background p-6 text-[var(--text)] transition-colors duration-300">
-            <div className="max-w-4xl mx-auto">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                    <SectionHeader title="ویرایش خدمت" description="اطلاعات خدمت و فرم آن را در همین صفحه مدیریت کنید." />
-                    <Link href="/admin/services">
-                        <TusanButton variant="secondary">بازگشت</TusanButton>
-                    </Link>
-                </div>
+          <TusanCard className="p-5"><ServiceFormBuilder value={formSchema} onChange={setFormSchema} /></TusanCard>
+          <div className="flex justify-end"><TusanButton type="submit" disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره اطلاعات خدمت"}</TusanButton></div>
+        </form>
+      </GlassPanel>
 
-                <GlassPanel className="p-6">
-                    <form onSubmit={updateService} className="space-y-6">
-                        <div className="grid md:grid-cols-2 gap-5">
-                            <div>
-                                <label className="block font-bold mb-2">عنوان خدمت</label>
-                                <TusanInput value={title} onChange={(e) => setTitle(e.target.value)} placeholder="مثلاً ثبت نام کنکور" />
-                            </div>
-                            <div>
-                                <label className="block font-bold mb-2">دسته‌بندی</label>
-                                <TusanInput value={category} onChange={(e) => setCategory(e.target.value)} placeholder="مثلاً آموزشی" />
-                            </div>
-                        </div>
-
-                        <div className="grid md:grid-cols-2 gap-5">
-                            <div>
-                                <label className="block font-bold mb-2">آیکون</label>
-                                <TusanInput value={icon} onChange={(e) => setIcon(e.target.value)} placeholder="مثلاً 🎓" />
-                                {icon && <div className="mt-3 text-4xl">{icon}</div>}
-                            </div>
-                            <div>
-                                <label className="block font-bold mb-2">قیمت</label>
-                                <div className="relative">
-                                    <TusanInput type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="مثلاً 150000" />
-                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500">تومان</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <TusanCard className="p-4">
-                            <label className="block font-bold mb-2">توضیحات</label>
-                            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none resize-none" />
-                        </TusanCard>
-
-                        <TusanCard className="p-4">
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="w-5 h-5 accent-[#09967C]" />
-                                <div>
-                                    <div className="font-bold">خدمت فعال باشد</div>
-                                    <div className="text-sm text-gray-500 mt-1">اگر غیرفعال باشد، کاربران نمی‌توانند خدمت را ثبت کنند.</div>
-                                </div>
-                            </label>
-                        </TusanCard>
-
-                        <GlassPanel className="p-5">
-                            <ServiceFormBuilder value={formSchema} onChange={setFormSchema} />
-                        </GlassPanel>
-
-                        <TusanCard className="p-5 space-y-4">
-                            <div>
-                                <h3 className="font-bold text-lg">فرم مادر</h3>
-                                <p className="text-sm text-gray-500 mt-1">این بخش کاملاً اختیاری است. اگر فرم مستقل است، هیچ گزینه‌ای انتخاب نکنید.</p>
-                            </div>
-
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={showParentOptions}
-                                    onChange={(e) => {
-                                        setShowParentOptions(e.target.checked);
-                                        if (!e.target.checked) setSelectedParentId("");
-                                    }}
-                                    className="w-5 h-5 accent-[#09967C]"
-                                />
-                                <span className="font-bold">این فرم داخل یک فرم مادر باشد</span>
-                            </label>
-
-                            {showParentOptions && (
-                                <div className="space-y-4 border-t pt-4">
-                                    <div className="grid sm:grid-cols-2 gap-3">
-                                        {parentForms.map((parent) => (
-                                            <button
-                                                key={parent.id}
-                                                type="button"
-                                                onClick={() => setSelectedParentId(parent.id)}
-                                                className={`text-right rounded-xl border p-4 transition ${selectedParentId === parent.id ? "border-[#09967C] bg-[#09967C]/5 ring-2 ring-[#09967C]/20" : "border-gray-200 bg-white hover:border-[#09967C]/50"}`}
-                                            >
-                                                <div className="font-bold">{parent.title}</div>
-                                                {parent.description && <div className="text-sm text-gray-500 mt-1">{parent.description}</div>}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {parentForms.length === 0 && !showCreateParent && (
-                                        <div className="text-sm text-gray-500 border border-dashed rounded-xl p-4">برای این خدمت هنوز فرم مادری ایجاد نشده است.</div>
-                                    )}
-
-                                    {!showCreateParent ? (
-                                        <button type="button" onClick={() => setShowCreateParent(true)} className="w-full border border-dashed border-[#09967C]/50 text-[#09967C] rounded-xl p-4 font-bold hover:bg-[#09967C]/5 transition">
-                                            + ایجاد فرم مادر جدید
-                                        </button>
-                                    ) : (
-                                        <div className="border rounded-xl p-4 space-y-3">
-                                            <div className="font-bold">ایجاد فرم مادر جدید</div>
-                                            <TusanInput value={newParentTitle} onChange={(e) => setNewParentTitle(e.target.value)} placeholder="مثلاً ثبت نام خودرو" />
-                                            <textarea value={newParentDescription} onChange={(e) => setNewParentDescription(e.target.value)} rows={3} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none resize-none" placeholder="توضیحات اختیاری" />
-                                            <div className="flex gap-2">
-                                                <TusanButton type="button" onClick={createParentInline} disabled={saving}>ایجاد فرم مادر</TusanButton>
-                                                <TusanButton type="button" variant="secondary" onClick={() => setShowCreateParent(false)}>انصراف</TusanButton>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </TusanCard>
-
-                        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">{error}</div>}
-
-                        <div className="flex justify-end gap-3 pt-2">
-                            <Link href="/admin/services">
-                                <TusanButton type="button" variant="secondary">انصراف</TusanButton>
-                            </Link>
-                            <TusanButton type="submit" disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره تغییرات"}</TusanButton>
-                        </div>
-                    </form>
-                </GlassPanel>
-            </div>
-        </div>
-    );
+      <FormHierarchyManager serviceId={serviceId} />
+    </div>
+  </div>;
 }
