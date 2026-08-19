@@ -1,0 +1,56 @@
+/* Global contrast guardrails for the Tusan design system. */
+
+:root {
+  --text-secondary: #4b5563;
+  --text-muted: #64748b;
+  --muted: var(--text-muted);
+  --surface-muted: #f1f5f9;
+}
+
+[data-theme="dark"] {
+  --text-secondary: #d1d5db;
+  --text-muted: #aeb9c9;
+  --muted: var(--text-muted);
+  --surface-muted: #1e293b;
+}
+
+/* Existing utility classes must remain readable on the design-system surfaces. */
+.bg-white,
+.bg-gray-50,
+.bg-gray-100,
+.bg-slate-50 {
+  color: var(--text) !important;
+}
+
+.text-gray-400 { color: var(--text-muted) !important; }
+.text-gray-500 { color: var(--text-secondary) !important; }
+.text-gray-600 { color: var(--text-secondary) !important; }
+
+[data-theme="dark"] .bg-white,
+[data-theme="dark"] .bg-gray-50,
+[data-theme="dark"] .bg-gray-100,
+[data-theme="dark"] .bg-slate-50 {
+  background-color: var(--surface-strong) !important;
+}
+
+[data-theme="dark"] .text-gray-400 { color: var(--text-muted) !important; }
+[data-theme="dark"] .text-gray-500,
+[data-theme="dark"] .text-gray-600 { color: var(--text-secondary) !important; }
+
+/* Native form controls are part of the system too. */
+select,
+option,
+textarea,
+input {
+  color: var(--text);
+}
+
+select,
+option {
+  background: var(--surface-strong);
+}
+
+::placeholder {
+  color: var(--text-muted);
+  opacity: 1;
+}
