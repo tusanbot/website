@@ -21,9 +21,6 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fa" dir="rtl">
-      <head>
-        <meta name="enamad" content="64905850" />
-      </head>
       <body
         className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}
       >
