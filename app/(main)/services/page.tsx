@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
 import ServiceAnnouncementsSlider from "@/components/ServiceAnnouncementsSlider";
 import { GlassPanel, TusanCard, PrimaryLinkButton, SectionHeader, TusanInput } from "@/components/ui";
 
