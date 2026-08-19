@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Vazirmatn } from "next/font/google";
 import "./globals.css";
+import "./design-system-accessibility.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const vazirmatn = Vazirmatn({
@@ -14,19 +15,11 @@ export const metadata: Metadata = {
   description: "سامانه خدمات آنلاین کافی‌نت توسن",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fa" dir="rtl">
-      <body
-        className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}
-      >
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+      <body className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}>
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
