@@ -12,9 +12,6 @@ const vazirmatn = Vazirmatn({
 export const metadata: Metadata = {
   title: "توسن | خدمات آنلاین کافی‌نت",
   description: "سامانه خدمات آنلاین کافی‌نت توسن",
-  other: {
-    enamad: "64905850",
-  },
 };
 
 export default function RootLayout({
@@ -24,6 +21,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fa" dir="rtl">
+      <head>
+        <meta name="enamad" content="64905850" />
+      </head>
       <body
         className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}
       >
