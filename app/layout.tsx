@@ -12,6 +12,9 @@ const vazirmatn = Vazirmatn({
 export const metadata: Metadata = {
   title: "توسن | خدمات آنلاین کافی‌نت",
   description: "سامانه خدمات آنلاین کافی‌نت توسن",
+  other: {
+    enamad: "64905850",
+  },
 };
 
 export default function RootLayout({
