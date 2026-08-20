@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, Search, ExternalLink } from "lucide-react";
+import { ExternalLink, RefreshCw, Search, Activity } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 
 interface SocialOrder {
@@ -39,6 +39,8 @@ export default function SocialOrdersAdminPage() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [checking, setChecking] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   async function loadOrders() {
     setRefreshing(true);
@@ -52,6 +54,26 @@ export default function SocialOrdersAdminPage() {
   }
 
   useEffect(() => { void loadOrders(); }, []);
+
+  async function checkProviderStatus(orderId: string) {
+    setChecking(orderId);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/social/provider-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || "بررسی وضعیت ناموفق بود");
+      setOrders((current) => current.map((order) => order.id === orderId ? { ...order, status: data.status } : order));
+      setMessage(`وضعیت سفارش به «${statusLabels[data.status] || data.status}» بروزرسانی شد.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "بررسی وضعیت ناموفق بود.");
+    } finally {
+      setChecking(null);
+    }
+  }
 
   const filtered = orders.filter((o) => {
     const matchesStatus = status === "all" || o.status === status;
@@ -77,6 +99,8 @@ export default function SocialOrdersAdminPage() {
           </button>
         </header>
 
+        {message && <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">{message}</div>}
+
         <section className="grid grid-cols-2 gap-3 md:grid-cols-5">
           {["all", "pending", "paid", "processing", "completed"].map((key) => (
             <button key={key} onClick={() => setStatus(key)} className={`rounded-2xl border p-4 text-right transition ${status === key ? "border-emerald-500 bg-white shadow-sm" : "border-slate-200 bg-white"}`}>
@@ -94,9 +118,9 @@ export default function SocialOrdersAdminPage() {
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {loading ? <div className="p-10 text-center text-slate-500">در حال دریافت سفارش‌ها...</div> : filtered.length === 0 ? <div className="p-10 text-center text-slate-500">سفارشی پیدا نشد.</div> : (
             <div className="overflow-x-auto">
-              <table className="min-w-[1050px] w-full text-sm">
+              <table className="min-w-[1180px] w-full text-sm">
                 <thead className="bg-slate-50 text-right text-xs text-slate-500">
-                  <tr><th className="px-4 py-3">کد پیگیری</th><th className="px-4 py-3">پلتفرم</th><th className="px-4 py-3">سرویس</th><th className="px-4 py-3">تعداد</th><th className="px-4 py-3">مبلغ</th><th className="px-4 py-3">وضعیت</th><th className="px-4 py-3">تاریخ</th><th className="px-4 py-3">لینک</th></tr>
+                  <tr><th className="px-4 py-3">کد پیگیری</th><th className="px-4 py-3">پلتفرم</th><th className="px-4 py-3">سرویس</th><th className="px-4 py-3">تعداد</th><th className="px-4 py-3">مبلغ</th><th className="px-4 py-3">وضعیت</th><th className="px-4 py-3">Provider</th><th className="px-4 py-3">تاریخ</th><th className="px-4 py-3">عملیات</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filtered.map((o) => <tr key={o.id} className="hover:bg-slate-50">
@@ -106,8 +130,9 @@ export default function SocialOrdersAdminPage() {
                     <td className="px-4 py-4">{o.quantity.toLocaleString("fa-IR")}</td>
                     <td className="px-4 py-4 font-medium">{Number(o.price).toLocaleString("fa-IR")} تومان</td>
                     <td className="px-4 py-4"><span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs">{statusLabels[o.status] || o.status}</span></td>
+                    <td className="px-4 py-4 text-xs text-slate-500">{o.provider_order_id || "—"}</td>
                     <td className="px-4 py-4 text-slate-500">{new Date(o.created_at).toLocaleString("fa-IR")}</td>
-                    <td className="px-4 py-4"><a href={o.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-600"><ExternalLink size={15} /> مشاهده</a></td>
+                    <td className="px-4 py-4"><div className="flex items-center gap-2"><a href={o.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-emerald-600"><ExternalLink size={15} /> لینک</a>{o.provider_order_id && <button disabled={checking === o.id} onClick={() => void checkProviderStatus(o.id)} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 disabled:opacity-50"><Activity size={14} className={checking === o.id ? "animate-pulse" : ""} />{checking === o.id ? "در حال بررسی" : "وضعیت"}</button>}</div></td>
                   </tr>)}
                 </tbody>
               </table>
