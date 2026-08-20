@@ -1,10 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Link2, ShoppingCart } from "lucide-react";
+import { ArrowRight, CheckCircle2, Link2, ShoppingCart } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { SocialService } from "@/lib/social/types";
+
+function formatNumber(value: number) {
+    return new Intl.NumberFormat("fa-IR").format(value);
+}
+
+function calculatePrice(service: SocialService, quantity: number) {
+    if (service.provider_rate == null || !Number.isFinite(Number(service.provider_rate))) return null;
+    const base = Number(service.provider_rate) * quantity / 1000;
+    if (service.profit_type === "percentage") return base * (1 + Number(service.profit_value || 0) / 100);
+    if (service.profit_type === "fixed") return base + Number(service.profit_value || 0);
+    return base;
+}
 
 export default function SocialOrderPage() {
     const [serviceId, setServiceId] = useState<string | null>(null);
@@ -12,6 +24,9 @@ export default function SocialOrderPage() {
     const [link, setLink] = useState("");
     const [quantity, setQuantity] = useState("");
     const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState<{ trackingCode: string; price: number } | null>(null);
     const [userEmail, setUserEmail] = useState<string | null>(null);
 
     useEffect(() => {
@@ -36,6 +51,47 @@ export default function SocialOrderPage() {
         load();
     }, [serviceId]);
 
+    const numericQuantity = Number(quantity);
+    const validQuantity = !!service && Number.isSafeInteger(numericQuantity) && numericQuantity >= service.min_quantity && numericQuantity <= service.max_quantity;
+    const price = useMemo(() => service && validQuantity ? calculatePrice(service, numericQuantity) : null, [service, validQuantity, numericQuantity]);
+
+    async function submitOrder() {
+        setError("");
+        if (!service || !validQuantity || !link.trim()) return;
+        setSubmitting(true);
+
+        try {
+            const { data: sessionData } = await supabase.auth.getSession();
+            const token = sessionData.session?.access_token;
+            if (!token) {
+                setError("برای ثبت سفارش ابتدا وارد حساب کاربری شوید.");
+                return;
+            }
+
+            const response = await fetch("/api/social/order", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    serviceId: service.id,
+                    link: link.trim(),
+                    quantity: numericQuantity,
+                }),
+            });
+
+            const result = await response.json().catch(() => null);
+            if (!response.ok) throw new Error(result?.error || "ثبت سفارش ناموفق بود.");
+
+            setSuccess({ trackingCode: result.order.tracking_code, price: Number(result.order.price) });
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "خطای ناشناخته در ثبت سفارش");
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
     if (loading) return <main dir="rtl" className="min-h-screen page-background p-6 text-center">در حال دریافت سرویس...</main>;
 
     if (!service) return (
@@ -47,8 +103,25 @@ export default function SocialOrderPage() {
         </main>
     );
 
-    const numericQuantity = Number(quantity);
-    const validQuantity = Number.isInteger(numericQuantity) && numericQuantity >= service.min_quantity && numericQuantity <= service.max_quantity;
+    if (success) return (
+        <main dir="rtl" className="min-h-screen page-background p-4 sm:p-6">
+            <div className="max-w-2xl mx-auto">
+                <div className="rounded-[2rem] border border-emerald-200 bg-[var(--surface)] p-8 sm:p-10 text-center shadow-sm">
+                    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-600"><CheckCircle2 size={34} /></div>
+                    <h1 className="mt-5 text-2xl sm:text-3xl font-black">پیش‌سفارش با موفقیت ایجاد شد</h1>
+                    <p className="mt-3 text-[var(--text-muted)] leading-7">سفارش شما ثبت شده و تا زمان فعال شدن پرداخت، در وضعیت انتظار پرداخت قرار دارد.</p>
+                    <div className="mt-7 grid sm:grid-cols-2 gap-3 text-right">
+                        <div className="rounded-2xl bg-[var(--background)] p-4"><span className="block text-xs text-[var(--text-muted)]">کد پیگیری</span><strong className="mt-1 block font-black ltr">{success.trackingCode}</strong></div>
+                        <div className="rounded-2xl bg-[var(--background)] p-4"><span className="block text-xs text-[var(--text-muted)]">مبلغ سفارش</span><strong className="mt-1 block">{formatNumber(Math.round(success.price))} ریال</strong></div>
+                    </div>
+                    <div className="mt-6 flex flex-col sm:flex-row gap-3">
+                        <Link href="/social" className="flex-1 rounded-2xl border border-[var(--border)] px-5 py-3 font-black text-center">بازگشت به خدمات</Link>
+                        <Link href="/social/orders" className="flex-1 rounded-2xl bg-[var(--primary)] px-5 py-3 font-black text-white text-center">مشاهده سفارش‌ها</Link>
+                    </div>
+                </div>
+            </div>
+        </main>
+    );
 
     return (
         <main dir="rtl" className="min-h-screen page-background p-4 sm:p-6">
@@ -58,7 +131,7 @@ export default function SocialOrderPage() {
                     <div className="p-6 sm:p-8 border-b border-[var(--border)] bg-gradient-to-l from-[var(--primary)]/10 to-transparent">
                         <div className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] p-2.5"><ShoppingCart size={22} /></div>
                         <h1 className="mt-4 text-2xl sm:text-3xl font-black">سفارش {service.name}</h1>
-                        <p className="mt-2 text-[var(--text-muted)] leading-7">اطلاعات سفارش را وارد کنید. پرداخت و ثبت نهایی پس از فعال شدن درگاه انجام خواهد شد.</p>
+                        <p className="mt-2 text-[var(--text-muted)] leading-7">لینک و تعداد را وارد کنید. قیمت نهایی در همین صفحه محاسبه می‌شود.</p>
                     </div>
                     <div className="p-6 sm:p-8 space-y-6">
                         <div>
@@ -71,14 +144,24 @@ export default function SocialOrderPage() {
                         <div>
                             <label className="block mb-2 font-bold">تعداد</label>
                             <input type="number" min={service.min_quantity} max={service.max_quantity} value={quantity} onChange={(e) => setQuantity(e.target.value)} className="w-full rounded-2xl border border-[var(--border)] bg-[var(--background)] py-3 px-4 outline-none focus:border-[var(--primary)]" />
-                            <p className="mt-2 text-xs text-[var(--text-muted)]">حداقل {service.min_quantity.toLocaleString("fa-IR")} و حداکثر {service.max_quantity.toLocaleString("fa-IR")}</p>
+                            <p className="mt-2 text-xs text-[var(--text-muted)]">حداقل {formatNumber(service.min_quantity)} و حداکثر {formatNumber(service.max_quantity)}</p>
                         </div>
+
+                        <div className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4">
+                            <div className="flex items-center justify-between gap-4"><span className="text-[var(--text-muted)]">قیمت سفارش</span><strong className="text-xl">{price == null ? "—" : `${formatNumber(Math.round(price))} ریال`}</strong></div>
+                            {service.provider_rate != null && <p className="mt-2 text-xs text-[var(--text-muted)]">نرخ سرویس: {formatNumber(Math.round(Number(service.provider_rate)))} ریال به ازای هر ۱۰۰۰ واحد</p>}
+                        </div>
+
                         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-800">
-                            {userEmail ? `حساب فعال: ${userEmail}` : "برای ثبت سفارش نهایی باید وارد حساب توسن شوید."}
+                            {userEmail ? `حساب فعال: ${userEmail}` : "برای ثبت سفارش باید وارد حساب توسن شوید."}
                         </div>
-                        <button type="button" disabled={!link.trim() || !validQuantity} className="w-full rounded-2xl bg-[var(--primary)] text-white py-3.5 font-black disabled:opacity-40 disabled:cursor-not-allowed">
-                            ادامه و پرداخت — به‌زودی فعال می‌شود
+
+                        {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-7 text-red-700">{error}</div>}
+
+                        <button type="button" onClick={submitOrder} disabled={!link.trim() || !validQuantity || submitting || !userEmail} className="w-full rounded-2xl bg-[var(--primary)] text-white py-3.5 font-black disabled:opacity-40 disabled:cursor-not-allowed">
+                            {submitting ? "در حال ثبت سفارش..." : "ثبت پیش‌سفارش"}
                         </button>
+                        <p className="text-center text-xs text-[var(--text-muted)]">ثبت پیش‌سفارش به‌معنی ارسال سفارش به ارائه‌دهنده نیست؛ ارسال به FJPanel پس از تأیید پرداخت انجام خواهد شد.</p>
                     </div>
                 </div>
             </div>
