@@ -3,6 +3,7 @@ import PageLoader from "@/components/home/PageLoader";
 import HeroSection from "@/components/home/HeroSection";
 import ActiveAnnouncements from "@/components/home/ActiveAnnouncements";
 import PopularServices from "@/components/home/PopularServices";
+import SocialServicesPreview from "@/components/home/SocialServicesPreview";
 import ProcessTimeline from "@/components/home/ProcessTimeline";
 import StatsSection from "@/components/home/StatsSection";
 import FeaturesSection from "@/components/home/FeaturesSection";
@@ -17,6 +18,7 @@ export default function HomePage() {
       <HeroSection />
       <ActiveAnnouncements />
       <PopularServices />
+      <SocialServicesPreview />
       <ProcessTimeline />
       <StatsSection />
       <FeaturesSection />
