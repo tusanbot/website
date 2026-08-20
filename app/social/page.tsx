@@ -35,6 +35,106 @@ const iconMap: Record<string, LucideIcon> = {
     "play-square": Play,
 };
 
+type PlatformTheme = {
+    soft: string;
+    border: string;
+    hoverBorder: string;
+    icon: string;
+    active: string;
+    activeIcon: string;
+    accent: string;
+};
+
+const defaultPlatformTheme: PlatformTheme = {
+    soft: "bg-[var(--primary)]/10",
+    border: "border-[var(--border)]",
+    hoverBorder: "hover:border-[var(--primary)]",
+    icon: "text-[var(--primary)]",
+    active: "bg-[var(--primary)] text-white border-[var(--primary)]",
+    activeIcon: "bg-white/15 text-white",
+    accent: "bg-[var(--primary)]",
+};
+
+const platformThemes: Record<string, PlatformTheme> = {
+    instagram: {
+        soft: "bg-pink-500/10",
+        border: "border-pink-300/60",
+        hoverBorder: "hover:border-pink-400",
+        icon: "text-fuchsia-600",
+        active: "bg-gradient-to-br from-fuchsia-600 via-pink-500 to-orange-400 text-white border-pink-400",
+        activeIcon: "bg-white/20 text-white",
+        accent: "bg-gradient-to-r from-fuchsia-600 via-pink-500 to-orange-400",
+    },
+    telegram: {
+        soft: "bg-sky-500/10",
+        border: "border-sky-300/60",
+        hoverBorder: "hover:border-sky-400",
+        icon: "text-sky-500",
+        active: "bg-sky-500 text-white border-sky-500",
+        activeIcon: "bg-white/20 text-white",
+        accent: "bg-sky-500",
+    },
+    youtube: {
+        soft: "bg-red-500/10",
+        border: "border-red-300/60",
+        hoverBorder: "hover:border-red-400",
+        icon: "text-red-600",
+        active: "bg-red-600 text-white border-red-600",
+        activeIcon: "bg-white/20 text-white",
+        accent: "bg-red-600",
+    },
+    tiktok: {
+        soft: "bg-black/10",
+        border: "border-black/20 dark:border-white/20",
+        hoverBorder: "hover:border-black/50 dark:hover:border-white/40",
+        icon: "text-black dark:text-white",
+        active: "bg-black text-white border-black dark:bg-white dark:text-black dark:border-white",
+        activeIcon: "bg-white/15 dark:bg-black/10",
+        accent: "bg-black dark:bg-white",
+    },
+    eitaa: {
+        soft: "bg-orange-500/10",
+        border: "border-orange-300/60",
+        hoverBorder: "hover:border-orange-400",
+        icon: "text-orange-500",
+        active: "bg-orange-500 text-white border-orange-500",
+        activeIcon: "bg-white/20 text-white",
+        accent: "bg-orange-500",
+    },
+    rubika: {
+        soft: "bg-rose-500/10",
+        border: "border-rose-300/60",
+        hoverBorder: "hover:border-rose-400",
+        icon: "text-rose-500",
+        active: "bg-rose-500 text-white border-rose-500",
+        activeIcon: "bg-white/20 text-white",
+        accent: "bg-rose-500",
+    },
+    aparat: {
+        soft: "bg-red-500/10",
+        border: "border-red-300/60",
+        hoverBorder: "hover:border-red-400",
+        icon: "text-red-500",
+        active: "bg-red-500 text-white border-red-500",
+        activeIcon: "bg-white/20 text-white",
+        accent: "bg-red-500",
+    },
+    x: {
+        soft: "bg-black/10",
+        border: "border-black/20 dark:border-white/20",
+        hoverBorder: "hover:border-black/50 dark:hover:border-white/40",
+        icon: "text-black dark:text-white",
+        active: "bg-black text-white border-black dark:bg-white dark:text-black dark:border-white",
+        activeIcon: "bg-white/15 dark:bg-black/10",
+        accent: "bg-black dark:bg-white",
+    },
+};
+
+function getPlatformTheme(platform?: SocialPlatform | null): PlatformTheme {
+    if (!platform) return defaultPlatformTheme;
+    return platformThemes[platform.slug.toLowerCase()] || platformThemes[platform.icon || ""] || defaultPlatformTheme;
+}
+
 const featureItems: Array<{ label: string; Icon: LucideIcon }> = [
     { label: "ثبت سفارش آنلاین", Icon: CheckCircle2 },
     { label: "تنوع سرویس", Icon: Users },
@@ -180,10 +280,12 @@ export default function SocialServicesPage() {
                         ) : (
                             platforms.map((platform) => {
                                 const Icon = iconMap[platform.icon || platform.slug] || MessageCircle;
+                                const theme = getPlatformTheme(platform);
                                 const active = selectedPlatform === platform.id;
                                 return (
-                                    <button key={platform.id} type="button" onClick={() => { selectPlatform(platform.id); scrollToCatalog(); }} className={`group rounded-3xl border p-5 text-right transition hover:-translate-y-0.5 ${active ? "border-[var(--primary)] bg-[var(--primary)] text-white shadow-sm" : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--primary)]"}`}>
-                                        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${active ? "bg-white/15" : "bg-[var(--primary)]/10 text-[var(--primary)]"}`}><Icon size={25} /></div>
+                                    <button key={platform.id} type="button" onClick={() => { selectPlatform(platform.id); scrollToCatalog(); }} className={`group relative overflow-hidden rounded-3xl border p-5 text-right transition hover:-translate-y-0.5 ${active ? theme.active : `${theme.border} bg-[var(--surface)] ${theme.hoverBorder}`}`}>
+                                        <div className={`absolute inset-x-0 top-0 h-1 ${theme.accent}`} />
+                                        <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${active ? theme.activeIcon : `${theme.soft} ${theme.icon}`}`}><Icon size={25} /></div>
                                         <div className="mt-4 font-black text-lg">{platform.name}</div>
                                         <div className={`mt-1 text-xs leading-6 ${active ? "text-white/75" : "text-[var(--text-muted)]"}`}>{platform.description || "مشاهده و سفارش خدمات"}</div>
                                     </button>
@@ -204,11 +306,14 @@ export default function SocialServicesPage() {
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {popularServices.map((service) => {
                             const rate = serviceRate(service);
+                            const platform = platforms.find((item) => item.id === service.platform_id);
+                            const theme = getPlatformTheme(platform);
                             return (
-                                <Link key={service.id} href={`/social/order?service=${service.id}`} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 transition hover:-translate-y-0.5 hover:border-[var(--primary)] shadow-sm">
+                                <Link key={service.id} href={`/social/order?service=${service.id}`} className={`relative overflow-hidden rounded-3xl border bg-[var(--surface)] p-5 transition hover:-translate-y-0.5 ${theme.border} ${theme.hoverBorder} shadow-sm`}>
+                                    <div className={`absolute inset-x-0 top-0 h-1 ${theme.accent}`} />
                                     <div className="flex items-center justify-between gap-3">
-                                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]"><Zap size={21} /></div>
-                                        <span className="rounded-full bg-[var(--background)] px-3 py-1 text-xs font-bold">محبوب</span>
+                                        <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${theme.soft} ${theme.icon}`}><Zap size={21} /></div>
+                                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${theme.soft} ${theme.icon}`}>{platform?.name || "محبوب"}</span>
                                     </div>
                                     <h3 className="mt-4 font-black leading-7">{service.name}</h3>
                                     <p className="mt-1 text-xs text-[var(--text-muted)]">{service.service_type}</p>
@@ -238,7 +343,8 @@ export default function SocialServicesPage() {
                                 <button type="button" onClick={() => selectPlatform("")} className={`w-full rounded-2xl px-4 py-3 text-right font-bold transition ${!selectedPlatform ? "bg-[var(--primary)] text-white" : "hover:bg-[var(--background)]"}`}>همه شبکه‌ها</button>
                                 {platforms.map((platform) => {
                                     const Icon = iconMap[platform.icon || platform.slug] || MessageCircle;
-                                    return <button key={platform.id} type="button" onClick={() => selectPlatform(platform.id)} className={`w-full rounded-2xl px-4 py-3 text-right font-bold flex items-center gap-3 transition ${selectedPlatform === platform.id ? "bg-[var(--primary)] text-white" : "hover:bg-[var(--background)]"}`}><Icon size={19} /><span>{platform.name}</span></button>;
+                                    const theme = getPlatformTheme(platform);
+                                    return <button key={platform.id} type="button" onClick={() => selectPlatform(platform.id)} className={`w-full rounded-2xl px-4 py-3 text-right font-bold flex items-center gap-3 transition ${selectedPlatform === platform.id ? theme.active : `hover:bg-[var(--background)] ${theme.icon}`}`}><span className={`flex h-8 w-8 items-center justify-center rounded-xl ${theme.soft}`}><Icon size={18} /></span><span>{platform.name}</span></button>;
                                 })}
                             </div>
                         </aside>
@@ -267,14 +373,18 @@ export default function SocialServicesPage() {
                                 <div className="mt-5 grid sm:grid-cols-2 gap-4">
                                     {visibleServices.map((service) => {
                                         const rate = serviceRate(service);
+                                        const platform = platforms.find((item) => item.id === service.platform_id);
+                                        const theme = getPlatformTheme(platform);
                                         return (
-                                            <div key={service.id} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:-translate-y-0.5 transition shadow-sm">
+                                            <div key={service.id} className={`relative overflow-hidden rounded-3xl border bg-[var(--surface)] p-5 transition hover:-translate-y-0.5 shadow-sm ${theme.border} ${theme.hoverBorder}`}>
+                                                <div className={`absolute inset-x-0 top-0 h-1 ${theme.accent}`} />
                                                 <div className="flex items-start justify-between gap-4">
                                                     <div>
+                                                        <div className={`mb-2 inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${theme.soft} ${theme.icon}`}>{platform?.name || "خدمات اجتماعی"}</div>
                                                         <h3 className="font-black text-lg leading-7">{service.name}</h3>
                                                         {service.description && <p className="mt-2 text-sm text-[var(--text-muted)] leading-6 line-clamp-2">{service.description}</p>}
                                                     </div>
-                                                    <div className="shrink-0 rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)] p-3"><Users size={20} /></div>
+                                                    <div className={`shrink-0 rounded-2xl p-3 ${theme.soft} ${theme.icon}`}><Users size={20} /></div>
                                                 </div>
                                                 <div className="mt-5 grid grid-cols-2 gap-2 text-xs">
                                                     <div className="rounded-xl bg-[var(--background)] p-3"><span className="text-[var(--text-muted)] block">حداقل سفارش</span><strong className="mt-1 block">{formatNumber(service.min_quantity)}</strong></div>
@@ -285,7 +395,7 @@ export default function SocialServicesPage() {
                                                         <span className="block text-xs text-[var(--text-muted)]">قیمت پایه</span>
                                                         <strong className="mt-1 block">{rate == null ? "استعلامی" : `${formatNumber(Math.round(rate))} ریال`}</strong>
                                                     </div>
-                                                    <Link href={`/social/order?service=${service.id}`} className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[var(--primary)] text-white px-4 py-3 font-black hover:opacity-90 transition">سفارش <ArrowLeft size={17} /></Link>
+                                                    <Link href={`/social/order?service=${service.id}`} className={`inline-flex items-center justify-center gap-2 rounded-2xl text-white px-4 py-3 font-black hover:opacity-90 transition ${theme.accent}`}>سفارش <ArrowLeft size={17} /></Link>
                                                 </div>
                                             </div>
                                         );
