@@ -15,14 +15,12 @@ function parseQuantity(value: unknown) {
     return Number.isSafeInteger(quantity) && quantity > 0 ? quantity : null;
 }
 
-function calculatePrice(rate: number | null, quantity: number, profitType: string, profitValue: number) {
+function calculatePrice(rate: number | null, quantity: number) {
     if (rate == null) return null;
 
-    // FJPanel rates are quoted per 1000 units.
-    const base = rate * quantity / 1000;
-    if (profitType === "percentage") return base * (1 + profitValue / 100);
-    if (profitType === "fixed") return base + profitValue;
-    return base;
+    // FJPanel rate is stored in Toman and represents the provider price for ONE unit.
+    // Customer price is exactly 2x the provider price.
+    return rate * quantity * 2;
 }
 
 function makeTrackingCode() {
@@ -92,8 +90,6 @@ export async function POST(request: NextRequest) {
         const price = calculatePrice(
             service.provider_rate == null ? null : Number(service.provider_rate),
             quantity,
-            service.profit_type,
-            Number(service.profit_value || 0),
         );
 
         if (price == null || !Number.isFinite(price) || price < 0) {
@@ -110,6 +106,7 @@ export async function POST(request: NextRequest) {
                 provider: service.provider || "fjpanel",
                 link,
                 quantity,
+                // social_orders.price is stored in Toman. Convert to Rial only at the payment gateway boundary.
                 price: Math.round(price * 100) / 100,
                 status: "pending",
             })
