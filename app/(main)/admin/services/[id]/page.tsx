@@ -3,10 +3,11 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import ServiceFormBuilder, { FormField } from "@/components/ServiceFormBuilder";
 import FormHierarchyManager from "@/components/FormHierarchyManager";
 import { GlassPanel, TusanCard, TusanButton, TusanInput, SectionHeader } from "@/components/ui";
+
+type ParentService = { id: string; title: string; category: string | null };
 
 export default function EditServicePage() {
   const params = useParams();
@@ -19,6 +20,9 @@ export default function EditServicePage() {
   const [icon, setIcon] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [formSchema, setFormSchema] = useState<FormField[]>([]);
+  const [parentServiceId, setParentServiceId] = useState("");
+  const [parentServices, setParentServices] = useState<ParentService[]>([]);
+  const [loadingParents, setLoadingParents] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -41,8 +45,28 @@ export default function EditServicePage() {
       setIcon(service.icon || "");
       setIsActive(service.is_active ?? true);
       setFormSchema(Array.isArray(service.form_schema) ? service.form_schema : []);
+      setParentServiceId(service.parent_service_id || "");
+      await loadParentServices(service.id);
     } catch (err: any) { setError(err?.message || "خطایی هنگام دریافت اطلاعات خدمت رخ داد."); }
     finally { setLoading(false); }
+  }
+
+  async function loadParentServices(currentId: string) {
+    setLoadingParents(true);
+    try {
+      const { data, error: queryError } = await supabase
+        .from("services")
+        .select("id,title,category")
+        .is("parent_service_id", null)
+        .neq("id", currentId)
+        .order("title", { ascending: true });
+      if (queryError) throw new Error(queryError.message);
+      setParentServices(data || []);
+    } catch (err: any) {
+      setError(err?.message || "دریافت فهرست خدمات مادر انجام نشد.");
+    } finally {
+      setLoadingParents(false);
+    }
   }
 
   async function updateService(e: React.FormEvent) {
@@ -59,6 +83,7 @@ export default function EditServicePage() {
       const { error: updateError } = await supabase.from("services").update({
         title: title.trim(), category: category.trim() || null, description: description.trim() || null,
         price: parsedPrice, icon: icon.trim() || null, is_active: isActive, form_schema: formSchema,
+        parent_service_id: parentServiceId || null,
       }).eq("id", serviceId);
       if (updateError) throw new Error(updateError.message);
       router.push("/admin/services"); router.refresh();
@@ -88,12 +113,26 @@ export default function EditServicePage() {
             <label className="flex items-center gap-3"><input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-5 h-5 accent-[#09967C]" /><span className="font-bold">خدمت فعال باشد</span></label>
           </TusanCard>
 
+          <TusanCard className="p-5 space-y-4">
+            <div>
+              <h3 className="font-bold">ارتباط با خدمت مادر</h3>
+              <p className="text-sm text-[var(--muted)] mt-1">اگر این خدمت باید داخل یک خدمت مادر نمایش داده شود، فرم مادر را در بخش «ساختار فرم‌ها» انتخاب کنید و اینجا نیز خدمت مادر را مشخص کنید.</p>
+            </div>
+            <div>
+              <label className="block font-bold mb-2">خدمت مادر</label>
+              <select value={parentServiceId} onChange={e => setParentServiceId(e.target.value)} disabled={loadingParents || saving} className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 outline-none">
+                <option value="">خدمت مستقل / بدون خدمت مادر</option>
+                {parentServices.map(parent => <option key={parent.id} value={parent.id}>{parent.title}{parent.category ? ` — ${parent.category}` : ""}</option>)}
+              </select>
+            </div>
+          </TusanCard>
+
           <TusanCard className="p-5"><ServiceFormBuilder value={formSchema} onChange={setFormSchema} /></TusanCard>
           <div className="flex justify-end"><TusanButton type="submit" disabled={saving}>{saving ? "در حال ذخیره..." : "ذخیره اطلاعات خدمت"}</TusanButton></div>
         </form>
       </GlassPanel>
 
-      <FormHierarchyManager serviceId={serviceId} />
+      <FormHierarchyManager serviceId={serviceId} parentServiceId={parentServiceId || null} />
     </div>
   </div>;
 }
