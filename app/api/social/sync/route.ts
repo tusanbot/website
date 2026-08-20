@@ -34,28 +34,21 @@ const CATEGORY_RULES = [
 function normalize(value: string) {
     return value.toLowerCase().replace(/[‌]/g, " ").replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/\s+/g, " ").trim();
 }
-
-function containsKeyword(text: string, keyword: string) {
-    return text.includes(normalize(keyword));
-}
-
+function containsKeyword(text: string, keyword: string) { return text.includes(normalize(keyword)); }
 function detectPlatform(service: FJPanelService) {
     const text = normalize(`${service.category} ${service.name}`);
     return PLATFORM_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? { slug: "other", name: "سایر شبکه‌ها", icon: "message-circle" };
 }
-
 function detectCategory(service: FJPanelService) {
     const text = normalize(`${service.category} ${service.name}`);
     return CATEGORY_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? { slug: "other", name: "سایر خدمات" };
 }
-
-function parsePositiveInteger(value: string, fallback = 1) {
-    const parsed = Number.parseInt(value, 10);
+function parsePositiveInteger(value: string | undefined, fallback = 1) {
+    const parsed = Number.parseInt(value ?? "", 10);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
-
-function parseRate(value: string) {
-    const parsed = Number.parseFloat(value);
+function parseRate(value: string | undefined) {
+    const parsed = Number.parseFloat(value ?? "");
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
@@ -69,7 +62,6 @@ async function getRequestUser(request: NextRequest) {
     const { data } = await client.auth.getUser();
     return data.user ?? null;
 }
-
 async function isAuthorized(request: NextRequest) {
     const syncSecret = process.env.SOCIAL_SYNC_SECRET;
     const suppliedSecret = request.headers.get("x-social-sync-secret");
@@ -91,20 +83,16 @@ export async function GET() {
 export async function POST(request: NextRequest) {
     try {
         if (!(await isAuthorized(request))) return NextResponse.json({ error: "اجازه دسترسی به همگام‌سازی سرویس‌ها را ندارید." }, { status: 403 });
-
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
         if (!supabaseUrl || !serviceRoleKey) return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, { status: 500 });
-
         const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
         const providerServices = await getFJPanelServices();
         if (!Array.isArray(providerServices)) return NextResponse.json({ error: "پاسخ سرویس‌ها از FJPanel معتبر نیست." }, { status: 502 });
-
         const platformCache = new Map<string, string>();
         const categoryCache = new Map<string, string>();
         let createdOrUpdated = 0;
         let skipped = 0;
-
         for (const providerService of providerServices) {
             if (!providerService?.service || !providerService.name) { skipped += 1; continue; }
             const platform = detectPlatform(providerService);
@@ -117,7 +105,6 @@ export async function POST(request: NextRequest) {
                 platformId = data.id;
                 platformCache.set(platformKey, platformId);
             }
-
             const categoryKey = `${platformId}:${category.slug}`;
             let categoryId = categoryCache.get(categoryKey);
             if (!categoryId) {
@@ -126,7 +113,6 @@ export async function POST(request: NextRequest) {
                 categoryId = data.id;
                 categoryCache.set(categoryKey, categoryId);
             }
-
             const minQuantity = parsePositiveInteger(providerService.min);
             const maxQuantity = Math.max(minQuantity, parsePositiveInteger(providerService.max, minQuantity));
             const providerRate = parseRate(providerService.rate);
@@ -134,7 +120,6 @@ export async function POST(request: NextRequest) {
             if (error) throw new Error(`service upsert failed for ${providerService.service}: ${error.message}`);
             createdOrUpdated += 1;
         }
-
         return NextResponse.json({ success: true, provider: "fjpanel", received: providerServices.length, synced: createdOrUpdated, skipped, syncedAt: new Date().toISOString() });
     } catch (error) {
         console.error("[social/fjpanel-sync]", error);
