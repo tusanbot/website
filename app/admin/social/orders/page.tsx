@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ExternalLink, RefreshCw, Search, Activity, RotateCcw, Eye } from "lucide-react";
-import { createClient } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 interface SocialOrder {
   id: string; tracking_code: string; user_id: string; service_id: string; link: string; quantity: number; price: number; status: string;
@@ -14,7 +14,6 @@ interface SocialOrder {
 const statusLabels: Record<string,string> = { pending:"در انتظار پرداخت", awaiting_payment:"در انتظار پرداخت", paid:"پرداخت‌شده", processing:"در حال پردازش", completed:"تکمیل‌شده", partial:"ناقص", cancelled:"لغوشده", failed:"ناموفق" };
 
 export default function SocialOrdersAdminPage() {
-  const supabase = createClient();
   const [orders,setOrders]=useState<SocialOrder[]>([]); const [loading,setLoading]=useState(true); const [query,setQuery]=useState(""); const [status,setStatus]=useState("all");
   const [refreshing,setRefreshing]=useState(false); const [checking,setChecking]=useState<string|null>(null); const [resending,setResending]=useState<string|null>(null); const [message,setMessage]=useState<string|null>(null);
   async function loadOrders(){setRefreshing(true);const {data,error}=await supabase.from("social_orders").select("*, social_services(name,slug,provider_service_id), social_platforms(name,slug)").order("created_at",{ascending:false});if(!error)setOrders((data||[]) as SocialOrder[]);setLoading(false);setRefreshing(false);}
