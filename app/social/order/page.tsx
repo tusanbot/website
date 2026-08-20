@@ -70,21 +70,25 @@ export default function SocialOrderPage() {
 
             const response = await fetch("/api/social/order", {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    serviceId: service.id,
-                    link: link.trim(),
-                    quantity: numericQuantity,
-                }),
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ serviceId: service.id, link: link.trim(), quantity: numericQuantity }),
             });
 
             const result = await response.json().catch(() => null);
             if (!response.ok) throw new Error(result?.error || "ثبت سفارش ناموفق بود.");
 
-            setSuccess({ trackingCode: result.order.tracking_code, price: Number(result.order.price) });
+            const order = result.order;
+            const paymentResponse = await fetch("/api/social/payment/request", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ orderId: order.id }),
+            });
+            const paymentResult = await paymentResponse.json().catch(() => null);
+            if (!paymentResponse.ok || !paymentResult?.paymentUrl) {
+                throw new Error(paymentResult?.error || "ایجاد پرداخت ناموفق بود.");
+            }
+
+            window.location.href = paymentResult.paymentUrl;
         } catch (err) {
             setError(err instanceof Error ? err.message : "خطای ناشناخته در ثبت سفارش");
         } finally {
@@ -159,9 +163,9 @@ export default function SocialOrderPage() {
                         {error && <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm leading-7 text-red-700">{error}</div>}
 
                         <button type="button" onClick={submitOrder} disabled={!link.trim() || !validQuantity || submitting || !userEmail} className="w-full rounded-2xl bg-[var(--primary)] text-white py-3.5 font-black disabled:opacity-40 disabled:cursor-not-allowed">
-                            {submitting ? "در حال ثبت سفارش..." : "ثبت پیش‌سفارش"}
+                            {submitting ? "در حال انتقال به درگاه..." : "ثبت سفارش و پرداخت"}
                         </button>
-                        <p className="text-center text-xs text-[var(--text-muted)]">ثبت پیش‌سفارش به‌معنی ارسال سفارش به ارائه‌دهنده نیست؛ ارسال به FJPanel پس از تأیید پرداخت انجام خواهد شد.</p>
+                        <p className="text-center text-xs text-[var(--text-muted)]">پس از ایجاد سفارش، برای پرداخت به درگاه امن زیبال منتقل می‌شوید و بعد از تأیید پرداخت، سفارش به‌صورت سروری برای ارائه‌دهنده ارسال خواهد شد.</p>
                     </div>
                 </div>
             </div>
