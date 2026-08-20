@@ -1,0 +1,68 @@
+name: Build master services seed
+
+on:
+  push:
+    branches:
+      - feature/services-phase5-complete
+    paths:
+      - 'supabase/tusan_services_phase1_complete.sql'
+      - 'supabase/tusan_services_phase2.sql'
+      - 'supabase/tusan_services_phase3.sql'
+      - 'supabase/tusan_services_phase4.sql'
+      - 'supabase/tusan_services_phase5.sql'
+      - 'supabase/build_master_services_seed.py'
+      - '.github/workflows/build-master-services-seed.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-master-seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/services-phase5-complete
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate master SQL
+        run: python supabase/build_master_services_seed.py
+
+      - name: Validate generated SQL
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('supabase/tusan_services_master.sql')
+          text = p.read_text(encoding='utf-8')
+          required = [
+              'BEGIN;',
+              'ALTER TABLE public.services ADD COLUMN IF NOT EXISTS parent_service_id uuid NULL;',
+              'ALTER TABLE public.custom_forms ADD COLUMN IF NOT EXISTS form_type text NOT NULL DEFAULT \'normal\';',
+              'jsonb_array_elements($seed$',
+              'COMMIT;',
+          ]
+          missing = [x for x in required if x not in text]
+          if missing:
+              raise SystemExit('Generated SQL missing required fragments: ' + repr(missing))
+          if '\\i ' in text or '\\ir ' in text:
+              raise SystemExit('Generated SQL contains psql include commands and is not SQL Editor compatible.')
+          print(f'Validated {p.stat().st_size} bytes of generated SQL.')
+
+      - name: Commit generated master SQL
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/tusan_services_master.sql
+          if git diff --cached --quiet; then
+            echo 'Master SQL is already up to date.'
+            exit 0
+          fi
+          git commit -m 'feat(supabase): add standalone master services seed'
+          git push origin HEAD:feature/services-phase5-complete
