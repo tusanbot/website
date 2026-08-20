@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
-export default function AuthCallbackPage() {
+function AuthCallbackContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [error, setError] = useState("");
@@ -48,5 +48,21 @@ export default function AuthCallbackPage() {
                 )}
             </div>
         </main>
+    );
+}
+
+export default function AuthCallbackPage() {
+    return (
+        <Suspense fallback={
+            <main dir="rtl" className="min-h-screen page-background flex items-center justify-center p-4">
+                <div className="w-full max-w-md rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-8 text-center shadow-xl">
+                    <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[var(--border)] border-t-[var(--primary)]" />
+                    <h1 className="mt-5 text-xl font-black text-[var(--text)]">در حال تکمیل ورود...</h1>
+                    <p className="mt-2 text-sm text-[var(--text-secondary)]">لطفاً چند لحظه صبر کنید.</p>
+                </div>
+            </main>
+        }>
+            <AuthCallbackContent />
+        </Suspense>
     );
 }
