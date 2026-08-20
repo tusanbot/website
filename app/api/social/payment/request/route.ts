@@ -45,8 +45,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: true, paymentUrl: zibalStartUrl(Number(order.payment_track_id)), trackId: Number(order.payment_track_id) });
         }
 
-        const amount = Math.round(Number(order.price));
-        if (!Number.isSafeInteger(amount) || amount < 1000) return NextResponse.json({ error: "مبلغ سفارش برای پرداخت معتبر نیست." }, { status: 409 });
+        // social_orders.price is stored in Toman. Zibal expects Rial.
+        const priceInToman = Number(order.price);
+        const amount = Math.round(priceInToman * 10);
+        if (!Number.isSafeInteger(amount) || amount < 10000) return NextResponse.json({ error: "مبلغ سفارش برای پرداخت معتبر نیست." }, { status: 409 });
 
         const payment = await requestZibalPayment({
             amount,
