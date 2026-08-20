@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 import ServiceFormBuilder, { FormField } from "@/components/ServiceFormBuilder";
 import FormHierarchyManager from "@/components/FormHierarchyManager";
 import { GlassPanel, TusanCard, TusanButton, TusanInput, SectionHeader } from "@/components/ui";
@@ -54,12 +55,7 @@ export default function EditServicePage() {
   async function loadParentServices(currentId: string) {
     setLoadingParents(true);
     try {
-      const { data, error: queryError } = await supabase
-        .from("services")
-        .select("id,title,category")
-        .is("parent_service_id", null)
-        .neq("id", currentId)
-        .order("title", { ascending: true });
+      const { data, error: queryError } = await supabase.from("services").select("id,title,category").is("parent_service_id", null).neq("id", currentId).order("title", { ascending: true });
       if (queryError) throw new Error(queryError.message);
       setParentServices(data || []);
     } catch (err: any) {
@@ -116,7 +112,7 @@ export default function EditServicePage() {
           <TusanCard className="p-5 space-y-4">
             <div>
               <h3 className="font-bold">ارتباط با خدمت مادر</h3>
-              <p className="text-sm text-[var(--muted)] mt-1">اگر این خدمت باید داخل یک خدمت مادر نمایش داده شود، فرم مادر را در بخش «ساختار فرم‌ها» انتخاب کنید و اینجا نیز خدمت مادر را مشخص کنید.</p>
+              <p className="text-sm text-[var(--muted)] mt-1">اگر این خدمت باید داخل یک خدمت مادر نمایش داده شود، خدمت مادر را انتخاب کنید. سپس در بخش «ساختار فرم‌ها» فرم مادر موجود را متصل کنید.</p>
             </div>
             <div>
               <label className="block font-bold mb-2">خدمت مادر</label>
