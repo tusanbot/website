@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
         }
 
         const verification = await verifyZibalPayment(trackId);
-        const expectedAmount = Math.round(Number(order.price));
+        // social_orders.price is stored in Toman; Zibal reports the paid amount in Rial.
+        const expectedAmount = Math.round(Number(order.price) * 10);
         const amountMatches = Number.isFinite(verification.amount) && verification.amount === expectedAmount;
 
         if (!verification.success || !amountMatches) {
