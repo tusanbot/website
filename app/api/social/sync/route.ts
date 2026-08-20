@@ -32,35 +32,21 @@ const CATEGORY_RULES = [
 ];
 
 function normalize(value: string) {
-    return value
-        .toLowerCase()
-        .replace(/[‌]/g, " ")
-        .replace(/ي/g, "ی")
-        .replace(/ك/g, "ک")
-        .replace(/\s+/g, " ")
-        .trim();
+    return value.toLowerCase().replace(/[‌]/g, " ").replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/\s+/g, " ").trim();
 }
 
 function containsKeyword(text: string, keyword: string) {
-    const normalizedKeyword = normalize(keyword);
-    return text.includes(normalizedKeyword);
+    return text.includes(normalize(keyword));
 }
 
 function detectPlatform(service: FJPanelService) {
     const text = normalize(`${service.category} ${service.name}`);
-    return PLATFORM_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? {
-        slug: "other",
-        name: "سایر شبکه‌ها",
-        icon: "message-circle",
-    };
+    return PLATFORM_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? { slug: "other", name: "سایر شبکه‌ها", icon: "message-circle" };
 }
 
 function detectCategory(service: FJPanelService) {
     const text = normalize(`${service.category} ${service.name}`);
-    return CATEGORY_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? {
-        slug: "other",
-        name: "سایر خدمات",
-    };
+    return CATEGORY_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? { slug: "other", name: "سایر خدمات" };
 }
 
 function parsePositiveInteger(value: string, fallback = 1) {
@@ -76,16 +62,10 @@ function parseRate(value: string) {
 async function getRequestUser(request: NextRequest) {
     const authHeader = request.headers.get("authorization");
     if (!authHeader?.startsWith("Bearer ")) return null;
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !anonKey) return null;
-
-    const client = createClient(supabaseUrl, anonKey, {
-        global: { headers: { Authorization: authHeader } },
-        auth: { persistSession: false, autoRefreshToken: false },
-    });
-
+    const client = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: authHeader } }, auth: { persistSession: false, autoRefreshToken: false } });
     const { data } = await client.auth.getUser();
     return data.user ?? null;
 }
@@ -94,49 +74,31 @@ async function isAuthorized(request: NextRequest) {
     const syncSecret = process.env.SOCIAL_SYNC_SECRET;
     const suppliedSecret = request.headers.get("x-social-sync-secret");
     if (syncSecret && suppliedSecret && suppliedSecret === syncSecret) return true;
-
     const user = await getRequestUser(request);
     if (!user) return false;
-
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!supabaseUrl || !serviceRoleKey) return false;
-
-    const admin = createClient(supabaseUrl, serviceRoleKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-    });
+    const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const { data: profile } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
     return profile?.role === "admin";
 }
 
 export async function GET() {
-    return NextResponse.json({
-        ok: true,
-        route: "social-sync",
-        message: "Social sync endpoint is available",
-    });
+    return NextResponse.json({ ok: true, route: "social-sync", message: "Social sync endpoint is available" });
 }
 
 export async function POST(request: NextRequest) {
     try {
-        if (!(await isAuthorized(request))) {
-            return NextResponse.json({ error: "اجازه دسترسی به همگام‌سازی سرویس‌ها را ندارید." }, { status: 403 });
-        }
+        if (!(await isAuthorized(request))) return NextResponse.json({ error: "اجازه دسترسی به همگام‌سازی سرویس‌ها را ندارید." }, { status: 403 });
 
         const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
         const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-        if (!supabaseUrl || !serviceRoleKey) {
-            return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, { status: 500 });
-        }
+        if (!supabaseUrl || !serviceRoleKey) return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, { status: 500 });
 
-        const admin = createClient(supabaseUrl, serviceRoleKey, {
-            auth: { persistSession: false, autoRefreshToken: false },
-        });
+        const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
         const providerServices = await getFJPanelServices();
-
-        if (!Array.isArray(providerServices)) {
-            return NextResponse.json({ error: "پاسخ سرویس‌ها از FJPanel معتبر نیست." }, { status: 502 });
-        }
+        if (!Array.isArray(providerServices)) return NextResponse.json({ error: "پاسخ سرویس‌ها از FJPanel معتبر نیست." }, { status: 502 });
 
         const platformCache = new Map<string, string>();
         const categoryCache = new Map<string, string>();
@@ -144,29 +106,13 @@ export async function POST(request: NextRequest) {
         let skipped = 0;
 
         for (const providerService of providerServices) {
-            if (!providerService?.service || !providerService.name) {
-                skipped += 1;
-                continue;
-            }
-
+            if (!providerService?.service || !providerService.name) { skipped += 1; continue; }
             const platform = detectPlatform(providerService);
             const category = detectCategory(providerService);
             const platformKey = platform.slug;
-
             let platformId = platformCache.get(platformKey);
             if (!platformId) {
-                const { data, error } = await admin
-                    .from("social_platforms")
-                    .upsert({
-                        name: platform.name,
-                        slug: platform.slug,
-                        icon: platform.icon,
-                        description: `خدمات ${platform.name}`,
-                        is_active: true,
-                        sort_order: 100,
-                    }, { onConflict: "slug" })
-                    .select("id")
-                    .single();
+                const { data, error } = await admin.from("social_platforms").upsert({ name: platform.name, slug: platform.slug, icon: platform.icon, description: `خدمات ${platform.name}`, is_active: true, sort_order: 100 }, { onConflict: "slug" }).select("id").single();
                 if (error || !data) throw new Error(`platform upsert failed: ${error?.message || platform.slug}`);
                 platformId = data.id;
                 platformCache.set(platformKey, platformId);
@@ -175,18 +121,7 @@ export async function POST(request: NextRequest) {
             const categoryKey = `${platformId}:${category.slug}`;
             let categoryId = categoryCache.get(categoryKey);
             if (!categoryId) {
-                const { data, error } = await admin
-                    .from("social_categories")
-                    .upsert({
-                        platform_id: platformId,
-                        name: category.name,
-                        slug: category.slug,
-                        description: `خدمات ${category.name}`,
-                        is_active: true,
-                        sort_order: 100,
-                    }, { onConflict: "platform_id,slug" })
-                    .select("id")
-                    .single();
+                const { data, error } = await admin.from("social_categories").upsert({ platform_id: platformId, name: category.name, slug: category.slug, description: `خدمات ${category.name}`, is_active: true, sort_order: 100 }, { onConflict: "platform_id,slug" }).select("id").single();
                 if (error || !data) throw new Error(`category upsert failed: ${error?.message || category.slug}`);
                 categoryId = data.id;
                 categoryCache.set(categoryKey, categoryId);
@@ -195,39 +130,14 @@ export async function POST(request: NextRequest) {
             const minQuantity = parsePositiveInteger(providerService.min);
             const maxQuantity = Math.max(minQuantity, parsePositiveInteger(providerService.max, minQuantity));
             const providerRate = parseRate(providerService.rate);
-
-            const { error } = await admin
-                .from("social_services")
-                .upsert({
-                    platform_id: platformId,
-                    category_id: categoryId,
-                    provider: "fjpanel",
-                    provider_service_id: String(providerService.service),
-                    name: providerService.name.trim(),
-                    description: providerService.category ? `دسته: ${providerService.category}` : null,
-                    service_type: providerService.type || "default",
-                    provider_rate: providerRate,
-                    min_quantity: minQuantity,
-                    max_quantity: maxQuantity,
-                    is_active: true,
-                }, { onConflict: "provider,provider_service_id" });
-
+            const { error } = await admin.from("social_services").upsert({ platform_id: platformId, category_id: categoryId, provider: "fjpanel", provider_service_id: String(providerService.service), name: providerService.name.trim(), description: providerService.category ? `دسته: ${providerService.category}` : null, service_type: providerService.type || "default", provider_rate: providerRate, min_quantity: minQuantity, max_quantity: maxQuantity, is_active: true }, { onConflict: "provider,provider_service_id" });
             if (error) throw new Error(`service upsert failed for ${providerService.service}: ${error.message}`);
             createdOrUpdated += 1;
         }
 
-        return NextResponse.json({
-            success: true,
-            provider: "fjpanel",
-            received: providerServices.length,
-            synced: createdOrUpdated,
-            skipped,
-            syncedAt: new Date().toISOString(),
-        });
+        return NextResponse.json({ success: true, provider: "fjpanel", received: providerServices.length, synced: createdOrUpdated, skipped, syncedAt: new Date().toISOString() });
     } catch (error) {
         console.error("[social/fjpanel-sync]", error);
-        return NextResponse.json({
-            error: error instanceof Error ? error.message : "خطای ناشناخته در همگام‌سازی سرویس‌ها",
-        }, { status: 500 });
+        return NextResponse.json({ error: error instanceof Error ? error.message : "خطای ناشناخته در همگام‌سازی سرویس‌ها" }, { status: 500 });
     }
 }
