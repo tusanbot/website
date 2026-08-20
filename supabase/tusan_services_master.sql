@@ -10,37 +10,34 @@
 
 BEGIN;
 
--- Align the two hierarchy tables used by the current admin/form flow.
+-- Align services/custom_forms hierarchy with the production migrations.
 ALTER TABLE public.services ADD COLUMN IF NOT EXISTS parent_service_id uuid NULL;
 ALTER TABLE public.custom_forms ADD COLUMN IF NOT EXISTS form_type text NOT NULL DEFAULT 'normal';
 ALTER TABLE public.custom_forms ADD COLUMN IF NOT EXISTS parent_form_id uuid NULL;
 ALTER TABLE public.custom_forms ADD COLUMN IF NOT EXISTS service_id uuid NULL;
 ALTER TABLE public.custom_forms ADD COLUMN IF NOT EXISTS sort_order integer NOT NULL DEFAULT 0;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'custom_forms_form_type_check') THEN
-    ALTER TABLE public.custom_forms ADD CONSTRAINT custom_forms_form_type_check CHECK (form_type IN ('normal', 'parent'));
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'custom_forms_parent_form_id_fkey') THEN
-    ALTER TABLE public.custom_forms ADD CONSTRAINT custom_forms_parent_form_id_fkey FOREIGN KEY (parent_form_id) REFERENCES public.custom_forms(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'custom_forms_service_id_fkey') THEN
-    ALTER TABLE public.custom_forms ADD CONSTRAINT custom_forms_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE CASCADE;
-  END IF;
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'services_parent_service_id_fkey') THEN
-    ALTER TABLE public.services ADD CONSTRAINT services_parent_service_id_fkey FOREIGN KEY (parent_service_id) REFERENCES public.services(id) ON DELETE SET NULL;
-  END IF;
-END $$;
+-- Recreate hierarchy constraints so an older/partial constraint cannot survive with incompatible semantics.
+ALTER TABLE public.custom_forms DROP CONSTRAINT IF EXISTS custom_forms_form_type_check;
+ALTER TABLE public.custom_forms ADD CONSTRAINT custom_forms_form_type_check CHECK (form_type IN ('normal', 'parent'));
+ALTER TABLE public.custom_forms DROP CONSTRAINT IF EXISTS custom_forms_hierarchy_check;
+ALTER TABLE public.custom_forms ADD CONSTRAINT custom_forms_hierarchy_check CHECK ((form_type = 'parent' AND parent_form_id IS NULL) OR (form_type = 'normal'));
+ALTER TABLE public.custom_forms DROP CONSTRAINT IF EXISTS custom_forms_parent_form_id_fkey;
+ALTER TABLE public.custom_forms ADD CONSTRAINT custom_forms_parent_form_id_fkey FOREIGN KEY (parent_form_id) REFERENCES public.custom_forms(id) ON DELETE CASCADE;
+ALTER TABLE public.custom_forms DROP CONSTRAINT IF EXISTS custom_forms_service_id_fkey;
+ALTER TABLE public.custom_forms ADD CONSTRAINT custom_forms_service_id_fkey FOREIGN KEY (service_id) REFERENCES public.services(id) ON DELETE CASCADE;
+ALTER TABLE public.services DROP CONSTRAINT IF EXISTS services_parent_service_id_fkey;
+ALTER TABLE public.services ADD CONSTRAINT services_parent_service_id_fkey FOREIGN KEY (parent_service_id) REFERENCES public.services(id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_custom_forms_service_id ON public.custom_forms(service_id);
 CREATE INDEX IF NOT EXISTS idx_custom_forms_parent_form_id ON public.custom_forms(parent_form_id);
+CREATE INDEX IF NOT EXISTS idx_custom_forms_service_parent_sort ON public.custom_forms(service_id, parent_form_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_services_parent_service_id ON public.services(parent_service_id);
+CREATE INDEX IF NOT EXISTS idx_services_active_parent_created ON public.services(is_active, parent_service_id, created_at DESC);
 
 -- Canonical service/form seed.
--- Every catalog service is a standalone service with one normal form.
--- Future mother/child variants can be added without changing this seed: a parent custom_form
--- uses form_type='parent', parent_form_id=NULL, and children point to that parent and same service_id.
+-- Every catalog service is a standalone service with one normal root form.
+-- Mother/child forms are intentionally not fabricated by this catalog seed.
 DO $$
 DECLARE
   item jsonb;
@@ -5918,13 +5915,33 @@ $seed$::jsonb) LOOP
       WHERE id = v_service_id;
     END IF;
 
+    -- Prefer an already-linked standalone form; never convert a parent form into a normal form.
     SELECT id INTO v_form_id
     FROM public.custom_forms
     WHERE service_id = v_service_id
       AND parent_form_id IS NULL
+      AND form_type = 'normal'
       AND lower(trim(title)) = lower(trim(item->>'title'))
     ORDER BY created_at NULLS FIRST, id
     LIMIT 1;
+
+    -- Recover a legacy standalone form that has the same exact title but no service link.
+    IF v_form_id IS NULL THEN
+      SELECT id INTO v_form_id
+      FROM public.custom_forms
+      WHERE service_id IS NULL
+        AND parent_form_id IS NULL
+        AND form_type = 'normal'
+        AND lower(trim(title)) = lower(trim(item->>'title'))
+      ORDER BY created_at NULLS FIRST, id
+      LIMIT 1;
+
+      IF v_form_id IS NOT NULL THEN
+        UPDATE public.custom_forms
+        SET service_id = v_service_id
+        WHERE id = v_form_id;
+      END IF;
+    END IF;
 
     IF v_form_id IS NULL THEN
       INSERT INTO public.custom_forms
@@ -5937,6 +5954,7 @@ $seed$::jsonb) LOOP
           schema = item->'form_schema',
           is_public = true,
           form_type = 'normal',
+          parent_form_id = NULL,
           service_id = v_service_id,
           sort_order = 0
       WHERE id = v_form_id;
@@ -5946,14 +5964,14 @@ END $$;
 
 COMMIT;
 
--- Validation: this should return zero rows for the canonical seed catalog.
+-- Validation 1: duplicate normalized service titles.
 SELECT lower(trim(title)) AS normalized_title, count(*) AS service_count
 FROM public.services
 GROUP BY lower(trim(title))
 HAVING count(*) > 1
 ORDER BY service_count DESC, normalized_title;
 
--- Validation: every canonical service should have a matching standalone normal form.
+-- Validation 2: active canonical services missing their standalone normal form.
 SELECT s.title
 FROM public.services s
 LEFT JOIN public.custom_forms f
@@ -5964,3 +5982,12 @@ LEFT JOIN public.custom_forms f
 WHERE s.is_active = true
   AND f.id IS NULL
 ORDER BY s.title;
+
+-- Validation 3: forms whose service link points at a different service title.
+SELECT f.id, f.title AS form_title, s.title AS service_title
+FROM public.custom_forms f
+JOIN public.services s ON s.id = f.service_id
+WHERE f.parent_form_id IS NULL
+  AND f.form_type = 'normal'
+  AND lower(trim(f.title)) <> lower(trim(s.title))
+ORDER BY f.title;
