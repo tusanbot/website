@@ -27,7 +27,7 @@ async function getUserId(request: NextRequest) {
 
 function mapProviderStatus(status: string) {
     const value = status.toLowerCase();
-    if (value.includes("complete") || value.includes("completed")) return "completed";
+    if (value.includes("complete")) return "completed";
     if (value.includes("cancel") || value.includes("refund")) return "cancelled";
     if (value.includes("partial")) return "partial";
     if (value.includes("fail")) return "failed";
@@ -44,13 +44,16 @@ export async function POST(request: NextRequest) {
         if (!orderId) return NextResponse.json({ error: "شناسه سفارش الزامی است." }, { status: 400 });
 
         const admin = adminClient();
+        const { data: profile } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
+        if (profile?.role !== "admin") return NextResponse.json({ error: "دسترسی مدیر لازم است." }, { status: 403 });
+
         const { data: order, error: orderError } = await admin
             .from("social_orders")
             .select("id, user_id, provider, provider_order_id, status")
             .eq("id", orderId)
             .maybeSingle();
         if (orderError) throw new Error(orderError.message);
-        if (!order || order.user_id !== userId) return NextResponse.json({ error: "سفارش پیدا نشد." }, { status: 404 });
+        if (!order) return NextResponse.json({ error: "سفارش پیدا نشد." }, { status: 404 });
         if (order.provider !== "fjpanel" || !order.provider_order_id) return NextResponse.json({ error: "سفارش هنوز شناسه ارائه‌دهنده ندارد." }, { status: 409 });
 
         const provider = await getFJPanelOrderStatus(String(order.provider_order_id));
