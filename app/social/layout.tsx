@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
-import AppLayout from "@/components/layout/AppLayout";
+import SocialNavigationGuard from "./SocialNavigationGuard";
 
 export default function SocialLayout({ children }: { children: ReactNode }) {
-    return <AppLayout>{children}</AppLayout>;
+    return (
+        <SocialNavigationGuard>
+            <div dir="rtl" className="min-h-screen bg-[var(--background)] text-[var(--text)]">
+                {children}
+            </div>
+        </SocialNavigationGuard>
+    );
 }
