@@ -12,10 +12,11 @@ function formatNumber(value: number) {
 
 function calculatePrice(service: SocialService, quantity: number) {
     if (service.provider_rate == null || !Number.isFinite(Number(service.provider_rate))) return null;
-    const base = Number(service.provider_rate) * quantity / 1000;
-    if (service.profit_type === "percentage") return base * (1 + Number(service.profit_value || 0) / 100);
-    if (service.profit_type === "fixed") return base + Number(service.profit_value || 0);
-    return base;
+
+    // FJPanel rate is stored in Toman and, for this catalog, represents the
+    // provider price for ONE unit. Our selling price is exactly 2x provider price.
+    const base = Number(service.provider_rate) * quantity;
+    return base * 2;
 }
 
 export default function SocialOrderPage() {
@@ -36,14 +37,17 @@ export default function SocialOrderPage() {
 
     useEffect(() => {
         async function load() {
-            if (!serviceId) {
-                setLoading(false);
-                return;
-            }
-            const [{ data }, { data: userData }] = await Promise.all([
-                supabase.from("social_services").select("*").eq("id", serviceId).eq("is_active", true).single(),
+            // Keep the loading state until the URL parameter has been read.
+            // This prevents the transient "service not found" screen on first render.
+            if (!serviceId) return;
+
+            setLoading(true);
+            const [{ data, error: serviceError }, { data: userData }] = await Promise.all([
+                supabase.from("social_services").select("*").eq("id", serviceId).eq("is_active", true).maybeSingle(),
                 supabase.auth.getUser(),
             ]);
+
+            if (serviceError) setError("دریافت اطلاعات سرویس ناموفق بود.");
             setService((data || null) as SocialService | null);
             setUserEmail(userData.user?.email || null);
             setLoading(false);
@@ -116,7 +120,7 @@ export default function SocialOrderPage() {
                     <p className="mt-3 text-[var(--text-muted)] leading-7">سفارش شما ثبت شده و تا زمان فعال شدن پرداخت، در وضعیت انتظار پرداخت قرار دارد.</p>
                     <div className="mt-7 grid sm:grid-cols-2 gap-3 text-right">
                         <div className="rounded-2xl bg-[var(--background)] p-4"><span className="block text-xs text-[var(--text-muted)]">کد پیگیری</span><strong className="mt-1 block font-black ltr">{success.trackingCode}</strong></div>
-                        <div className="rounded-2xl bg-[var(--background)] p-4"><span className="block text-xs text-[var(--text-muted)]">مبلغ سفارش</span><strong className="mt-1 block">{formatNumber(Math.round(success.price))} ریال</strong></div>
+                        <div className="rounded-2xl bg-[var(--background)] p-4"><span className="block text-xs text-[var(--text-muted)]">مبلغ سفارش</span><strong className="mt-1 block">{formatNumber(Math.round(success.price))} تومان</strong></div>
                     </div>
                     <div className="mt-6 flex flex-col sm:flex-row gap-3">
                         <Link href="/social" className="flex-1 rounded-2xl border border-[var(--border)] px-5 py-3 font-black text-center">بازگشت به خدمات</Link>
@@ -152,8 +156,8 @@ export default function SocialOrderPage() {
                         </div>
 
                         <div className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-4">
-                            <div className="flex items-center justify-between gap-4"><span className="text-[var(--text-muted)]">قیمت سفارش</span><strong className="text-xl">{price == null ? "—" : `${formatNumber(Math.round(price))} ریال`}</strong></div>
-                            {service.provider_rate != null && <p className="mt-2 text-xs text-[var(--text-muted)]">نرخ سرویس: {formatNumber(Math.round(Number(service.provider_rate)))} ریال به ازای هر ۱۰۰۰ واحد</p>}
+                            <div className="flex items-center justify-between gap-4"><span className="text-[var(--text-muted)]">قیمت سفارش</span><strong className="text-xl">{price == null ? "—" : `${formatNumber(Math.round(price))} تومان`}</strong></div>
+                            {service.provider_rate != null && <p className="mt-2 text-xs text-[var(--text-muted)]">قیمت پایه: {formatNumber(Math.round(Number(service.provider_rate)))} تومان برای هر واحد · قیمت فروش: ۲ برابر</p>}
                         </div>
 
                         <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-7 text-amber-800">
@@ -165,7 +169,7 @@ export default function SocialOrderPage() {
                         <button type="button" onClick={submitOrder} disabled={!link.trim() || !validQuantity || submitting || !userEmail} className="w-full rounded-2xl bg-[var(--primary)] text-white py-3.5 font-black disabled:opacity-40 disabled:cursor-not-allowed">
                             {submitting ? "در حال انتقال به درگاه..." : "ثبت سفارش و پرداخت"}
                         </button>
-                        <p className="text-center text-xs text-[var(--text-muted)]">پس از ایجاد سفارش، برای پرداخت به درگاه امن زیبال منتقل می‌شوید و بعد از تأیید پرداخت، سفارش به‌صورت سروری برای ارائه‌دهنده ارسال خواهد شد.</p>
+                        <p className="text-center text-xs text-[var(--text-muted)]">مبلغ سفارش در سایت به تومان محاسبه می‌شود و هنگام ارسال به درگاه زیبال به ریال تبدیل خواهد شد.</p>
                     </div>
                 </div>
             </div>
