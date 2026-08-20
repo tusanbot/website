@@ -81,7 +81,6 @@ alter table public.social_categories enable row level security;
 alter table public.social_services enable row level security;
 alter table public.social_orders enable row level security;
 
--- Remove/recreate policies so this migration is safe to run after a partial install.
 drop policy if exists "social platforms public read active" on public.social_platforms;
 drop policy if exists "social categories public read active" on public.social_categories;
 drop policy if exists "social services public read active" on public.social_services;
@@ -141,14 +140,21 @@ insert into public.social_platforms (name, slug, icon, description, sort_order) 
 on conflict (slug) do update set name=excluded.name, icon=excluded.icon, description=excluded.description, sort_order=excluded.sort_order;
 
 insert into public.social_categories (platform_id,name,slug,description,sort_order)
-select p.id,c.name,c.slug,c.description,c.sort_order from public.social_platforms p
-cross join (values
-('instagram','فالوور','followers','خدمات افزایش فالوور',1),('instagram','لایک','likes','خدمات لایک پست و ریلز',2),('instagram','بازدید','views','بازدید پست و ریلز',3),('instagram','کامنت','comments','کامنت و تعامل',4),
-('telegram','عضو','members','افزایش اعضای کانال یا گروه',1),('telegram','بازدید','views','بازدید پست‌های کانال',2),
-('youtube','بازدید','views','افزایش بازدید ویدیو',1),('youtube','سابسکرایب','subscribers','افزایش مشترک کانال',2),
-('tiktok','فالوور','followers','افزایش دنبال‌کننده',1),('tiktok','لایک','likes','افزایش لایک و تعامل',2)
-) as c(platform_slug,name,slug,description,sort_order) on p.slug=c.platform_slug
+select p.id, c.name, c.slug, c.description, c.sort_order
+from public.social_platforms p
+join (values
+('instagram','فالوور','followers','خدمات افزایش فالوور',1),
+('instagram','لایک','likes','خدمات لایک پست و ریلز',2),
+('instagram','بازدید','views','بازدید پست و ریلز',3),
+('instagram','کامنت','comments','کامنت و تعامل',4),
+('telegram','عضو','members','افزایش اعضای کانال یا گروه',1),
+('telegram','بازدید','views','بازدید پست‌های کانال',2),
+('youtube','بازدید','views','افزایش بازدید ویدیو',1),
+('youtube','سابسکرایب','subscribers','افزایش مشترک کانال',2),
+('tiktok','فالوور','followers','افزایش دنبال‌کننده',1),
+('tiktok','لایک','likes','افزایش لایک و تعامل',2)
+) as c(platform_slug,name,slug,description,sort_order)
+on c.platform_slug = p.slug
 on conflict (platform_id,slug) do update set name=excluded.name,description=excluded.description,sort_order=excluded.sort_order;
 
--- Refresh PostgREST schema cache after creating the tables.
 notify pgrst, 'reload schema';
