@@ -105,6 +105,7 @@ export async function POST(request: NextRequest) {
                 platformId = data.id;
                 platformCache.set(platformKey, platformId);
             }
+            if (!platformId) throw new Error(`platform id is missing for ${platform.slug}`);
             const categoryKey = `${platformId}:${category.slug}`;
             let categoryId = categoryCache.get(categoryKey);
             if (!categoryId) {
@@ -113,6 +114,7 @@ export async function POST(request: NextRequest) {
                 categoryId = data.id;
                 categoryCache.set(categoryKey, categoryId);
             }
+            if (!categoryId) throw new Error(`category id is missing for ${category.slug}`);
             const minQuantity = parsePositiveInteger(providerService.min);
             const maxQuantity = Math.max(minQuantity, parsePositiveInteger(providerService.max, minQuantity));
             const providerRate = parseRate(providerService.rate);
