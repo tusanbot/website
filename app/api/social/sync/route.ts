@@ -109,6 +109,14 @@ async function isAuthorized(request: NextRequest) {
     return profile?.role === "admin";
 }
 
+export async function GET() {
+    return NextResponse.json({
+        ok: true,
+        route: "social-sync",
+        message: "Social sync endpoint is available",
+    });
+}
+
 export async function POST(request: NextRequest) {
     try {
         if (!(await isAuthorized(request))) {
