@@ -4,13 +4,13 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, RefreshCw, Activity, RotateCcw, ExternalLink, CheckCircle2, Clock3, CircleAlert } from "lucide-react";
-import { createClient } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
 
 interface Order { id:string; tracking_code:string; link:string; quantity:number; price:number; status:string; provider_order_id:string|null; payment_provider:string|null; payment_reference:string|null; created_at:string; updated_at:string|null; social_services?:{name:string}|null; social_platforms?:{name:string}|null }
 const labels:Record<string,string>={pending:"در انتظار پرداخت",awaiting_payment:"در انتظار پرداخت",paid:"پرداخت‌شده",processing:"در حال پردازش",completed:"تکمیل‌شده",partial:"ناقص",cancelled:"لغوشده",failed:"ناموفق"};
 const steps=["pending","paid","processing","completed"];
 export default function SocialOrderDetail(){
- const {id}=useParams<{id:string}>(); const supabase=createClient(); const [order,setOrder]=useState<Order|null>(null); const [loading,setLoading]=useState(true); const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
+ const {id}=useParams<{id:string}>(); const [order,setOrder]=useState<Order|null>(null); const [loading,setLoading]=useState(true); const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
  async function load(){setLoading(true);const {data}=await supabase.from("social_orders").select("*, social_services(name), social_platforms(name)").eq("id",id).single();setOrder(data as Order|null);setLoading(false)}
  useEffect(()=>{if(id)void load()},[id]);
  async function status(){setBusy(true);setMessage("");try{const r=await fetch("/api/social/provider-status",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({orderId:id})});const d=await r.json();if(!r.ok)throw new Error(d.error||"خطا");setMessage(`وضعیت به «${labels[d.status]||d.status}» بروزرسانی شد.`);await load()}catch(e){setMessage(e instanceof Error?e.message:"خطا در بررسی وضعیت")}finally{setBusy(false)}}
