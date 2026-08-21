@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     try {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "احراز هویت لازم است." }, { status: 401 });
+
         const body = await request.json().catch(() => null) as { orderId?: unknown } | null;
         const orderId = typeof body?.orderId === "string" ? body.orderId.trim() : "";
         if (!orderId) return NextResponse.json({ error: "شناسه سفارش الزامی است." }, { status: 400 });
@@ -40,15 +41,29 @@ export async function POST(request: NextRequest) {
             .eq("id", orderId).maybeSingle();
         if (error) throw new Error(error.message);
         if (!order || order.user_id !== userId) return NextResponse.json({ error: "سفارش پیدا نشد." }, { status: 404 });
-        if (!["pending", "awaiting_payment"].includes(order.status)) return NextResponse.json({ error: "این سفارش در وضعیت قابل پرداخت نیست." }, { status: 409 });
-        if (order.payment_track_id && order.payment_provider === "zibal") {
-            return NextResponse.json({ success: true, paymentUrl: zibalStartUrl(Number(order.payment_track_id)), trackId: Number(order.payment_track_id) });
+
+        // A failed/cancelled payment may be retried. Never reuse the old trackId
+        // because it represents a previous gateway attempt.
+        const retryable = ["pending", "awaiting_payment", "failed", "cancelled"].includes(order.status);
+        if (!retryable) {
+            return NextResponse.json({ error: "این سفارش در وضعیت قابل پرداخت نیست." }, { status: 409 });
+        }
+
+        // Resume an existing, still-active payment attempt.
+        if (order.status === "awaiting_payment" && order.payment_track_id && order.payment_provider === "zibal") {
+            return NextResponse.json({
+                success: true,
+                paymentUrl: zibalStartUrl(Number(order.payment_track_id)),
+                trackId: Number(order.payment_track_id),
+            });
         }
 
         // social_orders.price is stored in Toman. Zibal expects Rial.
         const priceInToman = Number(order.price);
         const amount = Math.round(priceInToman * 10);
-        if (!Number.isSafeInteger(amount) || amount < 10000) return NextResponse.json({ error: "مبلغ سفارش برای پرداخت معتبر نیست." }, { status: 409 });
+        if (!Number.isSafeInteger(amount) || amount < 10000) {
+            return NextResponse.json({ error: "مبلغ سفارش برای پرداخت معتبر نیست." }, { status: 409 });
+        }
 
         const payment = await requestZibalPayment({
             amount,
@@ -61,10 +76,18 @@ export async function POST(request: NextRequest) {
             status: "awaiting_payment",
             payment_provider: "zibal",
             payment_track_id: String(payment.trackId),
-        }).eq("id", order.id).in("status", ["pending", "awaiting_payment"]);
+            payment_reference: null,
+            paid_at: null,
+            admin_note: null,
+        }).eq("id", order.id).in("status", ["pending", "awaiting_payment", "failed", "cancelled"]);
+
         if (updateError) throw new Error(updateError.message);
 
-        return NextResponse.json({ success: true, paymentUrl: zibalStartUrl(payment.trackId), trackId: payment.trackId });
+        return NextResponse.json({
+            success: true,
+            paymentUrl: zibalStartUrl(payment.trackId),
+            trackId: payment.trackId,
+        });
     } catch (error) {
         console.error("[social/payment/request]", error);
         return NextResponse.json({ error: error instanceof Error ? error.message : "ایجاد پرداخت ناموفق بود." }, { status: 500 });
