@@ -37,6 +37,7 @@ export interface SocialService {
     provider: SocialProvider;
     provider_service_id: string | null;
     name: string;
+    provider_name: string | null;
     description: string | null;
     service_type: string;
     provider_rate: number | null;
