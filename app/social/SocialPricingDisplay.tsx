@@ -1,19 +1,16 @@
 "use client";
 
 import { useEffect } from "react";
+import { calculateUnitPrice, formatSocialUnitPrice } from "@/lib/social/pricing";
 
 function toNumber(text: string) {
     const normalized = text
         .replace(/[۰-۹]/g, (digit) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)))
         .replace(/[٬,]/g, "")
-        .replace(/\s*ریال\s*$/u, "")
+        .replace(/\s*(تومان|ریال)\s*$/u, "")
         .trim();
     const value = Number(normalized);
     return Number.isFinite(value) ? value : null;
-}
-
-function format(value: number) {
-    return new Intl.NumberFormat("fa-IR").format(Math.round(value));
 }
 
 function applyPricingLabels() {
@@ -25,18 +22,23 @@ function applyPricingLabels() {
         const value = container?.querySelector<HTMLElement>("strong");
         if (!value) return;
 
-        const unitPrice = toNumber(value.textContent || "");
+        const providerRate = toNumber(value.textContent || "");
+        if (providerRate == null) return;
+
+        const unitPrice = calculateUnitPrice({ provider_rate: providerRate });
         if (unitPrice == null) return;
 
         label.textContent = "قیمت واحد";
-        value.textContent = `${format(unitPrice)} تومان (${format(unitPrice * 1000)} تومان برای ۱۰۰۰ عدد)`;
+        value.textContent = formatSocialUnitPrice(unitPrice);
     });
 
     document.querySelectorAll<HTMLElement>("main strong").forEach((value) => {
         if (!value.textContent?.trim().endsWith("ریال")) return;
-        const unitPrice = toNumber(value.textContent);
+        const providerRate = toNumber(value.textContent);
+        if (providerRate == null) return;
+        const unitPrice = calculateUnitPrice({ provider_rate: providerRate });
         if (unitPrice == null) return;
-        value.textContent = `${format(unitPrice)} تومان (${format(unitPrice * 1000)} تومان برای ۱۰۰۰ عدد)`;
+        value.textContent = formatSocialUnitPrice(unitPrice);
     });
 }
 
