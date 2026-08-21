@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { calculateOrderPrice } from "@/lib/social/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +14,6 @@ function getAdminClient() {
 function parseQuantity(value: unknown) {
     const quantity = Number(value);
     return Number.isSafeInteger(quantity) && quantity > 0 ? quantity : null;
-}
-
-function calculatePrice(rate: number | null, quantity: number) {
-    if (rate == null) return null;
-
-    // FJPanel rate is stored in Toman and represents the provider price for ONE unit.
-    // Customer price is exactly 2x the provider price.
-    return rate * quantity * 2;
 }
 
 function makeTrackingCode() {
@@ -87,10 +80,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: `تعداد باید بین ${service.min_quantity.toLocaleString("fa-IR")} و ${service.max_quantity.toLocaleString("fa-IR")} باشد.` }, { status: 400 });
         }
 
-        const price = calculatePrice(
-            service.provider_rate == null ? null : Number(service.provider_rate),
-            quantity,
-        );
+        const price = calculateOrderPrice(service, quantity);
 
         if (price == null || !Number.isFinite(price) || price < 0) {
             return NextResponse.json({ error: "قیمت این سرویس در حال حاضر قابل محاسبه نیست." }, { status: 409 });
