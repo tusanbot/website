@@ -1,8 +1,8 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { useRouter, useSearchParams } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 function AuthCallbackContent() {
     const router = useRouter();
@@ -11,21 +11,35 @@ function AuthCallbackContent() {
 
     useEffect(() => {
         let active = true;
+
         async function exchangeCode() {
             const code = searchParams.get("code");
             if (!code) {
                 if (active) setError("کد ورود از گوگل دریافت نشد.");
                 return;
             }
+
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+            const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+            if (!supabaseUrl || !supabaseKey) {
+                if (active) setError("تنظیمات اتصال به سرویس ورود کامل نیست.");
+                return;
+            }
+
+            const supabase = createClient(supabaseUrl, supabaseKey);
             const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
             if (!active) return;
             if (exchangeError) {
                 setError(exchangeError.message || "تکمیل ورود با گوگل انجام نشد.");
                 return;
             }
+
             router.replace("/dashboard");
             router.refresh();
         }
+
         exchangeCode();
         return () => { active = false; };
     }, [router, searchParams]);
