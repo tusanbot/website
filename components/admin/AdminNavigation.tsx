@@ -6,6 +6,7 @@ export type AdminTab =
     | "dashboard"
     | "orders"
     | "services"
+    | "social"
     | "users"
     | "messages"
     | "reports"
@@ -23,43 +24,49 @@ const menuItems: {
     icon: string;
     href?: string;
 }[] = [
-        {
-            id: "dashboard",
-            label: "داشبورد",
-            icon: "📊",
-        },
-        {
-            id: "orders",
-            label: "سفارش‌ها",
-            icon: "📋",
-            href: "/admin/orders",
-        },
-        {
-            id: "services",
-            label: "خدمات",
-            icon: "⚙️",
-        },
-        {
-            id: "users",
-            label: "کاربران",
-            icon: "👥",
-        },
-        {
-            id: "messages",
-            label: "پیام‌ها",
-            icon: "💬",
-        },
-        {
-            id: "reports",
-            label: "گزارش‌ها",
-            icon: "📈",
-        },
-        {
-            id: "settings",
-            label: "تنظیمات",
-            icon: "🔧",
-        },
-    ];
+    {
+        id: "dashboard",
+        label: "داشبورد",
+        icon: "📊",
+    },
+    {
+        id: "orders",
+        label: "سفارش‌ها",
+        icon: "📋",
+        href: "/admin/orders",
+    },
+    {
+        id: "services",
+        label: "خدمات",
+        icon: "⚙️",
+    },
+    {
+        id: "social",
+        label: "شبکه‌های اجتماعی",
+        icon: "📱",
+        href: "/admin/social",
+    },
+    {
+        id: "users",
+        label: "کاربران",
+        icon: "👥",
+    },
+    {
+        id: "messages",
+        label: "پیام‌ها",
+        icon: "💬",
+    },
+    {
+        id: "reports",
+        label: "گزارش‌ها",
+        icon: "📈",
+    },
+    {
+        id: "settings",
+        label: "تنظیمات",
+        icon: "🔧",
+    },
+];
 
 export default function AdminNavigation({
     activeTab,
