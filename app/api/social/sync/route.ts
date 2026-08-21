@@ -34,26 +34,19 @@ const CATEGORY_RULES = [
 function normalize(value: unknown) {
   return String(value ?? "").toLowerCase().replace(/[‌]/g, " ").replace(/ي/g, "ی").replace(/ك/g, "ک").replace(/\s+/g, " ").trim();
 }
-
-function containsKeyword(text: unknown, keyword: unknown) {
-  return normalize(text).includes(normalize(keyword));
-}
-
+function containsKeyword(text: unknown, keyword: unknown) { return normalize(text).includes(normalize(keyword)); }
 function detectPlatform(service: FJPanelService) {
   const text = normalize(`${service.category ?? ""} ${service.name ?? ""}`);
   return PLATFORM_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? { slug: "other", name: "سایر شبکه‌ها", icon: "message-circle" };
 }
-
 function detectCategory(service: FJPanelService) {
   const text = normalize(`${service.category ?? ""} ${service.name ?? ""}`);
   return CATEGORY_RULES.find((rule) => rule.keywords.some((keyword) => containsKeyword(text, keyword))) ?? { slug: "other", name: "سایر خدمات" };
 }
-
 function parsePositiveInteger(value: unknown, fallback = 1) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
-
 function parseRate(value: unknown) {
   const parsed = Number.parseFloat(String(value ?? ""));
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
@@ -69,7 +62,6 @@ async function getRequestUser(request: NextRequest) {
   const { data } = await client.auth.getUser();
   return data.user ?? null;
 }
-
 async function isAuthorized(request: NextRequest) {
   const syncSecret = process.env.SOCIAL_SYNC_SECRET;
   const suppliedSecret = request.headers.get("x-social-sync-secret");
@@ -90,21 +82,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    if (!(await isAuthorized(request))) {
-      return NextResponse.json({ error: "اجازه دسترسی به همگام‌سازی سرویس‌ها را ندارید." }, { status: 403 });
-    }
-
+    if (!(await isAuthorized(request))) return NextResponse.json({ error: "اجازه دسترسی به همگام‌سازی سرویس‌ها را ندارید." }, { status: 403 });
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!supabaseUrl || !serviceRoleKey) {
-      return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, { status: 500 });
-    }
+    if (!supabaseUrl || !serviceRoleKey) return NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY is not configured" }, { status: 500 });
 
     const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false, autoRefreshToken: false } });
     const providerServices = await getFJPanelServices();
-    if (!Array.isArray(providerServices)) {
-      return NextResponse.json({ error: "پاسخ سرویس‌ها از FJPanel معتبر نیست." }, { status: 502 });
-    }
+    if (!Array.isArray(providerServices)) return NextResponse.json({ error: "پاسخ سرویس‌ها از FJPanel معتبر نیست." }, { status: 502 });
 
     const platformCache = new Map<string, string>();
     const categoryCache = new Map<string, string>();
@@ -112,21 +97,16 @@ export async function POST(request: NextRequest) {
     let skipped = 0;
 
     for (const providerService of providerServices) {
-      if (!providerService?.service || !providerService.name) {
-        skipped += 1;
-        continue;
-      }
-
+      if (!providerService?.service || !providerService.name) { skipped += 1; continue; }
       const platform = detectPlatform(providerService);
       const category = detectCategory(providerService);
       let platformId = platformCache.get(platform.slug);
 
       if (!platformId) {
-        const { data, error } = await admin
-          .from("social_platforms")
-          .upsert({ name: platform.name, slug: platform.slug, icon: platform.icon, description: `خدمات ${platform.name}`, is_active: true, sort_order: 100 }, { onConflict: "slug" })
-          .select("id")
-          .single();
+        const { data, error } = await admin.from("social_platforms").upsert(
+          { name: platform.name, slug: platform.slug, icon: platform.icon, description: `خدمات ${platform.name}`, is_active: true, sort_order: 100 },
+          { onConflict: "slug" }
+        ).select("id").single();
         if (error || !data?.id) throw new Error(`platform upsert failed: ${error?.message || platform.slug}`);
         platformId = String(data.id);
         platformCache.set(platform.slug, platformId);
@@ -134,27 +114,47 @@ export async function POST(request: NextRequest) {
 
       const categoryKey = `${platformId}:${category.slug}`;
       let categoryId = categoryCache.get(categoryKey);
-
       if (!categoryId) {
-        const { data, error } = await admin
-          .from("social_categories")
-          .upsert({ platform_id: platformId, name: category.name, slug: category.slug, description: `خدمات ${category.name}`, is_active: true, sort_order: 100 }, { onConflict: "platform_id,slug" })
-          .select("id")
-          .single();
+        const { data, error } = await admin.from("social_categories").upsert(
+          { platform_id: platformId, name: category.name, slug: category.slug, description: `خدمات ${category.name}`, is_active: true, sort_order: 100 },
+          { onConflict: "platform_id,slug" }
+        ).select("id").single();
         if (error || !data?.id) throw new Error(`category upsert failed: ${error?.message || category.slug}`);
         categoryId = String(data.id);
         categoryCache.set(categoryKey, categoryId);
       }
 
+      const providerId = String(providerService.service);
+      const { data: existing, error: existingError } = await admin
+        .from("social_services")
+        .select("id,name")
+        .eq("provider", "fjpanel")
+        .eq("provider_service_id", providerId)
+        .maybeSingle();
+      if (existingError) throw new Error(`service lookup failed for ${providerId}: ${existingError.message}`);
+
       const minQuantity = parsePositiveInteger(providerService.min);
       const maxQuantity = Math.max(minQuantity, parsePositiveInteger(providerService.max, minQuantity));
       const providerRate = parseRate(providerService.rate);
 
-      const { error } = await admin
-        .from("social_services")
-        .upsert({ platform_id: platformId, category_id: categoryId, provider: "fjpanel", provider_service_id: String(providerService.service), name: providerService.name.trim(), description: providerService.category ? `دسته: ${providerService.category}` : null, service_type: providerService.type || "default", provider_rate: providerRate, min_quantity: minQuantity, max_quantity: maxQuantity, is_active: true }, { onConflict: "provider,provider_service_id" });
-
-      if (error) throw new Error(`service upsert failed for ${providerService.service}: ${error.message}`);
+      const { error } = await admin.from("social_services").upsert(
+        {
+          platform_id: platformId,
+          category_id: categoryId,
+          provider: "fjpanel",
+          provider_service_id: providerId,
+          // Preserve a locally edited display name. New services use FJPanel's name.
+          name: existing?.name?.trim() || providerService.name.trim(),
+          description: providerService.category ? `دسته: ${providerService.category}` : null,
+          service_type: providerService.type || "default",
+          provider_rate: providerRate,
+          min_quantity: minQuantity,
+          max_quantity: maxQuantity,
+          is_active: true,
+        },
+        { onConflict: "provider,provider_service_id" }
+      );
+      if (error) throw new Error(`service upsert failed for ${providerId}: ${error.message}`);
       createdOrUpdated += 1;
     }
 
