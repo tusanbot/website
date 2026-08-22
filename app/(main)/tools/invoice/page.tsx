@@ -2,6 +2,8 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Plus, Printer, Trash2, FileDown, Upload, X } from "lucide-react";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
 const SITE_URL = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -22,6 +24,8 @@ export default function InvoiceToolPage() {
   const [notes, setNotes] = useState("");
   const [logo, setLogo] = useState<string | null>(null);
   const [seal, setSeal] = useState<string | null>(null);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const sealInputRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<Item[]>([{ id: 1, title: "", qty: 1, price: 0, discount: 0 }]);
@@ -49,34 +53,75 @@ export default function InvoiceToolPage() {
   const printInvoice = () => window.print();
 
   const exportPdf = async () => {
-    if (!invoiceRef.current) return;
+    const source = invoiceRef.current;
+    if (!source || isExporting) return;
+
+    setPdfError(null);
+    setIsExporting(true);
+
     try {
-      const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
-        import("html2canvas"),
-        import("jspdf"),
-      ]);
-      const canvas = await html2canvas(invoiceRef.current, {
-        scale: Math.min(2, window.devicePixelRatio || 1.5),
+      // html2canvas can fail when it encounters modern CSS color functions inherited
+      // from the application shell. Capture a detached, self-contained copy instead.
+      const clone = source.cloneNode(true) as HTMLElement;
+      clone.querySelectorAll("input, textarea, button").forEach((element) => {
+        const input = element as HTMLInputElement | HTMLTextAreaElement | HTMLButtonElement;
+        if (input.tagName === "BUTTON") {
+          input.remove();
+          return;
+        }
+        const replacement = document.createElement("span");
+        replacement.textContent = "value" in input ? String(input.value || "—") : "—";
+        replacement.style.cssText = "display:inline-block;width:100%;white-space:pre-wrap;color:#0f172a;background:transparent;border:0;padding:8px;font:inherit;";
+        input.replaceWith(replacement);
+      });
+
+      clone.style.cssText = "position:absolute;left:-100000px;top:0;width:794px;min-height:1123px;background:#ffffff;color:#0f172a;direction:rtl;box-shadow:none;overflow:visible;";
+      clone.querySelectorAll("*").forEach((element) => {
+        const el = element as HTMLElement;
+        const computed = window.getComputedStyle(el);
+        const color = computed.color;
+        const background = computed.backgroundColor;
+        const borderColor = computed.borderColor;
+        if (color) el.style.color = color;
+        if (background && background !== "rgba(0, 0, 0, 0)") el.style.backgroundColor = background;
+        if (borderColor) el.style.borderColor = borderColor;
+      });
+      document.body.appendChild(clone);
+
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+      const canvas = await html2canvas(clone, {
+        scale: 2,
         backgroundColor: "#ffffff",
         useCORS: true,
         allowTaint: false,
         logging: false,
+        imageTimeout: 15000,
       });
+
+      clone.remove();
+
+      if (!canvas.width || !canvas.height) throw new Error("خروجی تصویر فاکتور خالی است.");
+
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4", compress: true });
       const margin = 8;
       const pageWidth = 210;
       const pageHeight = 297;
       const imageWidth = pageWidth - margin * 2;
-      const imageHeight = (canvas.height * imageWidth) / canvas.width;
       const usableHeight = pageHeight - margin * 2;
+      const imageHeight = (canvas.height * imageWidth) / canvas.width;
       let offset = 0;
       let page = 0;
 
       while (offset < imageHeight - 0.1) {
         if (page > 0) pdf.addPage();
+
         const sliceHeightMm = Math.min(usableHeight, imageHeight - offset);
         const sourceY = Math.floor((offset / imageHeight) * canvas.height);
-        const sourceHeight = Math.max(1, Math.min(canvas.height - sourceY, Math.ceil((sliceHeightMm / imageHeight) * canvas.height)));
+        const sourceHeight = Math.max(
+          1,
+          Math.min(canvas.height - sourceY, Math.ceil((sliceHeightMm / imageHeight) * canvas.height)),
+        );
         const slice = document.createElement("canvas");
         slice.width = canvas.width;
         slice.height = sourceHeight;
@@ -85,8 +130,9 @@ export default function InvoiceToolPage() {
         context.fillStyle = "#ffffff";
         context.fillRect(0, 0, slice.width, slice.height);
         context.drawImage(canvas, 0, sourceY, canvas.width, sourceHeight, 0, 0, canvas.width, sourceHeight);
-        const actualHeight = (sourceHeight * imageWidth) / canvas.width;
-        pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", margin, margin, imageWidth, Math.min(actualHeight, usableHeight), undefined, "FAST");
+
+        const actualHeight = Math.min((sourceHeight * imageWidth) / canvas.width, usableHeight);
+        pdf.addImage(slice.toDataURL("image/jpeg", 0.92), "JPEG", margin, margin, imageWidth, actualHeight, undefined, "FAST");
         offset += sliceHeightMm;
         page += 1;
       }
@@ -94,7 +140,11 @@ export default function InvoiceToolPage() {
       pdf.save(`invoice-${invoiceNo || "tusan"}.pdf`);
     } catch (error) {
       console.error("Invoice PDF export failed", error);
-      window.alert("ساخت فایل PDF انجام نشد. لطفاً دوباره تلاش کنید.");
+      const message = error instanceof Error ? error.message : "خطای ناشناخته در ساخت PDF";
+      setPdfError(`ساخت فایل PDF انجام نشد. ${message}`);
+    } finally {
+      document.querySelectorAll("body > .invoice-paper").forEach((element) => element.remove());
+      setIsExporting(false);
     }
   };
 
@@ -105,9 +155,11 @@ export default function InvoiceToolPage() {
           <div><h1 className="text-2xl font-black">فاکتورساز</h1><p className="mt-1 text-sm text-[var(--text-muted)]">ساخت فاکتور فارسی، چاپ و خروجی PDF</p></div>
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={printInvoice} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2 font-bold"><Printer size={18} /> چاپ</button>
-            <button type="button" onClick={exportPdf} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2 font-bold text-white"><FileDown size={18} /> خروجی PDF</button>
+            <button type="button" onClick={exportPdf} disabled={isExporting} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2 font-bold text-white disabled:cursor-not-allowed disabled:opacity-60"><FileDown size={18} /> {isExporting ? "در حال ساخت PDF..." : "خروجی PDF"}</button>
           </div>
         </div>
+
+        {pdfError && <div className="no-print mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{pdfError}</div>}
 
         <div className="no-print mb-6 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -143,7 +195,7 @@ export default function InvoiceToolPage() {
             <div className="no-print mt-3 flex justify-end"><button type="button" onClick={addItem} className="inline-flex items-center gap-2 rounded-xl border border-dashed border-[var(--primary)] px-4 py-2 font-bold text-[var(--primary)]"><Plus size={17} /> افزودن ردیف</button>{items.length > 1 && <button type="button" onClick={() => removeItem(items[items.length - 1].id)} className="mr-2 inline-flex items-center gap-2 rounded-xl border border-red-200 px-4 py-2 font-bold text-red-600"><Trash2 size={17} /> حذف ردیف آخر</button>}</div>
             <div className="mt-6 flex justify-end"><div className="w-full max-w-sm space-y-2 text-sm"><div className="flex justify-between"><span>جمع</span><b>{money(totals.subtotal)}</b></div><div className="flex justify-between"><span>تخفیف</span><b>{money(totals.discount)}</b></div><div className="flex justify-between border-t-2 border-slate-900 pt-3 text-lg"><span className="font-black">مبلغ نهایی</span><b>{money(totals.total)}</b></div></div></div>
             <div className="mt-8"><div className="font-bold">توضیحات</div><textarea className="mt-2 w-full resize-none rounded-xl border border-slate-300 bg-transparent p-3 outline-none print:hidden" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} /><p className="hidden whitespace-pre-wrap print:block">{notes || "—"}</p></div>
-            {seal && <div className="mt-6 flex justify-start"><img src={seal} alt="مهر" className="h-24 w-24 object-contain" crossOrigin="anonymous" /></div>}
+            {seal && <div className="mt-6 flex justify-start"><img src={seal} alt="مهر" className="h-24 w-24 object-contain" crossOrigin="anonymous" />}</div>}
             <footer className="invoice-footer mt-12 border-t border-slate-300 pt-4 text-center text-xs text-slate-500">فاکتور ساز رایگان توسن · <span dir="ltr">{SITE_URL}</span></footer>
           </div>
         </div>
