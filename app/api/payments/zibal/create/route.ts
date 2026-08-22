@@ -1,11 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { zibalGateway } from "@/lib/payments/zibal";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const supabase = supabaseAdmin();
     const authHeader = request.headers.get("authorization");
@@ -19,6 +20,18 @@ export async function POST(request: Request) {
     if (userError || !user) {
       return NextResponse.json({ error: "نشست کاربر معتبر نیست." }, { status: 401 });
     }
+
+    const bodySizeError = rejectOversizedJsonBody(request, 8 * 1024);
+    if (bodySizeError) return bodySizeError;
+
+    const rateLimitResponse = await checkRateLimit({
+      scope: "payments:zibal:create",
+      request,
+      userId: user.id,
+      limit: 3,
+      windowSeconds: 60,
+    });
+    if (rateLimitResponse) return rateLimitResponse;
 
     const body = await request.json().catch(() => null);
     const orderId = String(body?.orderId || "").trim();
