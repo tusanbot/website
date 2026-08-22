@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const DEFAULT_WINDOW_SECONDS = 60;
 const DEFAULT_LIMIT = 10;
+const DEFAULT_IP_MULTIPLIER = 5;
 const MAX_JSON_BODY_BYTES = 16 * 1024;
 
 type RateLimitOptions = {
@@ -12,6 +13,7 @@ type RateLimitOptions = {
     userId?: string | null;
     limit?: number;
     windowSeconds?: number;
+    ipMultiplier?: number;
 };
 
 function getAdminClient() {
@@ -49,61 +51,87 @@ function hashKey(value: string) {
         .digest("hex");
 }
 
+async function consume(scope: string, identity: string, limit: number, windowSeconds: number) {
+    const key = hashKey(`${scope}:${identity}`);
+
+    const { data, error } = await getAdminClient().rpc(
+        "consume_api_rate_limit",
+        {
+            p_key: key,
+            p_limit: limit,
+            p_window_seconds: windowSeconds,
+        }
+    );
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    return Array.isArray(data) ? data[0] : data;
+}
+
 export async function checkRateLimit({
     scope,
     request,
     userId,
     limit = DEFAULT_LIMIT,
     windowSeconds = DEFAULT_WINDOW_SECONDS,
+    ipMultiplier = DEFAULT_IP_MULTIPLIER,
 }: RateLimitOptions) {
-    const identity = userId
-        ? `user:${userId}`
-        : `ip:${getClientAddress(request)}`;
-
-    const key = hashKey(`${scope}:${identity}`);
+    const clientAddress = getClientAddress(request);
 
     try {
-        const { data, error } = await getAdminClient().rpc(
-            "consume_api_rate_limit",
-            {
-                p_key: key,
-                p_limit: limit,
-                p_window_seconds: windowSeconds,
-            }
-        );
+        if (userId) {
+            // Per-user bucket protects an authenticated account even when its
+            // network address changes.
+            const userResult = await consume(
+                scope,
+                `user:${userId}`,
+                limit,
+                windowSeconds
+            );
 
-        if (error) {
-            throw new Error(error.message);
+            if (!userResult?.allowed) {
+                return rateLimitedResponse(userResult, windowSeconds);
+            }
+
+            // A second, broader IP bucket prevents an attacker from bypassing
+            // the user bucket by creating/using multiple accounts from one IP.
+            const ipLimit = Math.min(
+                10000,
+                Math.max(limit, Math.ceil(limit * ipMultiplier))
+            );
+            const ipResult = await consume(
+                `${scope}:ip`,
+                `ip:${clientAddress}`,
+                ipLimit,
+                windowSeconds
+            );
+
+            if (!ipResult?.allowed) {
+                return rateLimitedResponse(ipResult, windowSeconds);
+            }
+
+            return null;
         }
 
-        const result = Array.isArray(data) ? data[0] : data;
+        const result = await consume(
+            scope,
+            `ip:${clientAddress}`,
+            limit,
+            windowSeconds
+        );
 
         if (!result?.allowed) {
-            const retryAfter = Math.max(
-                1,
-                Number(result?.retry_after_seconds || windowSeconds)
-            );
-
-            return NextResponse.json(
-                {
-                    error: "تعداد درخواست‌ها بیش از حد مجاز است. لطفاً کمی بعد دوباره تلاش کنید.",
-                },
-                {
-                    status: 429,
-                    headers: {
-                        "Retry-After": String(retryAfter),
-                        "Cache-Control": "no-store",
-                    },
-                }
-            );
+            return rateLimitedResponse(result, windowSeconds);
         }
 
         return null;
     } catch (error) {
         console.error("[security/rate-limit]", error);
 
-        // Fail closed for protected mutation endpoints. If the limiter itself
-        // is unavailable, do not allow the protected operation to continue.
+        // Fail closed for protected mutation endpoints. If the distributed
+        // limiter is unavailable, the protected operation must not continue.
         return NextResponse.json(
             {
                 error: "سامانه امنیتی موقتاً در دسترس نیست. لطفاً کمی بعد دوباره تلاش کنید.",
@@ -117,6 +145,26 @@ export async function checkRateLimit({
             }
         );
     }
+}
+
+function rateLimitedResponse(result: any, windowSeconds: number) {
+    const retryAfter = Math.max(
+        1,
+        Number(result?.retry_after_seconds || windowSeconds)
+    );
+
+    return NextResponse.json(
+        {
+            error: "تعداد درخواست‌ها بیش از حد مجاز است. لطفاً کمی بعد دوباره تلاش کنید.",
+        },
+        {
+            status: 429,
+            headers: {
+                "Retry-After": String(retryAfter),
+                "Cache-Control": "no-store",
+            },
+        }
+    );
 }
 
 export function rejectOversizedJsonBody(
