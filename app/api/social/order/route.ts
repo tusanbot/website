@@ -74,7 +74,10 @@ export async function POST(request: NextRequest) {
             .eq("is_active", true)
             .maybeSingle();
 
-        if (serviceError) throw new Error(serviceError.message);
+        if (serviceError) {
+            console.error("[social/order] service lookup failed", serviceError);
+            return NextResponse.json({ error: "دریافت اطلاعات سرویس ناموفق بود." }, { status: 500 });
+        }
         if (!service) return NextResponse.json({ error: "این سرویس فعال نیست یا پیدا نشد." }, { status: 404 });
         if (quantity < service.min_quantity || quantity > service.max_quantity) {
             return NextResponse.json({ error: `تعداد باید بین ${service.min_quantity.toLocaleString("fa-IR")} و ${service.max_quantity.toLocaleString("fa-IR")} باشد.` }, { status: 400 });
@@ -96,18 +99,20 @@ export async function POST(request: NextRequest) {
                 provider: service.provider || "fjpanel",
                 link,
                 quantity,
-                // social_orders.price is stored in Toman. Convert to Rial only at the payment gateway boundary.
                 price: Math.round(price * 100) / 100,
                 status: "pending",
             })
             .select("id, tracking_code, service_id, quantity, price, status, created_at")
             .single();
 
-        if (orderError) throw new Error(orderError.message);
+        if (orderError) {
+            console.error("[social/order] order insert failed", orderError);
+            return NextResponse.json({ error: "ثبت سفارش ناموفق بود." }, { status: 500 });
+        }
 
         return NextResponse.json({ success: true, order });
     } catch (error) {
-        console.error("[social/order]", error);
-        return NextResponse.json({ error: error instanceof Error ? error.message : "خطای ناشناخته در ایجاد سفارش" }, { status: 500 });
+        console.error("[social/order] unexpected error", error);
+        return NextResponse.json({ error: "خطایی هنگام ایجاد سفارش رخ داد." }, { status: 500 });
     }
 }
