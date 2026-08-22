@@ -1,0 +1,72 @@
+import type { ReactNode } from "react";
+import Link from "next/link";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { GlassPanel, TusanButton } from "@/components/ui";
+
+export default async function AdminLayout({
+    children,
+}: {
+    children: ReactNode;
+}) {
+    const supabase = await createSupabaseServerClient();
+
+    const {
+        data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+        return <AdminAccessDenied loggedIn={false} />;
+    }
+
+    const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+
+    if (error || profile?.role !== "admin") {
+        return <AdminAccessDenied loggedIn />;
+    }
+
+    return children;
+}
+
+function AdminAccessDenied({ loggedIn }: { loggedIn: boolean }) {
+    return (
+        <div
+            dir="rtl"
+            className="min-h-screen bg-[var(--background)] text-[var(--text)] flex items-center justify-center p-6"
+        >
+            <GlassPanel className="w-full max-w-md p-8 text-center">
+                <div className="text-5xl mb-4">⛔</div>
+
+                <h1 className="text-xl font-black">
+                    دسترسی غیرمجاز
+                </h1>
+
+                <p className="mt-3 leading-7 text-[var(--text-muted)]">
+                    {loggedIn
+                        ? "حساب کاربری شما مجوز ورود به پنل مدیریت را ندارد."
+                        : "برای ورود به پنل مدیریت باید ابتدا وارد حساب کاربری مدیر شوید."}
+                </p>
+
+                <div className="mt-6 flex flex-col gap-3">
+                    {!loggedIn && (
+                        <Link href="/auth?mode=login">
+                            <TusanButton className="w-full">
+                                ورود به حساب
+                            </TusanButton>
+                        </Link>
+                    )}
+
+                    <Link
+                        href="/"
+                        className="text-sm font-bold text-[var(--primary)] hover:underline"
+                    >
+                        بازگشت به صفحه اصلی
+                    </Link>
+                </div>
+            </GlassPanel>
+        </div>
+    );
+}
