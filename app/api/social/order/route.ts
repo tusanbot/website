@@ -33,6 +33,11 @@ function validTargetUrl(value: unknown) {
     }
 }
 
+function validIdempotencyKey(value: string | null) {
+    if (!value) return false;
+    return /^[A-Za-z0-9._:-]{16,128}$/.test(value);
+}
+
 async function getUserId(request: NextRequest) {
     const authorization = request.headers.get("authorization");
     if (!authorization?.startsWith("Bearer ")) return null;
@@ -70,6 +75,11 @@ export async function POST(request: NextRequest) {
         });
         if (rateLimitResponse) return rateLimitResponse;
 
+        const idempotencyKey = request.headers.get("idempotency-key")?.trim() || null;
+        if (!validIdempotencyKey(idempotencyKey)) {
+            return NextResponse.json({ error: "کلید یکتای درخواست نامعتبر است." }, { status: 400 });
+        }
+
         const body = await request.json().catch(() => null) as { serviceId?: unknown; link?: unknown; quantity?: unknown } | null;
         const serviceId = typeof body?.serviceId === "string" ? body.serviceId.trim() : "";
         const link = typeof body?.link === "string" ? body.link.trim() : "";
@@ -80,6 +90,23 @@ export async function POST(request: NextRequest) {
         if (!quantity) return NextResponse.json({ error: "تعداد سفارش معتبر نیست." }, { status: 400 });
 
         const admin = getAdminClient();
+
+        const { data: existingOrder, error: existingOrderError } = await admin
+            .from("social_orders")
+            .select("id, tracking_code, service_id, quantity, price, status, created_at")
+            .eq("user_id", userId)
+            .eq("idempotency_key", idempotencyKey)
+            .maybeSingle();
+
+        if (existingOrderError) {
+            console.error("[social/order] idempotency lookup failed", existingOrderError);
+            return NextResponse.json({ error: "بررسی درخواست قبلی ناموفق بود." }, { status: 500 });
+        }
+
+        if (existingOrder) {
+            return NextResponse.json({ success: true, order: existingOrder, idempotent: true });
+        }
+
         const { data: service, error: serviceError } = await admin
             .from("social_services")
             .select("id, provider, provider_service_id, name, provider_rate, min_quantity, max_quantity, profit_type, profit_value, is_active")
@@ -114,11 +141,25 @@ export async function POST(request: NextRequest) {
                 quantity,
                 price: Math.round(price * 100) / 100,
                 status: "pending",
+                idempotency_key: idempotencyKey,
             })
             .select("id, tracking_code, service_id, quantity, price, status, created_at")
             .single();
 
         if (orderError) {
+            if (orderError.code === "23505") {
+                const { data: concurrentOrder } = await admin
+                    .from("social_orders")
+                    .select("id, tracking_code, service_id, quantity, price, status, created_at")
+                    .eq("user_id", userId)
+                    .eq("idempotency_key", idempotencyKey)
+                    .maybeSingle();
+
+                if (concurrentOrder) {
+                    return NextResponse.json({ success: true, order: concurrentOrder, idempotent: true });
+                }
+            }
+
             console.error("[social/order] order insert failed", orderError);
             return NextResponse.json({ error: "ثبت سفارش ناموفق بود." }, { status: 500 });
         }
