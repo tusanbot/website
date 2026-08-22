@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { requestZibalPayment, zibalStartUrl } from "@/lib/social/zibal";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,18 @@ export async function POST(request: NextRequest) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "احراز هویت لازم است." }, { status: 401 });
 
+        const bodySizeError = rejectOversizedJsonBody(request, 8 * 1024);
+        if (bodySizeError) return bodySizeError;
+
+        const rateLimitResponse = await checkRateLimit({
+            scope: "social:payment:request",
+            request,
+            userId,
+            limit: 3,
+            windowSeconds: 60,
+        });
+        if (rateLimitResponse) return rateLimitResponse;
+
         const body = await request.json().catch(() => null) as { orderId?: unknown } | null;
         const orderId = typeof body?.orderId === "string" ? body.orderId.trim() : "";
         if (!orderId) return NextResponse.json({ error: "شناسه سفارش الزامی است." }, { status: 400 });
@@ -39,17 +52,17 @@ export async function POST(request: NextRequest) {
         const { data: order, error } = await admin.from("social_orders")
             .select("id,user_id,tracking_code,price,status,payment_track_id,payment_provider")
             .eq("id", orderId).maybeSingle();
-        if (error) throw new Error(error.message);
+        if (error) {
+            console.error("[social/payment/request] order lookup failed", error);
+            return NextResponse.json({ error: "دریافت سفارش ناموفق بود." }, { status: 500 });
+        }
         if (!order || order.user_id !== userId) return NextResponse.json({ error: "سفارش پیدا نشد." }, { status: 404 });
 
-        // A failed/cancelled payment may be retried. Never reuse the old trackId
-        // because it represents a previous gateway attempt.
         const retryable = ["pending", "awaiting_payment", "failed", "cancelled"].includes(order.status);
         if (!retryable) {
             return NextResponse.json({ error: "این سفارش در وضعیت قابل پرداخت نیست." }, { status: 409 });
         }
 
-        // Resume an existing, still-active payment attempt.
         if (order.status === "awaiting_payment" && order.payment_track_id && order.payment_provider === "zibal") {
             return NextResponse.json({
                 success: true,
@@ -58,7 +71,6 @@ export async function POST(request: NextRequest) {
             });
         }
 
-        // social_orders.price is stored in Toman. Zibal expects Rial.
         const priceInToman = Number(order.price);
         const amount = Math.round(priceInToman * 10);
         if (!Number.isSafeInteger(amount) || amount < 10000) {
@@ -81,7 +93,10 @@ export async function POST(request: NextRequest) {
             admin_note: null,
         }).eq("id", order.id).in("status", ["pending", "awaiting_payment", "failed", "cancelled"]);
 
-        if (updateError) throw new Error(updateError.message);
+        if (updateError) {
+            console.error("[social/payment/request] order update failed", updateError);
+            return NextResponse.json({ error: "ثبت درخواست پرداخت ناموفق بود." }, { status: 500 });
+        }
 
         return NextResponse.json({
             success: true,
@@ -89,7 +104,7 @@ export async function POST(request: NextRequest) {
             trackId: payment.trackId,
         });
     } catch (error) {
-        console.error("[social/payment/request]", error);
-        return NextResponse.json({ error: error instanceof Error ? error.message : "ایجاد پرداخت ناموفق بود." }, { status: 500 });
+        console.error("[social/payment/request] unexpected error", error);
+        return NextResponse.json({ error: "ایجاد پرداخت ناموفق بود." }, { status: 500 });
     }
 }
