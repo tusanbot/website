@@ -49,7 +49,7 @@ export default function FinalCTA() {
             />
 
             <div className="relative mx-auto max-w-6xl px-6 lg:px-8">
-                <GlassPanel className="overflow-hidden rounded-[36px] border border-white/15 bg-slate-900/30 p-8 shadow-[0_30px_90px_rgba(0,0,0,0.35)] backdrop-blur-xl lg:p-12">
+                <GlassPanel className="overflow-hidden rounded-[36px] border border-white/40 bg-white/90 p-8 shadow-[0_30px_90px_rgba(0,0,0,0.25)] backdrop-blur-xl lg:p-12">
                     <div className="grid gap-10 lg:grid-cols-[1.3fr_1fr] lg:items-center">
                         <motion.div
                             initial={{ opacity: 0, y: 24 }}
@@ -57,16 +57,16 @@ export default function FinalCTA() {
                             viewport={{ once: true, amount: 0.25 }}
                             transition={{ duration: 0.6 }}
                         >
-                            <div className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-bold text-white">
-                                <span className="h-2 w-2 rounded-full bg-white animate-pulse" />
+                            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-bold text-slate-800">
+                                <span className="h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse" />
                                 آماده شروع هستید؟
                             </div>
 
-                            <h2 className="mt-6 text-4xl font-black leading-tight text-white sm:text-5xl">
+                            <h2 className="mt-6 text-4xl font-black leading-tight text-slate-950 sm:text-5xl">
                                 همین حالا سفارش خود را در توسن ثبت کنید
                             </h2>
 
-                            <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-100">
+                            <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-700">
                                 ثبت سفارش کمتر از دو دقیقه زمان می‌برد. مدارک را آنلاین ارسال
                                 کنید، وضعیت سفارش را لحظه‌ای پیگیری کنید و بدون مراجعه غیرضروری
                                 خدمت خود را دریافت کنید.
@@ -74,7 +74,7 @@ export default function FinalCTA() {
 
                             <div className="mt-8 flex flex-col gap-4 sm:flex-row">
                                 <Link href="/services">
-                                    <TusanButton className="w-full bg-white text-[var(--primary)] hover:bg-white/90 sm:w-auto">
+                                    <TusanButton className="w-full bg-[var(--primary)] text-white hover:bg-[var(--primary)]/90 sm:w-auto">
                                         شروع ثبت سفارش
                                     </TusanButton>
                                 </Link>
@@ -82,26 +82,26 @@ export default function FinalCTA() {
                                 <Link href="/orders">
                                     <TusanButton
                                         variant="secondary"
-                                        className="w-full border-white/30 bg-white/10 text-white hover:bg-white/20 sm:w-auto"
+                                        className="w-full border-slate-300 bg-white text-slate-800 hover:bg-slate-100 sm:w-auto"
                                     >
                                         پیگیری سفارش
                                     </TusanButton>
                                 </Link>
                             </div>
 
-                            <div className="mt-8 flex flex-wrap gap-4 text-sm text-white/85">
+                            <div className="mt-8 flex flex-wrap gap-4 text-sm font-medium text-slate-700">
                                 <div className="flex items-center gap-2">
-                                    <span>✔</span>
+                                    <span className="text-[var(--primary)]">✔</span>
                                     ثبت سفارش ۲۴ ساعته
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <span>✔</span>
+                                    <span className="text-[var(--primary)]">✔</span>
                                     پشتیبانی سریع
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <span>✔</span>
+                                    <span className="text-[var(--primary)]">✔</span>
                                     امنیت اطلاعات
                                 </div>
                             </div>
@@ -136,10 +136,10 @@ function StatCard({
         <motion.div
             whileHover={{ y: -4, scale: 1.02 }}
             transition={{ duration: 0.2 }}
-            className="rounded-3xl border border-white/15 bg-slate-900/25 p-5 backdrop-blur"
+            className="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm"
         >
-            <div className="text-3xl font-black text-white">{value}</div>
-            <div className="mt-2 text-sm text-slate-200">{label}</div>
+            <div className="text-3xl font-black text-slate-950">{value}</div>
+            <div className="mt-2 text-sm text-slate-600">{label}</div>
         </motion.div>
     );
 }
