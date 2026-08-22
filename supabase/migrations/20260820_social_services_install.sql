@@ -61,6 +61,9 @@ create table if not exists public.social_orders (
     status text not null default 'pending' check (status in ('pending', 'awaiting_payment', 'paid', 'processing', 'partial', 'completed', 'cancelled', 'failed')),
     provider_status text,
     admin_note text,
+    admin_approved boolean not null default false,
+    admin_approved_at timestamptz,
+    admin_approved_by uuid references auth.users(id),
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -75,6 +78,7 @@ create index if not exists idx_social_services_category on public.social_service
 create index if not exists idx_social_orders_user on public.social_orders(user_id, created_at desc);
 create index if not exists idx_social_orders_status on public.social_orders(status, created_at desc);
 create index if not exists idx_social_orders_provider on public.social_orders(provider, provider_order_id);
+create index if not exists idx_social_orders_admin_approval on public.social_orders(admin_approved, status, created_at desc);
 
 alter table public.social_platforms enable row level security;
 alter table public.social_categories enable row level security;
