@@ -219,8 +219,6 @@ export default function AdminOrdersPage() {
                 className="min-h-screen bg-gray-100 flex items-center justify-center"
             >
                 <GlassPanel className="p-8 text-center">
-                    import TusanIcon from "@/components/ui/TusanIcon";
-
                     <div className="w-14 h-14 mx-auto rounded-2xl bg-[var(--primary)]/10 flex items-center justify-center">
                         <TusanIcon name="clipboard" size={28} className="text-[var(--primary)]" />
                     </div>
