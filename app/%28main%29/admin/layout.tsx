@@ -8,14 +8,9 @@ export default async function AdminLayout({
     children: ReactNode;
 }) {
     const supabase = await createSupabaseServerClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-        redirect("/auth?mode=login");
-    }
+    if (!user) redirect("/auth?mode=login");
 
     const { data: profile, error } = await supabase
         .from("profiles")
@@ -23,9 +18,7 @@ export default async function AdminLayout({
         .eq("id", user.id)
         .maybeSingle();
 
-    if (error || profile?.role !== "admin") {
-        redirect("/");
-    }
+    if (error || profile?.role !== "admin") redirect("/");
 
     return children;
 }
