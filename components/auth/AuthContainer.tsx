@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { GlassPanel, SectionHeader } from "@/components/ui";
 import LoginForm from "@/components/auth/LoginForm";
 import RegisterForm from "@/components/auth/RegisterForm";
@@ -11,13 +11,47 @@ import { supabase } from "@/lib/supabase";
 type Mode = "login" | "register" | "forgot";
 
 export default function AuthContainer() {
+    const router = useRouter();
     const searchParams = useSearchParams();
+    const [checkingSession, setCheckingSession] = useState(true);
     const [mode, setMode] = useState<Mode>(() => {
         const value = searchParams.get("mode");
         return value === "register" || value === "forgot" ? value : "login";
     });
     const [googleLoading, setGoogleLoading] = useState(false);
     const [googleError, setGoogleError] = useState("");
+
+    useEffect(() => {
+        let mounted = true;
+
+        async function checkSession() {
+            const { data } = await supabase.auth.getSession();
+
+            if (data.session?.user) {
+                router.replace("/dashboard");
+                return;
+            }
+
+            if (mounted) {
+                setCheckingSession(false);
+            }
+        }
+
+        checkSession();
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (session?.user) {
+                router.replace("/dashboard");
+            }
+        });
+
+        return () => {
+            mounted = false;
+            subscription.unsubscribe();
+        };
+    }, [router]);
 
     async function handleGoogleLogin() {
         setGoogleLoading(true);
@@ -31,6 +65,21 @@ export default function AuthContainer() {
             setGoogleError(error.message || "ورود با گوگل انجام نشد.");
             setGoogleLoading(false);
         }
+    }
+
+    if (checkingSession) {
+        return (
+            <div className="w-full max-w-md">
+                <GlassPanel className="p-8">
+                    <div className="animate-pulse space-y-4">
+                        <div className="mx-auto h-16 w-16 rounded-2xl bg-[var(--border)]" />
+                        <div className="mx-auto h-6 w-48 rounded bg-[var(--border)]" />
+                        <div className="h-12 rounded-xl bg-[var(--border)]" />
+                        <div className="h-12 rounded-xl bg-[var(--border)]" />
+                    </div>
+                </GlassPanel>
+            </div>
+        );
     }
 
     return (
