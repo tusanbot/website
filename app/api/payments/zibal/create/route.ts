@@ -6,6 +6,12 @@ import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimi
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const ZIBAL_START_URL = "https://gateway.zibal.ir/start";
+
+function paymentUrl(authority: string) {
+  return `${ZIBAL_START_URL}/${encodeURIComponent(authority)}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = supabaseAdmin();
@@ -68,6 +74,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "این سفارش قبلاً پرداخت شده است." }, { status: 409 });
     }
 
+    // Treat an existing active payment as the canonical payment attempt for this order.
+    // This prevents double gateway requests caused by double-clicks, retries or concurrent tabs.
+    const { data: existingActive, error: existingActiveError } = await supabase
+      .from("payments")
+      .select("id,authority,status")
+      .eq("order_id", order.id)
+      .in("status", ["pending", "redirected"])
+      .limit(1)
+      .maybeSingle();
+
+    if (existingActiveError) {
+      console.error("[payments/zibal/create] active payment lookup failed", existingActiveError);
+      return NextResponse.json({ error: "بررسی درخواست پرداخت ناموفق بود." }, { status: 500 });
+    }
+
+    if (existingActive) {
+      if (existingActive.status === "redirected" && existingActive.authority) {
+        return NextResponse.json({
+          paymentId: existingActive.id,
+          paymentUrl: paymentUrl(String(existingActive.authority)),
+          idempotent: true,
+        });
+      }
+
+      return NextResponse.json(
+        { error: "درخواست پرداخت دیگری برای این سفارش در حال ایجاد است. چند لحظه بعد دوباره تلاش کنید." },
+        { status: 409 }
+      );
+    }
+
     const { data: payment, error: paymentError } = await supabase
       .from("payments")
       .insert({
@@ -82,6 +118,29 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (paymentError || !payment) {
+      if (paymentError?.code === "23505") {
+        const { data: concurrentPayment } = await supabase
+          .from("payments")
+          .select("id,authority,status")
+          .eq("order_id", order.id)
+          .in("status", ["pending", "redirected"])
+          .limit(1)
+          .maybeSingle();
+
+        if (concurrentPayment?.status === "redirected" && concurrentPayment.authority) {
+          return NextResponse.json({
+            paymentId: concurrentPayment.id,
+            paymentUrl: paymentUrl(String(concurrentPayment.authority)),
+            idempotent: true,
+          });
+        }
+
+        return NextResponse.json(
+          { error: "درخواست پرداخت دیگری برای این سفارش در حال ایجاد است. چند لحظه بعد دوباره تلاش کنید." },
+          { status: 409 }
+        );
+      }
+
       console.error("[payments/zibal/create] payment insert failed", paymentError);
       return NextResponse.json({ error: "ایجاد درخواست پرداخت ناموفق بود." }, { status: 500 });
     }
@@ -105,7 +164,8 @@ export async function POST(request: NextRequest) {
           status: "redirected",
         })
         .eq("id", payment.id)
-        .eq("user_id", user.id);
+        .eq("user_id", user.id)
+        .eq("status", "pending");
 
       if (updateError) {
         console.error("[payments/zibal/create] payment update failed", updateError);
@@ -118,7 +178,8 @@ export async function POST(request: NextRequest) {
       await supabase
         .from("payments")
         .update({ status: "failed", gateway_response: { message: "gateway_error" } })
-        .eq("id", payment.id);
+        .eq("id", payment.id)
+        .eq("status", "pending");
 
       return NextResponse.json(
         { error: "ارتباط با درگاه پرداخت ناموفق بود. لطفاً دوباره تلاش کنید." },
