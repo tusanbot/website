@@ -13,19 +13,25 @@ function TelegramIcon({ size = 20 }: { size?: number }) {
 
 function EitaaIcon({ size = 20 }: { size?: number }) {
     return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 2.5c-5.25 0-9.5 4.1-9.5 9.17 0 2.55 1.1 4.86 2.86 6.5L4.4 21.5l4.24-1.73c1.05.4 2.18.61 3.36.61 5.25 0 9.5-4.1 9.5-9.17S17.25 2.5 12 2.5Z" fill="currentColor" />
-            <path d="M8.15 9.05h7.7c.48 0 .87.39.87.87v1.08c0 .48-.39.87-.87.87h-3.02l-2.05 2.05a.75.75 0 0 1-1.28-.53v-1.52H8.15a.87.87 0 0 1-.87-.87V9.92c0-.48.39-.87.87-.87Z" fill="white" />
-        </svg>
+        <img
+            src="https://cdn.simpleicons.org/eitaa"
+            width={size}
+            height={size}
+            alt=""
+            aria-hidden="true"
+        />
     );
 }
 
 function RubikaIcon({ size = 20 }: { size?: number }) {
     return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M12 2.5c5.25 0 9.5 4.25 9.5 9.5s-4.25 9.5-9.5 9.5S2.5 17.25 2.5 12 6.75 2.5 12 2.5Z" fill="currentColor" />
-            <path d="m8.1 8.25 7.8 3.75c.7.34.7 1.34 0 1.68l-7.8 3.75c-.64.31-1.35-.16-1.35-.87V9.12c0-.71.71-1.18 1.35-.87Z" fill="white" />
-        </svg>
+        <img
+            src="https://cdn.simpleicons.org/rubika"
+            width={size}
+            height={size}
+            alt=""
+            aria-hidden="true"
+        />
     );
 }
 
@@ -46,8 +52,8 @@ export default function HomeFooter() {
 
     const socialLinks = [
         { label: "تلگرام", username: "@Tusan_admin", href: "https://t.me/Tusan_admin", Icon: TelegramIcon, className: "text-sky-500" },
-        { label: "ایتا", username: "@Tusan_admin", href: "https://eitaa.com/Tusan_admin", Icon: EitaaIcon, className: "text-orange-500" },
-        { label: "روبیکا", username: "@Tusan_admin", href: "https://rubika.ir/Tusan_admin", Icon: RubikaIcon, className: "text-rose-500" },
+        { label: "ایتا", username: "@tusan_c", href: "https://eitaa.com/tusan_c", Icon: EitaaIcon, className: "text-orange-500" },
+        { label: "روبیکا", username: "@tusan_c", href: "https://rubika.ir/tusan_c", Icon: RubikaIcon, className: "text-rose-500" },
     ];
 
     return (
