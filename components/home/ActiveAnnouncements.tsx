@@ -17,14 +17,7 @@ type Announcement = {
   button_label: string | null;
   service_id: string | null;
   priority: number | null;
-  services?: {
-    title?: string | null;
-    category?: string | null;
-    description?: string | null;
-    icon?: string | null;
-    price?: number | null;
-    form_schema?: unknown;
-  } | null;
+  services?: { title?: string | null; category?: string | null; description?: string | null; icon?: string | null; price?: number | null; form_schema?: unknown } | null;
 };
 
 type Tone = { label: string; strong: string; soft: string; text: string; bar: string };
@@ -76,20 +69,29 @@ export default function ActiveAnnouncements() {
 
   async function loadAnnouncements() {
     setLoading(true);
-    const current = new Date().toISOString();
-    // Scheduled items are eligible even before start_at. They become visible
-    // immediately from their configured start date; expired items stay hidden.
+    const current = new Date();
+    const currentIso = current.toISOString();
+    // Fetch the current period plus the next 31 days so a scheduled item
+    // crossing into the next month is already available to the UI. It is
+    // displayed only once its own start_at has actually arrived.
+    const futureLimit = new Date(current.getTime() + 31 * 86400000).toISOString();
     const { data, error } = await supabase
       .from("services_announcements")
       .select(`id, title, summary, type, start_at, end_at, extended_end_at, button_label, service_id, priority, services(title, category, description, icon, price, form_schema)`)
       .eq("is_active", true)
-      .or(`start_at.is.null,start_at.gte.${current}`)
-      .or(`start_at.lte.${current}`)
-      .or(`end_at.is.null,end_at.gte.${current}`)
+      .or(`start_at.is.null,start_at.lte.${futureLimit}`)
+      .or(`end_at.is.null,end_at.gte.${currentIso}`)
       .order("priority", { ascending: false })
       .order("start_at", { ascending: true })
-      .limit(8);
-    if (!error) setItems((data || []) as Announcement[]);
+      .limit(20);
+
+    if (!error) {
+      const visible = ((data || []) as Announcement[]).filter((item) => {
+        if (!item.start_at) return true;
+        return new Date(item.start_at).getTime() <= current.getTime();
+      }).slice(0, 8);
+      setItems(visible);
+    }
     setLoading(false);
   }
 
@@ -121,7 +123,7 @@ export default function ActiveAnnouncements() {
                     <div className="mt-5">{item.services?.category && <div className="text-xs font-bold text-white/80">{item.services.category}</div>}<h3 className="mt-2 line-clamp-2 text-xl font-black leading-8">{item.title}</h3></div>
                     <div className="mt-auto rounded-2xl bg-black/15 p-3 backdrop-blur-sm"><div className="flex items-center justify-between gap-2 text-xs font-bold text-white/85"><span>زمان باقی‌مانده</span><span>{remaining.text}</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/30"><motion.div initial={{ width: 0 }} animate={{ width: `${remaining.percent}%` }} transition={{ duration: 0.8 }} className="h-full rounded-full bg-white" /></div><div className="mt-3 text-center text-[11px] font-bold text-white/75">برای مشاهده جزئیات مکث کنید ←</div></div>
                   </div>
-                  <motion.div initial={false} animate={{ y: isOpen ? 0 : "100%" }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }} className={`absolute inset-0 z-20 flex flex-col rounded-[1.9rem] p-5 backdrop-blur-xl ${tone.soft} bg-opacity-95}`}>
+                  <motion.div initial={false} animate={{ y: isOpen ? 0 : "100%" }} transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }} className={`absolute inset-0 z-20 flex flex-col rounded-[1.9rem] p-5 backdrop-blur-xl ${tone.soft} bg-opacity-95`}>
                     <div className="flex items-center justify-between gap-3"><span className={`rounded-full bg-white/90 px-3 py-1 text-[11px] font-black shadow-sm ${tone.text}`}>{tone.label}</span>{item.services?.category && <span className="truncate text-xs font-bold text-[var(--text-muted)]">{item.services.category}</span>}</div>
                     <h3 className="mt-3 line-clamp-2 text-lg font-black leading-7 text-[var(--text)]">{serviceTitle}</h3>{description && <p className="mt-1.5 line-clamp-2 text-xs leading-5 text-[var(--text-muted)]">{description}</p>}
                     <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] font-bold text-[var(--text-muted)]">{item.services?.price != null && <div className="rounded-xl bg-white/65 p-2.5 shadow-sm dark:bg-black/10"><div>قیمت خدمت</div><div className="mt-0.5 font-black text-[var(--text)]">{Number(item.services.price).toLocaleString("fa-IR")} تومان</div></div>}{endDate && <div className="rounded-xl bg-white/65 p-2.5 shadow-sm dark:bg-black/10"><div>پایان ثبت‌نام</div><div className="mt-0.5 font-black text-[var(--text)]">{endDate}</div></div>}{startDate && <div className="rounded-xl bg-white/65 p-2.5 shadow-sm dark:bg-black/10"><div>شروع ثبت‌نام</div><div className="mt-0.5 font-black text-[var(--text)]">{startDate}</div></div>}<div className="rounded-xl bg-white/65 p-2.5 shadow-sm dark:bg-black/10"><div>زمان باقی‌مانده</div><div className={`mt-0.5 font-black ${tone.text}`}>{remaining.text}</div></div></div>
