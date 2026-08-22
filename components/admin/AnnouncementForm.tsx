@@ -81,7 +81,10 @@ export default function AnnouncementForm({
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        onSubmit(form);
+        onSubmit({
+            ...form,
+            documents: form.documents.map((item) => item.trim()).filter(Boolean),
+        });
     }
 
     function JalaliDateTimePicker({
@@ -196,16 +199,23 @@ export default function AnnouncementForm({
                         onChange={(e) =>
                             update(
                                 "documents",
-                                e.target.value
-                                    .split("\n")
-                                    .map((v) => v.trim())
-                                    .filter(Boolean)
+                                e.target.value.replace(/\r\n/g, "\n").split("\n")
                             )
                         }
-                        className="w-full border border-[var(--border)] rounded-xl px-4 py-3 bg-[var(--surface)] text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--primary)]/10 focus:border-[var(--primary)] transition"
-                        rows={5}
-                        placeholder="هر مدرک را در یک خط وارد کنید"
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                                e.stopPropagation();
+                            }
+                        }}
+                        spellCheck={false}
+                        dir="rtl"
+                        className="w-full min-h-40 border border-[var(--border)] rounded-xl px-4 py-3 bg-[var(--surface)] text-[var(--text)] outline-none focus:ring-2 focus:ring-[var(--primary)]/10 focus:border-[var(--primary)] transition resize-y leading-8 whitespace-pre-wrap"
+                        rows={7}
+                        placeholder={'هر مدرک را در یک خط وارد کنید\nبرای فاصله بین موارد، Enter بزنید'}
                     />
+                    <p className="mt-2 text-xs text-[var(--muted)]">
+                        فاصله، چند خطی نوشتن و خطوط خالی حفظ می‌شوند؛ فقط هنگام ذخیره، فاصله‌های ابتدا و انتهای هر مدرک حذف می‌شود.
+                    </p>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-4">
