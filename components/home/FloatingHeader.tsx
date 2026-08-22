@@ -4,9 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { TusanButton } from "@/components/ui";
+import { supabase } from "@/lib/supabase";
 
 export default function FloatingHeader() {
     const [scrolled, setScrolled] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
 
     useEffect(() => {
         function onScroll() {
@@ -14,7 +16,31 @@ export default function FloatingHeader() {
         }
 
         window.addEventListener("scroll", onScroll);
-        return () => window.removeEventListener("scroll", onScroll);
+
+        let mounted = true;
+
+        async function loadSession() {
+            const { data } = await supabase.auth.getSession();
+            if (mounted) {
+                setIsAuthenticated(Boolean(data.session?.user));
+            }
+        }
+
+        loadSession();
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (mounted) {
+                setIsAuthenticated(Boolean(session?.user));
+            }
+        });
+
+        return () => {
+            mounted = false;
+            window.removeEventListener("scroll", onScroll);
+            subscription.unsubscribe();
+        };
     }, []);
 
     const links = [
@@ -64,11 +90,33 @@ export default function FloatingHeader() {
                     </nav>
 
                     <div className="flex items-center gap-2">
-                        <Link href="/login">
-                            <TusanButton variant="secondary" className="px-4 py-2 text-sm">
-                                ورود
-                            </TusanButton>
-                        </Link>
+                        {isAuthenticated ? (
+                            <>
+                                <Link href="/profile">
+                                    <TusanButton variant="secondary" className="px-4 py-2 text-sm">
+                                        پروفایل
+                                    </TusanButton>
+                                </Link>
+                                <Link href="/dashboard">
+                                    <TusanButton className="px-4 py-2 text-sm">
+                                        داشبورد
+                                    </TusanButton>
+                                </Link>
+                            </>
+                        ) : (
+                            <>
+                                <Link href="/login">
+                                    <TusanButton variant="secondary" className="px-4 py-2 text-sm">
+                                        ورود
+                                    </TusanButton>
+                                </Link>
+                                <Link href="/register">
+                                    <TusanButton className="px-4 py-2 text-sm">
+                                        ثبت‌نام
+                                    </TusanButton>
+                                </Link>
+                            </>
+                        )}
 
                         <Link href="/services">
                             <TusanButton className="px-4 py-2 text-sm">
