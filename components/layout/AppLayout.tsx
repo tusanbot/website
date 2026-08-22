@@ -1,14 +1,129 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import AppSidebar from "./AppSidebar";
+import { supabase } from "@/lib/supabase";
+import { GlassPanel, TusanButton } from "@/components/ui";
+
+type AdminAccess = "checking" | "allowed" | "denied";
 
 export default function AppLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const pathname = usePathname();
     const [open, setOpen] = useState(false);
+    const [adminAccess, setAdminAccess] = useState<AdminAccess>("checking");
+
+    const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+
+    useEffect(() => {
+        if (!isAdminRoute) {
+            setAdminAccess("allowed");
+            return;
+        }
+
+        let active = true;
+
+        async function checkAdminAccess() {
+            setAdminAccess("checking");
+
+            try {
+                const {
+                    data: { user },
+                } = await supabase.auth.getUser();
+
+                if (!user) {
+                    if (active) setAdminAccess("denied");
+                    return;
+                }
+
+                const { data: profile, error } = await supabase
+                    .from("profiles")
+                    .select("role")
+                    .eq("id", user.id)
+                    .maybeSingle();
+
+                if (active) {
+                    setAdminAccess(
+                        !error && profile?.role === "admin"
+                            ? "allowed"
+                            : "denied"
+                    );
+                }
+            } catch (error) {
+                console.error("[AppLayout] admin access check failed", error);
+
+                if (active) {
+                    setAdminAccess("denied");
+                }
+            }
+        }
+
+        checkAdminAccess();
+
+        const {
+            data: { subscription },
+        } = supabase.auth.onAuthStateChange(() => {
+            checkAdminAccess();
+        });
+
+        return () => {
+            active = false;
+            subscription.unsubscribe();
+        };
+    }, [isAdminRoute, pathname]);
+
+    if (isAdminRoute && adminAccess !== "allowed") {
+        return (
+            <div
+                dir="rtl"
+                className="min-h-screen bg-[var(--background)] text-[var(--text)] flex items-center justify-center p-6"
+            >
+                <GlassPanel className="w-full max-w-md p-8 text-center">
+                    {adminAccess === "checking" ? (
+                        <>
+                            <div className="text-5xl mb-4">🔐</div>
+                            <h1 className="text-xl font-black">
+                                در حال بررسی دسترسی...
+                            </h1>
+                            <p className="mt-3 text-[var(--text-muted)]">
+                                لطفاً چند لحظه صبر کنید.
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <div className="text-5xl mb-4">⛔</div>
+                            <h1 className="text-xl font-black">
+                                دسترسی غیرمجاز
+                            </h1>
+                            <p className="mt-3 leading-7 text-[var(--text-muted)]">
+                                برای ورود به پنل مدیریت باید با حساب مدیر وارد شده باشید.
+                            </p>
+
+                            <div className="mt-6 flex flex-col gap-3">
+                                <Link href="/auth?mode=login">
+                                    <TusanButton className="w-full">
+                                        ورود به حساب
+                                    </TusanButton>
+                                </Link>
+
+                                <Link
+                                    href="/"
+                                    className="text-sm font-bold text-[var(--primary)] hover:underline"
+                                >
+                                    بازگشت به صفحه اصلی
+                                </Link>
+                            </div>
+                        </>
+                    )}
+                </GlassPanel>
+            </div>
+        );
+    }
 
     return (
         <div
