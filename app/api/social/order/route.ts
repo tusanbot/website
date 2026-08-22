@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { calculateOrderPrice } from "@/lib/social/pricing";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,18 @@ export async function POST(request: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: "برای ثبت سفارش ابتدا وارد حساب کاربری شوید." }, { status: 401 });
         }
+
+        const bodySizeError = rejectOversizedJsonBody(request, 16 * 1024);
+        if (bodySizeError) return bodySizeError;
+
+        const rateLimitResponse = await checkRateLimit({
+            scope: "social:order:create",
+            request,
+            userId,
+            limit: 5,
+            windowSeconds: 60,
+        });
+        if (rateLimitResponse) return rateLimitResponse;
 
         const body = await request.json().catch(() => null) as { serviceId?: unknown; link?: unknown; quantity?: unknown } | null;
         const serviceId = typeof body?.serviceId === "string" ? body.serviceId.trim() : "";
