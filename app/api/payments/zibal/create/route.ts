@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "نشست کاربر معتبر نیست." }, { status: 401 });
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
     const orderId = String(body?.orderId || "").trim();
     if (!orderId) {
       return NextResponse.json({ error: "شناسه سفارش الزامی است." }, { status: 400 });
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       .single();
 
     if (orderError || !order) {
+      console.error("[payments/zibal/create] order lookup failed", orderError);
       return NextResponse.json({ error: "سفارش پیدا نشد." }, { status: 404 });
     }
 
@@ -68,7 +69,8 @@ export async function POST(request: Request) {
       .single();
 
     if (paymentError || !payment) {
-      throw new Error(paymentError?.message || "رکورد پرداخت ایجاد نشد.");
+      console.error("[payments/zibal/create] payment insert failed", paymentError);
+      return NextResponse.json({ error: "ایجاد درخواست پرداخت ناموفق بود." }, { status: 500 });
     }
 
     const origin = new URL(request.url).origin;
@@ -92,18 +94,26 @@ export async function POST(request: Request) {
         .eq("id", payment.id)
         .eq("user_id", user.id);
 
-      if (updateError) throw new Error(updateError.message);
+      if (updateError) {
+        console.error("[payments/zibal/create] payment update failed", updateError);
+        throw new Error("payment_update_failed");
+      }
 
       return NextResponse.json({ paymentId: payment.id, paymentUrl: result.paymentUrl });
     } catch (gatewayError) {
+      console.error("[payments/zibal/create] gateway error", gatewayError);
       await supabase
         .from("payments")
-        .update({ status: "failed", gateway_response: { message: gatewayError instanceof Error ? gatewayError.message : "Gateway error" } })
+        .update({ status: "failed", gateway_response: { message: "gateway_error" } })
         .eq("id", payment.id);
-      throw gatewayError;
+
+      return NextResponse.json(
+        { error: "ارتباط با درگاه پرداخت ناموفق بود. لطفاً دوباره تلاش کنید." },
+        { status: 502 }
+      );
     }
   } catch (error) {
-    console.error("Zibal create payment error:", error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : "خطا در ایجاد پرداخت." }, { status: 500 });
+    console.error("[payments/zibal/create] unexpected error", error);
+    return NextResponse.json({ error: "خطایی در ایجاد پرداخت رخ داد." }, { status: 500 });
   }
 }
