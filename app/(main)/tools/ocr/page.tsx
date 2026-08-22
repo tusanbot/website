@@ -5,7 +5,55 @@ import { Copy, Download, FileText, Loader2, RotateCcw, Upload } from "lucide-rea
 
 type Status = "idle" | "loading" | "processing" | "done" | "error";
 type OcrPage = { index: number; text: string };
+
+declare global {
+    interface Window {
+        Tesseract?: {
+            createWorker: (langs?: string, oem?: number, options?: { logger?: (message: { status?: string; progress?: number }) => void }) => Promise<{
+                recognize: (image: File | HTMLCanvasElement) => Promise<{ data: { text: string } }>;
+                terminate: () => Promise<unknown>;
+            }>;
+        };
+        pdfjsLib?: {
+            version: string;
+            GlobalWorkerOptions: { workerSrc: string };
+            getDocument: (source: { data: ArrayBuffer }) => { promise: Promise<{
+                numPages: number;
+                getPage: (pageNumber: number) => Promise<{
+                    getViewport: (options: { scale: number }) => { width: number; height: number };
+                    render: (options: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<unknown> };
+                }>;
+            }> };
+        };
+    }
+}
+
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDF_WORKER_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+function loadScript(id: string, src: string) {
+    return new Promise<void>((resolve, reject) => {
+        const existing = document.getElementById(id) as HTMLScriptElement | null;
+        if (existing?.dataset.loaded === "true") { resolve(); return; }
+        if (existing) {
+            existing.addEventListener("load", () => resolve(), { once: true });
+            existing.addEventListener("error", () => reject(new Error(`Failed to load ${src}`)), { once: true });
+            return;
+        }
+        const script = document.createElement("script");
+        script.id = id; script.src = src; script.async = true;
+        script.onload = () => { script.dataset.loaded = "true"; resolve(); };
+        script.onerror = () => reject(new Error(`Failed to load ${src}`));
+        document.head.appendChild(script);
+    });
+}
+
+async function ensureLibraries(needsPdf: boolean) {
+    if (!window.Tesseract) await loadScript("tesseract-js-cdn", TESSERACT_URL);
+    if (needsPdf && !window.pdfjsLib) await loadScript("pdfjs-cdn", PDFJS_URL);
+}
 
 export default function OcrToolPage() {
     const inputRef = useRef<HTMLInputElement>(null);
@@ -30,21 +78,22 @@ export default function OcrToolPage() {
             setStatus("error"); setError("حجم فایل نباید بیشتر از ۲۵ مگابایت باشد."); return;
         }
         try {
-            setStatus("loading"); setProgress(5);
-            const { createWorker } = await import("tesseract.js");
-            const worker = await createWorker("fas+eng", 1, {
+            setStatus("loading"); setProgress(3);
+            await ensureLibraries(file.type === "application/pdf");
+            if (!window.Tesseract) throw new Error("Tesseract unavailable");
+            const worker = await window.Tesseract.createWorker("fas+eng", 1, {
                 logger: (message) => {
                     if (message.status === "recognizing text" && typeof message.progress === "number") {
-                        setStatus("processing"); setProgress(Math.min(95, Math.max(10, Math.round(message.progress * 85))));
+                        setStatus("processing"); setProgress(Math.min(95, Math.max(8, Math.round(message.progress * 85))));
                     }
                 },
             });
             try {
                 const pages: OcrPage[] = [];
                 if (file.type === "application/pdf") {
-                    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-                    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
-                    const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+                    if (!window.pdfjsLib) throw new Error("PDF.js unavailable");
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+                    const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
                     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
                         setStatus("processing"); setProgress(Math.round(((pageNumber - 1) / pdf.numPages) * 80) + 10);
                         const page = await pdf.getPage(pageNumber);
@@ -61,13 +110,13 @@ export default function OcrToolPage() {
                     const result = await worker.recognize(file);
                     pages.push({ index: 1, text: result.data.text.trim() });
                 }
-                setProgress(98);
+                setProgress(100);
                 setText(pages.map((page) => pages.length > 1 ? `--- صفحه ${page.index} ---\n${page.text}` : page.text).join("\n\n").trim());
-                setProgress(100); setStatus("done");
+                setStatus("done");
             } finally { await worker.terminate(); }
         } catch (err) {
             console.error("OCR failed", err); setStatus("error");
-            setError("پردازش فایل انجام نشد. اگر فایل PDF است، حجم یا تعداد صفحات آن را کاهش دهید و دوباره تلاش کنید.");
+            setError("پردازش فایل انجام نشد. اتصال اینترنت و حجم فایل را بررسی کنید و دوباره تلاش کنید.");
         }
     }, []);
 
@@ -78,15 +127,11 @@ export default function OcrToolPage() {
         const blob = new Blob([text], { type: "text/plain;charset=utf-8" }); const url = URL.createObjectURL(blob);
         const a = document.createElement("a"); a.href = url; a.download = `${fileName.replace(/\.[^.]+$/, "") || "ocr-result"}.txt`; a.click(); URL.revokeObjectURL(url);
     };
-    const downloadWord = async () => {
+    const downloadWord = () => {
         if (!text) return;
-        try {
-            const { Document, Packer, Paragraph, TextRun } = await import("docx");
-            const paragraphs = text.split(/\r?\n/).map((line) => new Paragraph({ children: [new TextRun({ text: line, font: "Vazirmatn", size: 24 })] }));
-            const wordDocument = new Document({ sections: [{ properties: {}, children: paragraphs }] });
-            const blob = await Packer.toBlob(wordDocument); const url = URL.createObjectURL(blob);
-            const a = document.createElement("a"); a.href = url; a.download = `${fileName.replace(/\.[^.]+$/, "") || "ocr-result"}.docx`; a.click(); URL.revokeObjectURL(url);
-        } catch (err) { console.error("Word export failed", err); setError("ساخت فایل Word انجام نشد."); }
+        const html = `<!doctype html><html dir="rtl"><head><meta charset="utf-8"><style>body{font-family:Vazirmatn,Tahoma,sans-serif;direction:rtl;line-height:2;font-size:14px}p{margin:0 0 10px}</style></head><body>${text.split(/\r?\n/).map((line) => `<p>${line.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;") || "&nbsp;"}</p>`).join("")}</body></html>`;
+        const blob = new Blob(["\ufeff", html], { type: "application/msword;charset=utf-8" }); const url = URL.createObjectURL(blob);
+        const a = document.createElement("a"); a.href = url; a.download = `${fileName.replace(/\.[^.]+$/, "") || "ocr-result"}.doc`; a.click(); URL.revokeObjectURL(url);
     };
 
     return (
@@ -112,7 +157,7 @@ export default function OcrToolPage() {
                         <div className="mt-5 flex gap-2"><button type="button" onClick={reset} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-bold"><RotateCcw size={17} /> شروع مجدد</button></div>
                     </section>
                     <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-4"><div><h2 className="font-black">متن استخراج‌شده</h2><p className="mt-1 text-xs text-[var(--text-muted)]">می‌توانید متن را مستقیماً ویرایش کنید.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={!text} onClick={() => void copyText()} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold disabled:opacity-40"><Copy size={16} /> کپی</button><button type="button" disabled={!text} onClick={downloadTxt} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold disabled:opacity-40"><Download size={16} /> TXT</button><button type="button" disabled={!text} onClick={() => void downloadWord()} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2 text-sm font-bold text-white disabled:opacity-40"><Download size={16} /> Word</button></div></div><textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="بعد از پردازش فایل، متن اینجا نمایش داده می‌شود..." className="mt-4 min-h-[520px] w-full resize-y rounded-2xl border border-[var(--border)] bg-transparent p-5 text-sm leading-8 outline-none focus:border-[var(--primary)]" />
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--border)] pb-4"><div><h2 className="font-black">متن استخراج‌شده</h2><p className="mt-1 text-xs text-[var(--text-muted)]">می‌توانید متن را مستقیماً ویرایش کنید.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={!text} onClick={() => void copyText()} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold disabled:opacity-40"><Copy size={16} /> کپی</button><button type="button" disabled={!text} onClick={downloadTxt} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold disabled:opacity-40"><Download size={16} /> TXT</button><button type="button" disabled={!text} onClick={downloadWord} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2 text-sm font-bold text-white disabled:opacity-40"><Download size={16} /> Word</button></div></div><textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="بعد از پردازش فایل، متن اینجا نمایش داده می‌شود..." className="mt-4 min-h-[520px] w-full resize-y rounded-2xl border border-[var(--border)] bg-transparent p-5 text-sm leading-8 outline-none focus:border-[var(--primary)]" />
                     </section>
                 </div>
             </div>
