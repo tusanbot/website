@@ -46,6 +46,11 @@ export async function requireAdmin(
         const { url, anonKey } = getSupabaseConfig();
 
         const authClient = createClient(url, anonKey, {
+            global: {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            },
             auth: {
                 persistSession: false,
                 autoRefreshToken: false,
