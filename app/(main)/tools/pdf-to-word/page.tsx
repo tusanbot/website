@@ -6,9 +6,9 @@ import { Download, FileText, Loader2, RotateCcw, Upload } from "lucide-react";
 type PdfJs = { getDocument: (options: { data: ArrayBuffer }) => { promise: Promise<any> } };
 type DocxApi = { Document: new (options: any) => any; Packer: { toBlob: (document: any) => Promise<Blob> }; Paragraph: new (options: any) => any; TextRun: new (options: any) => any };
 type OcrApi = { createWorker: (lang: string, oem?: number, options?: any) => Promise<any> };
+type BrowserLibraries = { pdfjsLib?: PdfJs; docx?: DocxApi; Tesseract?: OcrApi };
 
-declare global { interface Window { pdfjsLib?: PdfJs; docx?: DocxApi; Tesseract?: OcrApi } }
-
+const browserLibraries = () => window as unknown as BrowserLibraries;
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
 const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 const DOCX_URL = "https://cdn.jsdelivr.net/npm/docx@9.5.1/build/index.umd.js";
@@ -23,13 +23,14 @@ function loadScript(src: string, id: string) {
 }
 
 function formatBytes(bytes: number) { return `${(bytes / 1024 / 1024).toFixed(bytes < 1024 * 1024 ? 2 : 1)} MB`; }
-
 function textLooksUseful(text: string) { return text.replace(/\s/g, "").length >= 20; }
 
 async function renderPage(page: any, scale = 1.8) {
     const viewport = page.getViewport({ scale }); const canvas = document.createElement("canvas");
     canvas.width = Math.ceil(viewport.width); canvas.height = Math.ceil(viewport.height);
-    await page.render({ canvasContext: canvas.getContext("2d", { willReadFrequently: true }), viewport }).promise;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("امکان آماده‌سازی صفحه PDF وجود ندارد.");
+    await page.render({ canvasContext: context, viewport }).promise;
     return canvas;
 }
 
@@ -54,20 +55,26 @@ export default function PdfToWordPage() {
         let worker: any = null;
         try {
             await loadScript(PDFJS_URL, "tusan-pdfjs");
-            if (!window.pdfjsLib) throw new Error("کتابخانه PDF بارگذاری نشد.");
-            const pdf = await window.pdfjsLib.getDocument({ data: await selected.arrayBuffer() }).promise;
+            const libraries = browserLibraries();
+            if (!libraries.pdfjsLib) throw new Error("کتابخانه PDF بارگذاری نشد.");
+            const pdf = await libraries.pdfjsLib.getDocument({ data: await selected.arrayBuffer() }).promise;
             setPages(pdf.numPages); setStatus("processing");
             const chunks: string[] = [];
             for (let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i); const direct = await page.getTextContent();
-                const directText = (direct.items || []).map((item: any) => item.str || "").join(" ").replace(/[ \t]+/g, " ").trim();
+                const page = await pdf.getPage(i);
+                let directText = "";
+                if (typeof page.getTextContent === "function") {
+                    const direct = await page.getTextContent();
+                    directText = (direct.items || []).map((item: any) => item.str || "").join(" ").replace(/[ \t]+/g, " ").trim();
+                }
                 if (textLooksUseful(directText)) {
                     chunks.push(directText); setProgress(Math.round((i / pdf.numPages) * 90)); continue;
                 }
                 if (!worker) {
                     await loadScript(TESSERACT_URL, "tusan-tesseract");
-                    if (!window.Tesseract) throw new Error("موتور OCR بارگذاری نشد.");
-                    worker = await window.Tesseract.createWorker("fas+eng", 1, { logger: (m: any) => { if (m.status === "recognizing text" && typeof m.progress === "number") setProgress(Math.min(95, Math.round(((i - 1 + m.progress) / pdf.numPages) * 90))); } });
+                    const ocr = browserLibraries();
+                    if (!ocr.Tesseract) throw new Error("موتور OCR بارگذاری نشد.");
+                    worker = await ocr.Tesseract.createWorker("fas+eng", 1, { logger: (m: any) => { if (m.status === "recognizing text" && typeof m.progress === "number") setProgress(Math.min(95, Math.round(((i - 1 + m.progress) / pdf.numPages) * 90))); } });
                     await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: "6" });
                 }
                 const canvas = await renderPage(page, 2); chunks.push(await canvasToText(canvas, worker));
@@ -85,24 +92,13 @@ export default function PdfToWordPage() {
     const downloadWord = async () => {
         if (!text) return;
         try {
-            await loadScript(DOCX_URL, "tusan-docx"); if (!window.docx) throw new Error("کتابخانه ساخت Word بارگذاری نشد.");
-            const { Document, Packer, Paragraph, TextRun } = window.docx;
+            await loadScript(DOCX_URL, "tusan-docx"); const libraries = browserLibraries(); if (!libraries.docx) throw new Error("کتابخانه ساخت Word بارگذاری نشد.");
+            const { Document, Packer, Paragraph, TextRun } = libraries.docx;
             const paragraphs = text.split(/\r?\n/).map((line) => new Paragraph({ bidirectional: true, alignment: "right", children: [new TextRun({ text: line })] }));
             const document = new Document({ sections: [{ properties: {}, children: paragraphs }] });
             const blob = await Packer.toBlob(document); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `${file?.name.replace(/\.pdf$/i, "") || "converted"}.docx`; a.click(); URL.revokeObjectURL(url);
         } catch (err) { setError(err instanceof Error ? err.message : "ساخت فایل Word انجام نشد."); setStatus("error"); }
     };
 
-    return <main dir="rtl" className="min-h-screen page-background py-12 md:py-20"><div className="mx-auto max-w-6xl px-5 lg:px-8">
-        <div className="mx-auto max-w-3xl text-center"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--primary)]/10 text-[var(--primary)]"><FileText size={32}/></div><h1 className="mt-5 text-3xl font-black text-[var(--text)] md:text-4xl">تبدیل PDF به Word</h1><p className="mt-3 text-[var(--text-muted)]">تبدیل PDF متنی به سند Word و استفاده از OCR برای PDFهای اسکن‌شده.</p></div>
-        <div className="mt-10 grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <section className="h-fit rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"><div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop} onClick={() => inputRef.current?.click()} className={`flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center ${dragging ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/50"}`}><Upload size={40} className="text-[var(--primary)]"/><strong className="mt-4">PDF را اینجا رها کنید</strong><span className="mt-2 text-sm text-[var(--text-muted)]">یا برای انتخاب فایل کلیک کنید</span><span className="mt-4 text-xs text-[var(--text-muted)]">PDF · حداکثر ۵۰ مگابایت</span><input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onInput}/></div>
-                {file && <div className="mt-4 rounded-2xl bg-[var(--surface-secondary)] p-4"><div className="break-all text-sm font-black">{file.name}</div><div className="mt-2 text-xs text-[var(--text-muted)]">{formatBytes(file.size)} · {pages || "در حال بررسی"} صفحه</div></div>}
-                {(status === "loading" || status === "processing") && <div className="mt-5"><div className="mb-2 flex justify-between text-xs font-bold"><span>در حال تبدیل</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--surface-secondary)]"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{width:`${progress}%`}}/></div><div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]"><Loader2 size={14} className="animate-spin"/> صفحات متنی مستقیم استخراج می‌شوند؛ صفحات اسکن‌شده با OCR پردازش می‌شوند.</div></div>}
-                {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700">{error}</div>}
-                <div className="mt-5 flex gap-2"><button type="button" onClick={(e) => { e.stopPropagation(); reset(); }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold"><RotateCcw size={16}/> شروع مجدد</button>{text && <button type="button" onClick={(e) => { e.stopPropagation(); void downloadWord(); }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2 text-sm font-bold text-white"><Download size={16}/> دریافت Word</button>}</div>
-            </section>
-            <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"><div className="mb-4"><h2 className="font-black">پیش‌نمایش متن</h2><p className="mt-1 text-xs text-[var(--text-muted)]">متن استخراج‌شده قابل ویرایش است و قبل از دریافت Word می‌توانید آن را اصلاح کنید.</p></div><textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="بعد از انتخاب PDF، متن اینجا نمایش داده می‌شود..." className="min-h-[520px] w-full resize-y rounded-2xl border border-[var(--border)] bg-transparent p-4 text-sm leading-8 outline-none focus:border-[var(--primary)]"/><div className="mt-4 rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 p-4 text-xs leading-6 text-[var(--text-muted)]">PDFهای متنی معمولاً با کیفیت بالاتر تبدیل می‌شوند. در PDF اسکن‌شده، صفحات بدون متن قابل استخراج با OCR پردازش می‌شوند و کیفیت خروجی به کیفیت اسکن وابسته است.</div></section>
-        </div>
-    </div></main>;
+    return <main dir="rtl" className="min-h-screen page-background py-12 md:py-20"><div className="mx-auto max-w-6xl px-5 lg:px-8"><div className="mx-auto max-w-3xl text-center"><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--primary)]/10 text-[var(--primary)]"><FileText size={32}/></div><h1 className="mt-5 text-3xl font-black text-[var(--text)] md:text-4xl">تبدیل PDF به Word</h1><p className="mt-3 text-[var(--text-muted)]">تبدیل PDF متنی به سند Word و استفاده از OCR برای PDFهای اسکن‌شده.</p></div><div className="mt-10 grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]"><section className="h-fit rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"><div onDragOver={(e) => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop} onClick={() => inputRef.current?.click()} className={`flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center ${dragging ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/50"}`}><Upload size={40} className="text-[var(--primary)]"/><strong className="mt-4">PDF را اینجا رها کنید</strong><span className="mt-2 text-sm text-[var(--text-muted)]">یا برای انتخاب فایل کلیک کنید</span><span className="mt-4 text-xs text-[var(--text-muted)]">PDF · حداکثر ۵۰ مگابایت</span><input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onInput}/></div>{file && <div className="mt-4 rounded-2xl bg-[var(--surface-secondary)] p-4"><div className="break-all text-sm font-black">{file.name}</div><div className="mt-2 text-xs text-[var(--text-muted)]">{formatBytes(file.size)} · {pages || "در حال بررسی"} صفحه</div></div>}{(status === "loading" || status === "processing") && <div className="mt-5"><div className="mb-2 flex justify-between text-xs font-bold"><span>در حال تبدیل</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--surface-secondary)]"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{width:`${progress}%`}}/></div><div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]"><Loader2 size={14} className="animate-spin"/> صفحات متنی مستقیم استخراج می‌شوند؛ صفحات اسکن‌شده با OCR پردازش می‌شوند.</div></div>}{error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700">{error}</div>}<div className="mt-5 flex gap-2"><button type="button" onClick={(e) => { e.stopPropagation(); reset(); }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold"><RotateCcw size={16}/> شروع مجدد</button>{text && <button type="button" onClick={(e) => { e.stopPropagation(); void downloadWord(); }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2 text-sm font-bold text-white"><Download size={16}/> دریافت Word</button>}</div></section><section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"><div className="mb-4"><h2 className="font-black">پیش‌نمایش متن</h2><p className="mt-1 text-xs text-[var(--text-muted)]">متن استخراج‌شده قابل ویرایش است و قبل از دریافت Word می‌توانید آن را اصلاح کنید.</p></div><textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="بعد از انتخاب PDF، متن اینجا نمایش داده می‌شود..." className="min-h-[520px] w-full resize-y rounded-2xl border border-[var(--border)] bg-transparent p-4 text-sm leading-8 outline-none focus:border-[var(--primary)]"/><div className="mt-4 rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 p-4 text-xs leading-6 text-[var(--text-muted)]">PDFهای متنی معمولاً با کیفیت بالاتر تبدیل می‌شوند. در PDF اسکن‌شده، صفحات بدون متن قابل استخراج با OCR پردازش می‌شوند و کیفیت خروجی به کیفیت اسکن وابسته است.</div></section></div></div></main>;
 }
