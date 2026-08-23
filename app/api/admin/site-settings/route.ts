@@ -2,69 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
+const ALLOWED_KEYS = new Set(["business", "social", "display", "orders", "announcements", "pricing"]);
+
+export async function GET(request: NextRequest) {
+  const admin = await requireAdmin(request);
+  if (isNextResponse(admin)) return admin;
+  const { data, error } = await supabaseAdmin().from("site_settings").select("site_name,site_description,theme,primary_color,primary_dark,radius,font_family,config,updated_at").limit(1).single();
+  if (error) return NextResponse.json({ success: false, error: "دریافت تنظیمات ناموفق بود." }, { status: 500 });
+  return NextResponse.json({ success: true, settings: data });
+}
+
 export async function POST(request: NextRequest) {
-    const admin = await requireAdmin(request);
-
-    if (isNextResponse(admin)) {
-        return admin;
+  const admin = await requireAdmin(request);
+  if (isNextResponse(admin)) return admin;
+  try {
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ success: false, error: "اطلاعات درخواست نامعتبر است." }, { status: 400 });
+    const current = await supabaseAdmin().from("site_settings").select("id,config").limit(1).single();
+    if (current.error) throw current.error;
+    const update: Record<string, unknown> = {};
+    for (const key of ["site_name", "site_description", "theme", "primary_color", "primary_dark", "radius", "font_family"]) {
+      if (key in body && typeof body[key] === "string") update[key] = body[key];
     }
-
-    try {
-        const body = await request.json().catch(() => null);
-
-        if (!body || typeof body !== "object" || Array.isArray(body)) {
-            return NextResponse.json(
-                { success: false, error: "اطلاعات درخواست نامعتبر است." },
-                { status: 400 }
-            );
-        }
-
-        const theme = typeof body.theme === "string" ? body.theme : null;
-        const primaryColor = typeof body.primary_color === "string" ? body.primary_color : null;
-        const primaryDark = typeof body.primary_dark === "string" ? body.primary_dark : null;
-        const radius = typeof body.radius === "number" ? body.radius : null;
-
-        if (!theme && !primaryColor && !primaryDark && radius === null) {
-            return NextResponse.json(
-                { success: false, error: "هیچ تنظیم قابل ذخیره‌ای ارسال نشده است." },
-                { status: 400 }
-            );
-        }
-
-        const update: Record<string, string | number> = {};
-
-        if (theme !== null) update.theme = theme;
-        if (primaryColor !== null) update.primary_color = primaryColor;
-        if (primaryDark !== null) update.primary_dark = primaryDark;
-        if (radius !== null) update.radius = radius;
-
-        const { error } = await supabaseAdmin()
-            .from("site_settings")
-            .update(update)
-            .neq("id", "00000000-0000-0000-0000-000000000000");
-
-        if (error) {
-            console.error("[admin/site-settings] update failed", {
-                adminId: admin.id,
-                error,
-            });
-
-            return NextResponse.json(
-                { success: false, error: "ذخیره تنظیمات ناموفق بود." },
-                { status: 500 }
-            );
-        }
-
-        return NextResponse.json({ success: true });
-    } catch (error) {
-        console.error("[admin/site-settings] unexpected error", {
-            adminId: admin.id,
-            error,
-        });
-
-        return NextResponse.json(
-            { success: false, error: "خطایی هنگام ذخیره تنظیمات رخ داد." },
-            { status: 500 }
-        );
+    const nextConfig: Record<string, unknown> = current.data?.config || {};
+    if (body.config && typeof body.config === "object" && !Array.isArray(body.config)) {
+      for (const [key, value] of Object.entries(body.config)) if (ALLOWED_KEYS.has(key)) nextConfig[key] = value;
     }
+    update.config = nextConfig;
+    update.updated_at = new Date().toISOString();
+    const { error } = await supabaseAdmin().from("site_settings").update(update).eq("id", current.data.id);
+    if (error) throw error;
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[admin/site-settings] update failed", { adminId: admin.id, error });
+    return NextResponse.json({ success: false, error: "ذخیره تنظیمات ناموفق بود." }, { status: 500 });
+  }
 }
