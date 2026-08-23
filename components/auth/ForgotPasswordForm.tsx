@@ -36,13 +36,15 @@ export default function ForgotPasswordForm({ onLogin }: Props) {
                 redirectTo,
             });
 
-            if (error) throw error;
+            if (error) {
+                throw new Error('PASSWORD_RESET_FAILED');
+            }
 
             setSuccess(
                 'اگر این ایمیل در سیستم وجود داشته باشد، لینک بازیابی رمز عبور برای شما ارسال شد.'
             );
-        } catch (err: any) {
-            setError(err?.message || 'ارسال لینک بازیابی انجام نشد.');
+        } catch {
+            setError('ارسال لینک بازیابی انجام نشد. لطفاً کمی بعد دوباره تلاش کنید.');
         } finally {
             setLoading(false);
         }
