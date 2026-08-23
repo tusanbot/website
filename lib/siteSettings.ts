@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export type SiteSettings = {
     site_name: string;
@@ -8,6 +8,9 @@ export type SiteSettings = {
     primary_dark: string;
     radius: string;
     font_family: string;
+    config?: {
+        assets?: { logoUrl?: string; iconUrl?: string; faviconUrl?: string };
+    };
 };
 
 const defaultSettings: SiteSettings = {
@@ -18,12 +21,13 @@ const defaultSettings: SiteSettings = {
     primary_dark: "#087d69",
     radius: "28px",
     font_family: "Vazirmatn",
+    config: { assets: {} },
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from("site_settings")
-        .select("*")
+        .select("site_name, site_description, theme, primary_color, primary_dark, radius, font_family, config")
         .limit(1)
         .single();
 
@@ -32,5 +36,14 @@ export async function getSiteSettings(): Promise<SiteSettings> {
         return defaultSettings;
     }
 
-    return data as SiteSettings;
+    return {
+        ...defaultSettings,
+        ...data,
+        config: {
+            assets: {
+                ...(defaultSettings.config?.assets || {}),
+                ...(data.config?.assets || {}),
+            },
+        },
+    } as SiteSettings;
 }
