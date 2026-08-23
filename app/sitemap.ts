@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tusan.ir";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tusancn.ir";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticPages: MetadataRoute.Sitemap = [
@@ -12,17 +12,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   const supabase = createSupabaseServerClient();
-  const { data: services } = await supabase
-    .from("services")
-    .select("id,created_at")
-    .eq("is_active", true);
-
-  const servicePages: MetadataRoute.Sitemap = (services || []).map((service: any) => ({
-    url: `${siteUrl}/services/${service.id}`,
-    lastModified: service.created_at || undefined,
-    changeFrequency: "weekly",
-    priority: 0.8,
-  }));
-
+  const { data: services } = await supabase.from("services").select("id,slug,created_at").eq("is_active", true).not("slug", "is", null);
+  const servicePages: MetadataRoute.Sitemap = (services || []).map((service: any) => ({ url: `${siteUrl}/services/${encodeURIComponent(service.slug)}`, lastModified: service.created_at || undefined, changeFrequency: "weekly", priority: 0.8 }));
   return [...staticPages, ...servicePages];
 }
