@@ -5,7 +5,7 @@ import "./design-system-accessibility.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import { getSiteSettings } from "@/lib/siteSettings";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tusan.ir";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir";
 const vazirmatn = Vazirmatn({
   subsets: ["arabic"],
   variable: "--font-vazirmatn",
