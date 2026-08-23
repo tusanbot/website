@@ -15,7 +15,7 @@ function AuthCallbackContent() {
         async function exchangeCode() {
             const code = searchParams.get("code");
             if (!code) {
-                if (active) setError("کد ورود از گوگل دریافت نشد.");
+                if (active) setError("ورود با گوگل کامل نشد. لطفاً دوباره تلاش کنید.");
                 return;
             }
 
@@ -23,7 +23,7 @@ function AuthCallbackContent() {
             if (!active) return;
 
             if (exchangeError) {
-                setError(exchangeError.message || "تکمیل ورود با گوگل انجام نشد.");
+                setError("ورود با گوگل کامل نشد. لطفاً دوباره تلاش کنید.");
                 return;
             }
 
