@@ -14,49 +14,59 @@ export async function proxy(request: NextRequest) {
                 getAll() {
                     return request.cookies.getAll();
                 },
-                setAll(cookiesToSet) {
-                    cookiesToSet.forEach(
-                        ({ name, value }) =>
-                            request.cookies.set(name, value)
-                    );
+                setAll(cookiesToSet, headers) {
+                    cookiesToSet.forEach(({ name, value }) => {
+                        request.cookies.set(name, value);
+                    });
 
                     response = NextResponse.next({
                         request,
                     });
 
                     cookiesToSet.forEach(
-                        ({ name, value, options }) =>
+                        ({ name, value, options }) => {
                             response.cookies.set(
                                 name,
                                 value,
                                 options
-                            )
+                            );
+                        }
+                    );
+
+                    Object.entries(headers ?? {}).forEach(
+                        ([name, value]) => {
+                            response.headers.set(name, value);
+                        }
                     );
                 },
             },
         }
     );
 
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
+    // getClaims verifies the JWT and is the recommended Supabase method
+    // for protecting server-rendered pages. It also allows refreshed
+    // authentication cookies to be propagated through this proxy.
+    const { data: claimsData, error: claimsError } =
+        await supabase.auth.getClaims();
+
+    const userId = claimsData?.claims?.sub ?? null;
 
     const pathname = request.nextUrl.pathname;
     const isAdminRoute =
         pathname === "/admin" ||
         pathname.startsWith("/admin/");
 
-    if (isAdminRoute && !user) {
+    if (isAdminRoute && (!userId || claimsError)) {
         return NextResponse.redirect(
             new URL("/auth?mode=login", request.url)
         );
     }
 
-    if (isAdminRoute && user) {
+    if (isAdminRoute && userId) {
         const { data: profile, error } = await supabase
             .from("profiles")
             .select("role")
-            .eq("id", user.id)
+            .eq("id", userId)
             .maybeSingle();
 
         if (error || profile?.role !== "admin") {
