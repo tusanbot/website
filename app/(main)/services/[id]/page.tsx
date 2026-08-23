@@ -8,12 +8,28 @@ export const revalidate = 300;
 type Service = { id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null; form_schema: any[]; is_active: boolean; parent_service_id: string | null; created_at?: string | null };
 function normalizeSchema(value: any): any[] { if (Array.isArray(value)) return value; if (typeof value === "string") { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } } return []; }
 function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
+function normalizeSlug(value: string) { return decodeURIComponent(value).normalize("NFC").replace(/\u200c/g, "").replace(/\u200d/g, "").trim(); }
+
 async function getService(path: string): Promise<Service | null> {
   const supabase = createSupabaseServerClient();
   const query = supabase.from("services").select("id,title,slug,category,description,price,icon,form_schema,is_active,parent_service_id,created_at").eq("is_active", true);
-  const { data, error } = isUuid(path) ? await query.eq("id", path).maybeSingle() : await query.eq("slug", path).maybeSingle();
-  if (error || !data) return null;
-  return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema) } as Service;
+  if (isUuid(path)) {
+    const { data, error } = await query.eq("id", path).maybeSingle();
+    if (error || !data) return null;
+    return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema) } as Service;
+  }
+
+  const requestedSlug = normalizeSlug(path);
+  const { data, error } = await query.eq("slug", requestedSlug).maybeSingle();
+  if (!error && data) return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema) } as Service;
+
+  // Persian URLs can differ by Unicode normalization or zero-width joiners.
+  // Compare normalized slugs in memory as a safe fallback for the small service catalog.
+  const { data: services, error: fallbackError } = await supabase.from("services").select("id,title,slug,category,description,price,icon,form_schema,is_active,parent_service_id,created_at").eq("is_active", true).not("slug", "is", null);
+  if (fallbackError) return null;
+  const match = (services || []).find((item: any) => normalizeSlug(item.slug) === requestedSlug);
+  if (!match) return null;
+  return { ...match, price: Number(match.price || 0), form_schema: normalizeSchema(match.form_schema) } as Service;
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
