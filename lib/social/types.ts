@@ -49,6 +49,21 @@ export interface SocialService {
     sort_order: number;
 }
 
+/** Safe customer-facing catalog shape. Never contains provider or margin data. */
+export interface PublicSocialService {
+    id: string;
+    platform_id: string;
+    category_id: string;
+    name: string;
+    description: string | null;
+    service_type: string;
+    min_quantity: number;
+    max_quantity: number;
+    is_active: boolean;
+    sort_order: number;
+    customer_unit_price: number | null;
+}
+
 export interface SocialOrder {
     id: string;
     tracking_code: string;
