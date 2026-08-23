@@ -4,14 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, CheckCircle2, Link2, ShoppingCart } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { SocialService } from "@/lib/social/types";
-import { calculateOrderPrice, calculateUnitPrice, formatSocialPrice, formatSocialUnitPrice } from "@/lib/social/pricing";
+import type { PublicSocialService } from "@/lib/social/types";
+import { formatSocialPrice, formatSocialUnitPrice } from "@/lib/social/pricing";
 
 function formatNumber(value: number) { return new Intl.NumberFormat("fa-IR").format(value); }
 
 export default function SocialOrderPage() {
     const [serviceId, setServiceId] = useState<string | null>(null);
-    const [service, setService] = useState<SocialService | null>(null);
+    const [service, setService] = useState<PublicSocialService | null>(null);
     const [link, setLink] = useState("");
     const [quantity, setQuantity] = useState("");
     const [loading, setLoading] = useState(true);
@@ -31,11 +31,11 @@ export default function SocialOrderPage() {
             if (!serviceId) return;
             setLoading(true);
             const [{ data, error: serviceError }, { data: userData }] = await Promise.all([
-                supabase.from("social_services").select("*").eq("id", serviceId).eq("is_active", true).maybeSingle(),
+                supabase.from("social_services_public").select("*").eq("id", serviceId).maybeSingle(),
                 supabase.auth.getUser(),
             ]);
             if (serviceError) setError("دریافت اطلاعات سرویس ناموفق بود.");
-            setService((data || null) as SocialService | null);
+            setService((data || null) as PublicSocialService | null);
             setUserEmail(userData.user?.email || null);
             setLoading(false);
         }
@@ -44,8 +44,8 @@ export default function SocialOrderPage() {
 
     const numericQuantity = Number(quantity);
     const validQuantity = !!service && Number.isSafeInteger(numericQuantity) && numericQuantity >= service.min_quantity && numericQuantity <= service.max_quantity;
-    const unitPrice = service ? calculateUnitPrice(service) : null;
-    const price = useMemo(() => service && validQuantity ? calculateOrderPrice(service, numericQuantity) : null, [service, validQuantity, numericQuantity]);
+    const unitPrice = service?.customer_unit_price == null ? null : Number(service.customer_unit_price);
+    const price = useMemo(() => service && validQuantity && unitPrice != null ? unitPrice * numericQuantity : null, [service, validQuantity, numericQuantity, unitPrice]);
 
     async function submitOrder() {
         setError("");
