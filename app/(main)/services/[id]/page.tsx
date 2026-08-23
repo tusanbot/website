@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import ServiceOrderClient from "./ServiceOrderClient";
-
-export const revalidate = 300;
 
 type Service = { id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null; form_schema: any[]; is_active: boolean; parent_service_id: string | null; created_at?: string | null };
 function normalizeSchema(value: any): any[] { if (Array.isArray(value)) return value; if (typeof value === "string") { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } } return []; }
@@ -13,18 +12,10 @@ function normalizeSlug(value: string) { return decodeURIComponent(value).normali
 async function getService(path: string): Promise<Service | null> {
   const supabase = createSupabaseServerClient();
   const query = supabase.from("services").select("id,title,slug,category,description,price,icon,form_schema,is_active,parent_service_id,created_at").eq("is_active", true);
-  if (isUuid(path)) {
-    const { data, error } = await query.eq("id", path).maybeSingle();
-    if (error || !data) return null;
-    return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema) } as Service;
-  }
-
+  if (isUuid(path)) { const { data, error } = await query.eq("id", path).maybeSingle(); if (error || !data) return null; return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema) } as Service; }
   const requestedSlug = normalizeSlug(path);
   const { data, error } = await query.eq("slug", requestedSlug).maybeSingle();
   if (!error && data) return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema) } as Service;
-
-  // Persian URLs can differ by Unicode normalization or zero-width joiners.
-  // Compare normalized slugs in memory as a safe fallback for the small service catalog.
   const { data: services, error: fallbackError } = await supabase.from("services").select("id,title,slug,category,description,price,icon,form_schema,is_active,parent_service_id,created_at").eq("is_active", true).not("slug", "is", null);
   if (fallbackError) return null;
   const match = (services || []).find((item: any) => normalizeSlug(item.slug) === requestedSlug);
@@ -46,6 +37,24 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
   if (isUuid(id)) permanentRedirect(`/services/${encodeURIComponent(service.slug)}`);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tusancn.ir";
   const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
+  const supabase = createSupabaseServerClient();
+  const { data: related } = await supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("category", service.category).neq("id", service.id).limit(4);
   const jsonLd = { "@context": "https://schema.org", "@type": "Service", name: service.title, description: service.description || undefined, url: canonicalUrl, provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl }, areaServed: { "@type": "Country", name: "ایران" }, ...(service.price > 0 ? { offers: { "@type": "Offer", price: service.price, priceCurrency: "IRR", url: canonicalUrl } } : {}) };
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} /><ServiceOrderClient initialService={service} /></>;
+  const breadcrumbJsonLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "خانه", item: siteUrl }, { "@type": "ListItem", position: 2, name: "خدمات", item: `${siteUrl}/services` }, ...(service.category ? [{ "@type": "ListItem", position: 3, name: service.category }] : []), { "@type": "ListItem", position: service.category ? 4 : 3, name: service.title, item: canonicalUrl }] };
+  return <>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+    <div dir="rtl" className="max-w-3xl mx-auto px-6 pt-5">
+      <nav aria-label="مسیر صفحه" className="text-sm text-[var(--text-muted)]" itemScope itemType="https://schema.org/BreadcrumbList">
+        <Link href="/" className="hover:underline" itemProp="item"><span itemProp="name">خانه</span></Link><span className="mx-2">/</span>
+        <Link href="/services" className="hover:underline" itemProp="item"><span itemProp="name">خدمات</span></Link><span className="mx-2">/</span>
+        {service.category && <><span>{service.category}</span><span className="mx-2">/</span></>}
+        <span className="font-medium text-[var(--text)]" itemProp="name">{service.title}</span>
+      </nav>
+    </div>
+    <ServiceOrderClient initialService={service} />
+    {related && related.length > 0 && <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-10" aria-labelledby="related-services-title">
+      <div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 id="related-services-title" className="text-xl font-bold mb-4">خدمات مرتبط</h2><div className="grid sm:grid-cols-2 gap-3">{related.map((item: any) => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-4 hover:border-[#09967C] transition"><div className="font-bold">{item.icon || "📄"} {item.title}</div>{item.description && <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div>
+    </section>}
+  </>;
 }
