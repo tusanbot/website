@@ -15,8 +15,7 @@ const securityHeaders = [
     },
     {
         key: "Permissions-Policy",
-        value:
-            "camera=(), microphone=(), geolocation=(), payment=()",
+        value: "camera=(), microphone=(), geolocation=(), payment=()",
     },
     {
         key: "X-DNS-Prefetch-Control",
@@ -24,16 +23,15 @@ const securityHeaders = [
     },
     {
         key: "Strict-Transport-Security",
-        value:
-            "max-age=31536000; includeSubDomains",
+        value: "max-age=31536000; includeSubDomains",
     },
 ];
 
 const contentSecurityPolicy = [
     "default-src 'self'",
 
-    // JavaScript
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+    // JavaScript: OCR/PDF libraries are intentionally loaded client-side from CDN.
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
 
     // CSS / Fonts
     "style-src 'self' 'unsafe-inline'",
@@ -42,7 +40,7 @@ const contentSecurityPolicy = [
     // Images
     "img-src 'self' data: blob: https:",
 
-    // API / Supabase / external connections
+    // API / Supabase / external connections / OCR assets
     [
         "connect-src",
         "'self'",
@@ -51,6 +49,8 @@ const contentSecurityPolicy = [
         "https://fjpanel.com",
         "https://*.fjpanel.com",
         "https://vercel.live",
+        "https://cdn.jsdelivr.net",
+        "https://cdnjs.cloudflare.com",
     ].join(" "),
 
     // Frames
@@ -68,8 +68,8 @@ const contentSecurityPolicy = [
     // Prevent embedding by other origins
     "frame-ancestors 'self'",
 
-    // Workers
-    "worker-src 'self' blob:",
+    // Workers: Tesseract and PDF.js create browser workers from CDN/Blob URLs.
+    "worker-src 'self' blob: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
 
     // Manifest
     "manifest-src 'self'",
