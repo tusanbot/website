@@ -7,6 +7,16 @@ type Props = {
     orderId: string;
 };
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set([
+    "application/pdf",
+    "application/json",
+    "application/octet-stream",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+]);
+
 export default function OrderFileUpload({
     orderId,
 }: Props) {
@@ -20,13 +30,38 @@ export default function OrderFileUpload({
     const fileInputRef =
         useRef<HTMLInputElement | null>(null);
 
+    function validateFile(selectedFile: File) {
+        if (selectedFile.size <= 0) {
+            return "فایل انتخاب‌شده خالی است.";
+        }
+
+        if (selectedFile.size > MAX_FILE_SIZE) {
+            return "حجم فایل نباید بیشتر از ۱۰ مگابایت باشد.";
+        }
+
+        if (!ALLOWED_MIME_TYPES.has(selectedFile.type)) {
+            return "نوع فایل مجاز نیست. فقط PDF، تصاویر JPG/PNG/WebP و فایل‌های JSON مجاز هستند.";
+        }
+
+        return "";
+    }
+
     async function uploadFile() {
         setError("");
         setMessage("");
 
-        if (!fileTitle.trim()) {
+        const normalizedTitle = fileTitle.trim();
+
+        if (!normalizedTitle) {
             setError(
                 "لطفاً عنوان مدرک را وارد کنید."
+            );
+            return;
+        }
+
+        if (normalizedTitle.length > 200) {
+            setError(
+                "عنوان مدرک نمی‌تواند بیشتر از ۲۰۰ کاراکتر باشد."
             );
             return;
         }
@@ -35,6 +70,12 @@ export default function OrderFileUpload({
             setError(
                 "لطفاً فایل موردنظر را انتخاب کنید."
             );
+            return;
+        }
+
+        const fileValidationError = validateFile(file);
+        if (fileValidationError) {
+            setError(fileValidationError);
             return;
         }
 
@@ -48,7 +89,6 @@ export default function OrderFileUpload({
         setUploading(true);
 
         try {
-            // دریافت کاربر فعلی
             const {
                 data: { user },
                 error: userError,
@@ -60,10 +100,9 @@ export default function OrderFileUpload({
                 );
             }
 
-            // ساخت نام یکتا برای فایل
             const fileExt =
                 file.name.includes(".")
-                    ? file.name.split(".").pop()
+                    ? file.name.split(".").pop()?.toLowerCase()
                     : "";
 
             const uniqueFileName =
@@ -75,17 +114,17 @@ export default function OrderFileUpload({
             const filePath =
                 `${orderId}/${uniqueFileName}`;
 
-            // ==========================================
-            // Upload to Storage
-            // ==========================================
-
             const {
                 error: uploadError,
             } = await supabase.storage
                 .from("order-files")
                 .upload(
                     filePath,
-                    file
+                    file,
+                    {
+                        contentType: file.type,
+                        upsert: false,
+                    }
                 );
 
             if (uploadError) {
@@ -94,33 +133,21 @@ export default function OrderFileUpload({
                 );
             }
 
-            // ==========================================
-            // Save file information in database
-            // ==========================================
-
             const {
                 error: insertError,
             } = await supabase
                 .from("order_files")
                 .insert({
                     order_id: orderId,
-                    file_title:
-                        fileTitle.trim(),
-                    file_name:
-                        file.name,
-                    file_path:
-                        filePath,
-                    file_type:
-                        file.type || "",
-                    file_size:
-                        file.size,
-                    uploaded_by:
-                        user.id,
+                    file_title: normalizedTitle,
+                    file_name: file.name,
+                    file_path: filePath,
+                    file_type: file.type || "",
+                    file_size: file.size,
+                    uploaded_by: user.id,
                 });
 
             if (insertError) {
-                // اگر DB شکست خورد،
-                // فایل Storage را حذف می‌کنیم.
                 await supabase.storage
                     .from("order-files")
                     .remove([
@@ -132,7 +159,6 @@ export default function OrderFileUpload({
                 );
             }
 
-            // پاک کردن فرم
             setFile(null);
             setFileTitle("");
 
@@ -175,7 +201,6 @@ export default function OrderFileUpload({
                 تا مدیر بتواند نوع مدرک را تشخیص دهد.
             </p>
 
-            {/* عنوان مدرک */}
             <div className="mb-4">
                 <label className="block font-bold text-sm mb-2">
                     عنوان مدرک
@@ -184,6 +209,7 @@ export default function OrderFileUpload({
                 <input
                     type="text"
                     value={fileTitle}
+                    maxLength={200}
                     onChange={(e) => {
                         setFileTitle(
                             e.target.value
@@ -201,7 +227,6 @@ export default function OrderFileUpload({
                 </p>
             </div>
 
-            {/* انتخاب فایل */}
             <div className="mb-4">
                 <label className="block font-bold text-sm mb-2">
                     فایل
@@ -210,21 +235,34 @@ export default function OrderFileUpload({
                 <input
                     ref={fileInputRef}
                     type="file"
+                    accept="application/pdf,application/json,application/octet-stream,image/jpeg,image/png,image/webp"
                     onChange={(e) => {
-                        setFile(
+                        const selectedFile =
                             e.target.files?.[0] ||
-                            null
-                        );
+                            null;
 
+                        setFile(selectedFile);
                         setError("");
                         setMessage("");
+
+                        if (selectedFile) {
+                            const validationError =
+                                validateFile(selectedFile);
+
+                            if (validationError) {
+                                setError(validationError);
+                            }
+                        }
                     }}
                     disabled={uploading}
                     className="block w-full border border-gray-200 rounded-xl p-3 bg-gray-50"
                 />
+
+                <p className="text-xs text-gray-400 mt-2">
+                    حداکثر حجم: ۱۰ مگابایت — PDF، JPG، PNG، WebP و JSON
+                </p>
             </div>
 
-            {/* فایل انتخاب شده */}
             {file && (
                 <div className="bg-gray-50 border rounded-xl p-4 mb-4">
                     <div className="font-bold">
@@ -246,14 +284,12 @@ export default function OrderFileUpload({
                 </div>
             )}
 
-            {/* خطا */}
             {error && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-4 text-sm">
                     {error}
                 </div>
             )}
 
-            {/* موفقیت */}
             {message && (
                 <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl p-4 mb-4 text-sm">
                     {message}
@@ -266,7 +302,8 @@ export default function OrderFileUpload({
                 disabled={
                     uploading ||
                     !file ||
-                    !fileTitle.trim()
+                    !fileTitle.trim() ||
+                    Boolean(file && validateFile(file))
                 }
                 className="bg-[#09967C] text-white px-6 py-3 rounded-xl font-bold disabled:opacity-50 transition"
             >
