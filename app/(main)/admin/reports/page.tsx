@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { GlassPanel, SectionHeader, TusanBadge, TusanButton, TusanStatCard } from "@/components/ui";
+import { supabase } from "@/lib/supabase";
 
 type Report = {
   summary: Record<string, number>;
@@ -42,7 +43,18 @@ export default function ReportsPage() {
     setError("");
     try {
       const params = new URLSearchParams({ from, to, status, service });
-      const response = await fetch(`/api/admin/reports?${params.toString()}`);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("نشست مدیر معتبر نیست. لطفاً یک‌بار از حساب خارج و دوباره وارد شوید.");
+      }
+
+      const response = await fetch(`/api/admin/reports?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        cache: "no-store",
+      });
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || "خطا در دریافت گزارش");
       setReport(data);
@@ -53,7 +65,15 @@ export default function ReportsPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") load();
+    });
+
+    return () => listener.subscription.unsubscribe();
+  }, []);
 
   const maxDaily = useMemo(() => Math.max(1, ...(report?.daily || []).map((item) => item.orders)), [report]);
 
