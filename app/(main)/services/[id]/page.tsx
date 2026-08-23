@@ -1,109 +1,14 @@
-"use client";
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import ServiceOrderClient from "./ServiceOrderClient";
 
-import { useEffect, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import DynamicServiceForm from "@/components/DynamicServiceForm";
-import { GlassPanel, TusanButton, SectionHeader } from "@/components/ui";
+export const revalidate = 300;
 
-type Service = { id: string; title: string; category: string | null; description: string | null; price: number; icon: string | null; form_schema: any[]; is_active: boolean; parent_service_id: string | null };
+type Service = { id: string; title: string; category: string | null; description: string | null; price: number; icon: string | null; form_schema: any[]; is_active: boolean; parent_service_id: string | null; updated_at?: string | null; created_at?: string | null };
+function normalizeSchema(value: any): any[] { if (Array.isArray(value)) return value; if (typeof value === "string") { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } } return []; }
+async function getService(id: string): Promise<Service | null> { const supabase = createSupabaseServerClient(); const { data, error } = await supabase.from("services").select("id,title,category,description,price,icon,form_schema,is_active,parent_service_id,updated_at,created_at").eq("id", id).eq("is_active", true).single(); if (error || !data) return null; return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema) } as Service; }
 
-type LegacyChild = { id: string; title: string; description: string | null; price: number; schema: any[]; sort_order: number };
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> { const { id } = await params; const service = await getService(id); if (!service) return { title: "خدمت پیدا نشد", robots: { index: false, follow: false } }; const title = `${service.title} | کافی نت توسن`; const description = service.description?.trim() || `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`; const canonical = `/services/${service.id}`; return { title, description, keywords: [service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[], alternates: { canonical }, openGraph: { type: "website", locale: "fa_IR", url: canonical, siteName: "کافی نت توسن", title, description }, robots: { index: true, follow: true } }; }
 
-function normalizeSchema(value: any): any[] {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } }
-  return [];
-}
-
-export default function ServiceOrderPage() {
-  const params = useParams(); const router = useRouter(); const serviceId = params.id as string;
-  const [service, setService] = useState<Service | null>(null);
-  const [children, setChildren] = useState<Service[]>([]);
-  const [legacyChildren, setLegacyChildren] = useState<LegacyChild[]>([]);
-  const [selectedChild, setSelectedChild] = useState<Service | null>(null);
-  const [selectedLegacy, setSelectedLegacy] = useState<LegacyChild | null>(null);
-  const [hasChildren, setHasChildren] = useState(false);
-  const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => { if (serviceId) loadService(); }, [serviceId]);
-
-  async function loadService() {
-    setLoading(true); setError("");
-    try {
-      const { data: serviceData, error: serviceError } = await supabase.from("services")
-        .select("id,title,category,description,price,icon,form_schema,is_active,parent_service_id")
-        .eq("id", serviceId).eq("is_active", true).single();
-      if (serviceError || !serviceData) throw new Error("خدمت موردنظر پیدا نشد یا غیرفعال است.");
-      const root: Service = { ...serviceData, price: Number(serviceData.price || 0), form_schema: normalizeSchema(serviceData.form_schema) };
-      setService(root);
-
-      const { data: childServices, error: childServiceError } = await supabase.from("services")
-        .select("id,title,category,description,price,icon,form_schema,is_active,parent_service_id")
-        .eq("parent_service_id", serviceId).eq("is_active", true).order("created_at", { ascending: true });
-      if (childServiceError) throw new Error(childServiceError.message);
-      const normalizedChildren = (childServices || []).map((item: any) => ({ ...item, price: Number(item.price || 0), form_schema: normalizeSchema(item.form_schema) })) as Service[];
-      setChildren(normalizedChildren);
-
-      // Legacy compatibility: older parent/child records used custom_forms instead of parent_service_id.
-      if (normalizedChildren.length === 0) {
-        const { data: parentForm } = await supabase.from("custom_forms").select("id")
-          .eq("service_id", serviceId).eq("form_type", "parent").is("parent_form_id", null).eq("is_public", true).maybeSingle();
-        if (parentForm) {
-          const { data: oldChildren, error: oldError } = await supabase.from("custom_forms")
-            .select("id,title,description,price,schema,sort_order")
-            .eq("service_id", serviceId).eq("parent_form_id", parentForm.id).eq("form_type", "normal").eq("is_public", true)
-            .order("sort_order", { ascending: true }).order("created_at", { ascending: true });
-          if (oldError) throw new Error(oldError.message);
-          setLegacyChildren((oldChildren || []).map((form: any) => ({ ...form, price: Number(form.price || 0), schema: normalizeSchema(form.schema) })));
-        } else setLegacyChildren([]);
-      } else setLegacyChildren([]);
-
-      setHasChildren(normalizedChildren.length > 0);
-    } catch (err: any) { console.error(err); setError(err?.message || "خطایی هنگام دریافت اطلاعات خدمت رخ داد."); }
-    finally { setLoading(false); }
-  }
-
-  function generateTrackingCode() { return `TUS-${Date.now().toString().slice(-6)}-${Math.floor(100000 + Math.random() * 900000)}`; }
-
-  async function submitOrder(formData: Record<string, any>) {
-    const chosenService = selectedChild;
-    const chosenLegacy = selectedLegacy;
-    if ((hasChildren || legacyChildren.length > 0) && !chosenService && !chosenLegacy) { setError("ابتدا یکی از خدمات موردنظر را انتخاب کنید."); return; }
-    setSubmitting(true); setError("");
-    try {
-      const { data: { user } } = await supabase.auth.getUser(); if (!user) { router.push("/login"); return; }
-      const orderServiceId = chosenService?.id || service!.id;
-      const orderFormId = chosenLegacy?.id || null;
-      const orderPrice = chosenService ? chosenService.price : chosenLegacy ? chosenLegacy.price : service!.price;
-      const { data: order, error: orderError } = await supabase.from("orders").insert({
-        user_id: user.id, service_id: orderServiceId, form_id: orderFormId, tracking_code: generateTrackingCode(),
-        status: "registered", form_data: { ...formData }, price: orderPrice,
-      }).select("id,tracking_code,price").single();
-      if (orderError) throw new Error(orderError.message);
-      if (!order) throw new Error("سفارش ثبت شد اما اطلاعات سفارش دریافت نشد.");
-      router.push(`/payment/${order.id}`); router.refresh();
-    } catch (err: any) { console.error(err); setError(err?.message || "خطایی هنگام ثبت سفارش رخ داد."); }
-    finally { setSubmitting(false); }
-  }
-
-  if (loading) return <div dir="rtl" className="min-h-screen page-background p-6 text-[var(--text)]"><GlassPanel className="p-8 text-center text-[var(--text-muted)]">در حال دریافت اطلاعات خدمت...</GlassPanel></div>;
-  if (!service) return <div dir="rtl" className="min-h-screen page-background p-6"><GlassPanel className="p-8 text-center"><div className="text-5xl mb-4">⚠️</div><h1 className="text-xl font-bold">خدمت پیدا نشد</h1><p className="text-[var(--text-muted)] mt-2">{error}</p><div className="mt-6"><Link href="/services"><TusanButton>بازگشت به خدمات</TusanButton></Link></div></GlassPanel></div>;
-
-  const activeSchema = selectedChild ? selectedChild.form_schema : selectedLegacy ? selectedLegacy.schema : service.form_schema;
-  const showingChildPicker = !selectedChild && !selectedLegacy && (children.length > 0 || legacyChildren.length > 0);
-
-  return <div dir="rtl" className="min-h-screen bg-gray-100 p-6"><div className="max-w-3xl mx-auto">
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"><SectionHeader title={`${service.icon || "📋"} ${service.title}`} description={service.category || "ثبت سفارش خدمت"} /><Link href="/services"><TusanButton variant="secondary">← بازگشت به خدمات</TusanButton></Link></div>
-    {service.description && <GlassPanel className="p-6 mb-5"><h2 className="font-bold mb-2">درباره این خدمت</h2><p className="text-[var(--text-secondary)] leading-7">{service.description}</p></GlassPanel>}
-    {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-5">{error}</div>}
-
-    {showingChildPicker ? <GlassPanel className="bg-white rounded-2xl shadow p-6"><div className="mb-6"><h2 className="text-xl font-bold">انتخاب خدمت</h2><p className="text-sm text-[var(--text-muted)] mt-1">یکی از خدمات زیرمجموعه را انتخاب کنید.</p></div>
-      <div className="grid sm:grid-cols-2 gap-4">
-        {children.map(child => <button key={child.id} type="button" onClick={() => { setSelectedChild(child); setError(""); }} className="text-right border rounded-2xl p-5 bg-white hover:border-[#09967C] hover:shadow-md transition"><div className="flex items-center gap-3"><div className="text-2xl">{child.icon || "📄"}</div><div className="font-bold text-lg">{child.title}</div></div>{child.description && <div className="text-sm text-gray-500 mt-2 leading-6">{child.description}</div>}<div className="mt-3 text-[#09967C] font-bold">{child.price > 0 ? `${child.price.toLocaleString("fa-IR")} تومان` : "تماس بگیرید"}</div><div className="text-[#09967C] font-bold text-sm mt-2">انتخاب خدمت ←</div></button>)}
-        {legacyChildren.map(child => <button key={child.id} type="button" onClick={() => { setSelectedLegacy(child); setError(""); }} className="text-right border rounded-2xl p-5 bg-white hover:border-[#09967C] hover:shadow-md transition"><div className="font-bold text-lg">{child.title}</div>{child.description && <div className="text-sm text-gray-500 mt-2 leading-6">{child.description}</div>}<div className="mt-3 text-[#09967C] font-bold">{child.price > 0 ? `${child.price.toLocaleString("fa-IR")} تومان` : "تماس بگیرید"}</div><div className="text-[#09967C] font-bold text-sm mt-2">انتخاب فرم ←</div></button>)}
-      </div>
-    </GlassPanel> : <GlassPanel className="bg-white rounded-2xl shadow p-6"><div className="flex items-center justify-between gap-3 mb-6"><div><h2 className="text-xl font-bold">{selectedChild ? selectedChild.title : selectedLegacy ? selectedLegacy.title : "اطلاعات سفارش"}</h2><p className="text-sm text-[var(--text-muted)] mt-1">مبلغ خدمت: {(selectedChild?.price ?? selectedLegacy?.price ?? service.price).toLocaleString("fa-IR")} تومان</p></div>{(selectedChild || selectedLegacy) && <TusanButton type="button" variant="secondary" onClick={() => { setSelectedChild(null); setSelectedLegacy(null); }}>تغییر خدمت</TusanButton>}</div>{activeSchema.length === 0 ? <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center"><p className="text-[var(--text-muted)]">این فرم هنوز فیلدی ندارد.</p></div> : <DynamicServiceForm fields={activeSchema} onSubmit={submitOrder} submitting={submitting} />}</GlassPanel>}
-  </div></div>;
-}
+export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; const service = await getService(id); if (!service) notFound(); const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tusan.ir"; const jsonLd = { "@context": "https://schema.org", "@type": "Service", name: service.title, description: service.description || undefined, url: `${siteUrl}/services/${service.id}`, provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl }, areaServed: { "@type": "Country", name: "ایران" }, ...(service.price > 0 ? { offers: { "@type": "Offer", price: service.price, priceCurrency: "IRR", url: `${siteUrl}/services/${service.id}` } } : {}) }; return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} /><ServiceOrderClient initialService={service} /></>; }
