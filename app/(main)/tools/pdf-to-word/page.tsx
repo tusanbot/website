@@ -18,7 +18,8 @@ const getLibraries = () => window as unknown as BrowserLibraries;
 
 const PDFJS_URL = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
 const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-const DOCX_URL = "https://cdn.jsdelivr.net/npm/docx@9.5.1/build/index.umd.js";
+// docx 9.x publishes its browser IIFE as index.iife.js, not build/index.umd.js.
+const DOCX_URL = "https://cdn.jsdelivr.net/npm/docx@9.5.1/dist/index.iife.js";
 const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
 
 function loadScript(src: string, id: string) {
@@ -118,13 +119,13 @@ export default function PdfToWordPage() {
     try {
       await loadScript(DOCX_URL, "tusan-docx");
       const libraries = getLibraries();
-      if (!libraries.docx) throw new Error("کتابخانه ساخت Word بارگذاری نشد.");
+      if (!libraries.docx) throw new Error("کتابخانه ساخت Word بارگذاری شد اما شیء docx در مرورگر پیدا نشد.");
       const { Document, Packer, Paragraph, TextRun } = libraries.docx;
       const paragraphs = text.split(/\r?\n/).map(line => new Paragraph({ bidirectional: true, alignment: "right", children: [new TextRun({ text: line })] }));
       const document = new Document({ sections: [{ properties: {}, children: paragraphs }] });
       const blob = await Packer.toBlob(document);
       const url = URL.createObjectURL(blob); const a = document.createElement("a");
-      a.href = url; a.download = `${file?.name.replace(/\.pdf$/i, "") || "converted"}.docx`; a.click(); URL.revokeObjectURL(url);
+      a.href = url; a.download = `${file?.name.replace(/\.pdf$/i, "") || "converted"}.docx`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) { setError(err instanceof Error ? err.message : "ساخت فایل Word انجام نشد."); setStatus("error"); }
   };
 
