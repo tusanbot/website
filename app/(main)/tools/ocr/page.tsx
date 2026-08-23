@@ -5,7 +5,7 @@ import { Copy, Download, Eye, FileText, Loader2, RotateCcw, Sparkles, Upload } f
 
 type Status = "idle" | "loading" | "processing" | "done" | "error";
 type OcrMode = "fast" | "accurate";
-type PrepSettings = { contrast: boolean; threshold: boolean; denoise: boolean; sharpen: boolean };
+type PrepSettings = { contrast: boolean; threshold: boolean; denoise: boolean; sharpen: boolean; deskew: boolean; crop: boolean };
 
 declare global {
   interface Window {
@@ -45,23 +45,95 @@ async function ensureLibraries(needsPdf: boolean) {
   if (needsPdf && !window.pdfjsLib) await loadScript("pdfjs-cdn", PDFJS_URL);
 }
 
-function preprocessCanvas(source: HTMLCanvasElement, mode: OcrMode, settings: PrepSettings) {
+function rotateCanvas(source: HTMLCanvasElement, angle: number) {
+  if (Math.abs(angle) < 0.05) return source;
+  const radians = angle * Math.PI / 180;
   const canvas = document.createElement("canvas");
-  const scale = mode === "accurate" ? 2 : 1.45;
+  const sin = Math.abs(Math.sin(radians));
+  const cos = Math.abs(Math.cos(radians));
+  canvas.width = Math.ceil(source.width * cos + source.height * sin);
+  canvas.height = Math.ceil(source.width * sin + source.height * cos);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return source;
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate(radians);
+  ctx.drawImage(source, -source.width / 2, -source.height / 2);
+  return canvas;
+}
+
+function estimateSkew(source: HTMLCanvasElement) {
+  const maxWidth = 1000;
+  const scale = Math.min(1, maxWidth / source.width);
+  const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(source.width * scale));
   canvas.height = Math.max(1, Math.round(source.height * scale));
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) throw new Error("مرورگر امکان پردازش تصویر را فراهم نکرد.");
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
+  if (!ctx) return 0;
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
-  const { data, width, height } = image;
+  const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let sumX = 0, sumY = 0, count = 0;
+  const step = Math.max(1, Math.floor(Math.min(width, height) / 700));
+  for (let y = 2; y < height - 2; y += step) {
+    for (let x = 2; x < width - 2; x += step) {
+      const i = (y * width + x) * 4;
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (gray < 105) { sumX += x; sumY += y; count += 1; }
+    }
+  }
+  if (count < 100) return 0;
+  const meanX = sumX / count, meanY = sumY / count;
+  let xx = 0, yy = 0, xy = 0;
+  for (let y = 2; y < height - 2; y += step) {
+    for (let x = 2; x < width - 2; x += step) {
+      const i = (y * width + x) * 4;
+      const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (gray < 105) { const dx = x - meanX, dy = y - meanY; xx += dx * dx; yy += dy * dy; xy += dx * dy; }
+    }
+  }
+  const angle = 0.5 * Math.atan2(2 * xy, xx - yy) * 180 / Math.PI;
+  if (!Number.isFinite(angle) || Math.abs(angle) > 4) return 0;
+  return angle;
+}
+
+function cropWhitespace(source: HTMLCanvasElement) {
+  const ctx = source.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return source;
+  const { data, width, height } = ctx.getImageData(0, 0, source.width, source.height);
+  let minX = width, minY = height, maxX = -1, maxY = -1;
+  const threshold = 242;
+  const step = Math.max(1, Math.floor(Math.min(width, height) / 1200));
+  for (let y = 0; y < height; y += step) for (let x = 0; x < width; x += step) {
+    const i = (y * width + x) * 4;
+    const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    if (gray < threshold) { minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); }
+  }
+  if (maxX < 0 || maxY < 0) return source;
+  const padX = Math.round(width * 0.025), padY = Math.round(height * 0.025);
+  const x = Math.max(0, minX - padX), y = Math.max(0, minY - padY);
+  const w = Math.min(width - x, maxX - minX + padX * 2), h = Math.min(height - y, maxY - minY + padY * 2);
+  if (w < width * 0.35 || h < height * 0.25) return source;
+  const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+  const out = canvas.getContext("2d"); if (!out) return source;
+  out.drawImage(source, x, y, w, h, 0, 0, w, h);
+  return canvas;
+}
+
+function preprocessCanvas(source: HTMLCanvasElement, mode: OcrMode, settings: PrepSettings) {
+  let base = source;
+  if (settings.deskew) base = rotateCanvas(base, -estimateSkew(base));
+  if (settings.crop) base = cropWhitespace(base);
+  const canvas = document.createElement("canvas");
+  const scale = mode === "accurate" ? 2 : 1.45;
+  canvas.width = Math.max(1, Math.round(base.width * scale));
+  canvas.height = Math.max(1, Math.round(base.height * scale));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("مرورگر امکان پردازش تصویر را فراهم نکرد.");
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = "high"; ctx.drawImage(base, 0, 0, canvas.width, canvas.height);
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height); const { data, width, height } = image;
   const contrast = settings.contrast ? (mode === "accurate" ? 1.38 : 1.18) : 1;
   const threshold = mode === "accurate" && settings.threshold;
   for (let i = 0; i < data.length; i += 4) {
-    const r = data[i], g = data[i + 1], b = data[i + 2];
-    let gray = 0.299 * r + 0.587 * g + 0.114 * b;
+    const r = data[i], g = data[i + 1], b = data[i + 2]; let gray = 0.299 * r + 0.587 * g + 0.114 * b;
     gray = Math.max(0, Math.min(255, (gray - 128) * contrast + 128));
     if (threshold) gray = gray < 178 ? 0 : 255;
     data[i] = gray; data[i + 1] = gray; data[i + 2] = gray; data[i + 3] = 255;
@@ -69,17 +141,12 @@ function preprocessCanvas(source: HTMLCanvasElement, mode: OcrMode, settings: Pr
   if (settings.denoise) {
     const copy = new Uint8ClampedArray(data);
     for (let y = 1; y < height - 1; y += 1) for (let x = 1; x < width - 1; x += 1) {
-      const idx = (y * width + x) * 4;
-      const neighbors = [copy[idx - 4], copy[idx + 4], copy[idx - width * 4], copy[idx + width * 4], copy[idx]];
-      neighbors.sort((a, b) => a - b); const value = neighbors[2];
-      data[idx] = value; data[idx + 1] = value; data[idx + 2] = value;
+      const idx = (y * width + x) * 4; const neighbors = [copy[idx - 4], copy[idx + 4], copy[idx - width * 4], copy[idx + width * 4], copy[idx]];
+      neighbors.sort((a, b) => a - b); const value = neighbors[2]; data[idx] = value; data[idx + 1] = value; data[idx + 2] = value;
     }
   }
   ctx.putImageData(image, 0, 0);
-  if (settings.sharpen) {
-    const sharpened = document.createElement("canvas"); sharpened.width = canvas.width; sharpened.height = canvas.height;
-    const sctx = sharpened.getContext("2d"); if (sctx) { sctx.filter = "contrast(1.08)"; sctx.drawImage(canvas, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(sharpened, 0, 0); }
-  }
+  if (settings.sharpen) { const sharpened = document.createElement("canvas"); sharpened.width = canvas.width; sharpened.height = canvas.height; const sctx = sharpened.getContext("2d"); if (sctx) { sctx.filter = "contrast(1.08)"; sctx.drawImage(canvas, 0, 0); ctx.clearRect(0, 0, canvas.width, canvas.height); ctx.drawImage(sharpened, 0, 0); } }
   return canvas;
 }
 
@@ -92,33 +159,40 @@ function fileToCanvas(file: File) {
 }
 
 function normalizeOcrText(value: string) {
-  return value
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
-    .replace(/[يى]/g, "ی").replace(/ك/g, "ک").replace(/ۀ/g, "هٔ")
-    .replace(/\u00a0/g, " ")
-    .split("\n").map((line) => line.replace(/[ \t]+/g, " ").replace(/\s+([،؛,:.!؟?٪%])/g, "$1").replace(/([،؛,:.!؟?٪%])(?=\S)/g, "$1 ").trim()).filter((line, index, arr) => line || (index > 0 && arr[index - 1])).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "").replace(/[يى]/g, "ی").replace(/ك/g, "ک").replace(/ۀ/g, "هٔ").replace(/\u00a0/g, " ").split("\n").map((line) => line.replace(/[ \t]+/g, " ").replace(/\s+([،؛,:.!؟?٪%])/g, "$1").replace(/([،؛,:.!؟?٪%])(?=\S)/g, "$1 ").trim()).filter((line, index, arr) => line || (index > 0 && arr[index - 1])).join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 function cleanOcrText(value: string) {
-  return normalizeOcrText(value)
-    .replace(/[|¦]{2,}/g, "")
-    .replace(/[~`^]{2,}/g, "")
-    .replace(/ {2,}/g, " ")
-    .replace(/([آ-ی])([0-9])/g, "$1 $2")
-    .replace(/([0-9])([آ-ی])/g, "$1 $2")
-    .replace(/\s+([\)\]\}»])/g, "$1")
-    .replace(/([\(\[\{«])\s+/g, "$1")
-    .trim();
+  return normalizeOcrText(value).replace(/[|¦]{2,}/g, "").replace(/[~`^]{2,}/g, "").replace(/ {2,}/g, " ").replace(/([آ-ی])([0-9])/g, "$1 $2").replace(/([0-9])([آ-ی])/g, "$1 $2").replace(/\s+([\)\]\}»])/g, "$1").replace(/([\(\[\{«])\s+/g, "$1").trim();
 }
 
 function canvasPreviewUrl(canvas: HTMLCanvasElement | null) { return canvas ? canvas.toDataURL("image/jpeg", 0.72) : ""; }
+
+function ocrScore(value: string) {
+  const normalized = normalizeOcrText(value); if (!normalized) return -Infinity;
+  const chars = normalized.replace(/\s/g, ""); const words = normalized.split(/\s+/).filter(Boolean);
+  const letters = (chars.match(/[A-Za-zآ-ی]/g) || []).length; const digits = (chars.match(/[0-9۰-۹]/g) || []).length;
+  const noise = (chars.match(/[|¦~`^_{}\\]/g) || []).length;
+  const useful = letters + digits; return useful + Math.min(words.length, 80) * 2 - noise * 8 + Math.min(normalized.length, 2000) * 0.03;
+}
+
+async function recognizeBest(worker: Awaited<ReturnType<NonNullable<Window["Tesseract"]>["createWorker"]>>, canvas: HTMLCanvasElement, mode: OcrMode) {
+  const psmValues = mode === "accurate" ? ["6", "11"] : ["6"];
+  let best = ""; let bestScore = -Infinity;
+  for (const psm of psmValues) {
+    if (worker.setParameters) await worker.setParameters({ tessedit_pageseg_mode: psm, preserve_interword_spaces: "1", language_model_ngram_on: "1" });
+    const result = await worker.recognize(canvas); const score = ocrScore(result.data.text);
+    if (score > bestScore) { bestScore = score; best = result.data.text; }
+  }
+  return best;
+}
 
 export default function OcrToolPage() {
   const inputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<Status>("idle"); const [progress, setProgress] = useState(0);
   const [fileName, setFileName] = useState(""); const [rawText, setRawText] = useState(""); const [text, setText] = useState("");
   const [error, setError] = useState(""); const [isDragging, setIsDragging] = useState(false); const [mode, setMode] = useState<OcrMode>("accurate");
-  const [settings, setSettings] = useState<PrepSettings>({ contrast: true, threshold: true, denoise: false, sharpen: true });
+  const [settings, setSettings] = useState<PrepSettings>({ contrast: true, threshold: true, denoise: false, sharpen: true, deskew: true, crop: true });
   const [previewOriginal, setPreviewOriginal] = useState(""); const [previewProcessed, setPreviewProcessed] = useState("");
 
   const reset = () => { setStatus("idle"); setProgress(0); setFileName(""); setRawText(""); setText(""); setError(""); setPreviewOriginal(""); setPreviewProcessed(""); if (inputRef.current) inputRef.current.value = ""; };
@@ -130,9 +204,8 @@ export default function OcrToolPage() {
     try {
       setStatus("loading"); setProgress(3); await ensureLibraries(file.type === "application/pdf");
       if (!window.Tesseract) throw new Error("موتور OCR بارگذاری نشد.");
-      const worker = await window.Tesseract.createWorker("fas+eng", 1, { logger: (message) => { if (message.status === "recognizing text" && typeof message.progress === "number") setProgress(Math.min(96, Math.max(10, Math.round(message.progress * 72)))); } });
+      const worker = await window.Tesseract.createWorker("fas+eng", 1, { logger: (message) => { if (message.status === "recognizing text" && typeof message.progress === "number") setProgress(Math.min(96, Math.max(10, Math.round(message.progress * 60)))); } });
       try {
-        if (worker.setParameters) await worker.setParameters({ tessedit_pageseg_mode: mode === "accurate" ? "6" : "3", preserve_interword_spaces: "1", language_model_ngram_on: "1" });
         const outputs: string[] = [];
         if (file.type === "application/pdf") {
           if (!window.pdfjsLib) throw new Error("موتور PDF بارگذاری نشد.");
@@ -145,11 +218,11 @@ export default function OcrToolPage() {
             await page.render({ canvasContext: sctx, viewport }).promise;
             if (n === 1) setPreviewOriginal(canvasPreviewUrl(source));
             const prepared = preprocessCanvas(source, mode, settings); if (n === 1) setPreviewProcessed(canvasPreviewUrl(prepared));
-            const result = await worker.recognize(prepared); outputs.push(pdf.numPages > 1 ? `--- صفحه ${n} ---\n${result.data.text}` : result.data.text);
+            const result = await recognizeBest(worker, prepared, mode); outputs.push(pdf.numPages > 1 ? `--- صفحه ${n} ---\n${result}` : result);
           }
         } else {
           const source = await fileToCanvas(file); setPreviewOriginal(canvasPreviewUrl(source)); const prepared = preprocessCanvas(source, mode, settings); setPreviewProcessed(canvasPreviewUrl(prepared));
-          const result = await worker.recognize(prepared); outputs.push(result.data.text);
+          const result = await recognizeBest(worker, prepared, mode); outputs.push(result);
         }
         const raw = outputs.join("\n\n").trim(); setRawText(raw); setText(normalizeOcrText(raw)); setProgress(100); setStatus("done");
       } finally { await worker.terminate(); }
@@ -168,18 +241,18 @@ export default function OcrToolPage() {
         <div className="mt-10 grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
           <section className="h-fit rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
             <div className="mb-4 grid grid-cols-2 gap-2 rounded-2xl bg-[var(--surface-secondary)] p-1"><button type="button" onClick={() => setMode("fast")} className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "fast" ? "bg-[var(--surface)] shadow-sm" : "text-[var(--text-muted)]"}`}>⚡ سریع</button><button type="button" onClick={() => setMode("accurate")} className={`rounded-xl px-3 py-2 text-sm font-bold ${mode === "accurate" ? "bg-[var(--surface)] shadow-sm" : "text-[var(--text-muted)]"}`}>🎯 دقیق</button></div>
-            <div className="mb-4 rounded-2xl bg-[var(--surface-secondary)] p-3"><div className="mb-2 text-sm font-black">بهبود تصویر</div><div className="grid grid-cols-2 gap-2 text-xs"><label className="flex items-center gap-2"><input type="checkbox" checked={settings.contrast} onChange={(e) => setSettings((s) => ({ ...s, contrast: e.target.checked }))} /> افزایش کنتراست</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.threshold} onChange={(e) => setSettings((s) => ({ ...s, threshold: e.target.checked }))} /> سیاه‌وسفید</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.denoise} onChange={(e) => setSettings((s) => ({ ...s, denoise: e.target.checked }))} /> حذف نویز</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.sharpen} onChange={(e) => setSettings((s) => ({ ...s, sharpen: e.target.checked }))} /> افزایش وضوح</label></div></div>
+            <div className="mb-4 rounded-2xl bg-[var(--surface-secondary)] p-3"><div className="mb-2 text-sm font-black">بهبود تصویر</div><div className="grid grid-cols-2 gap-2 text-xs"><label className="flex items-center gap-2"><input type="checkbox" checked={settings.contrast} onChange={(e) => setSettings((s) => ({ ...s, contrast: e.target.checked }))} /> افزایش کنتراست</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.threshold} onChange={(e) => setSettings((s) => ({ ...s, threshold: e.target.checked }))} /> سیاه‌وسفید</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.denoise} onChange={(e) => setSettings((s) => ({ ...s, denoise: e.target.checked }))} /> حذف نویز</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.sharpen} onChange={(e) => setSettings((s) => ({ ...s, sharpen: e.target.checked }))} /> افزایش وضوح</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.deskew} onChange={(e) => setSettings((s) => ({ ...s, deskew: e.target.checked }))} /> صاف‌کردن زاویه</label><label className="flex items-center gap-2"><input type="checkbox" checked={settings.crop} onChange={(e) => setSettings((s) => ({ ...s, crop: e.target.checked }))} /> حذف حاشیه</label></div></div>
             <p className="mb-4 text-xs leading-5 text-[var(--text-muted)]">حالت دقیق برای اسناد فارسی و اسکن‌های متوسط مناسب‌تر است. دست‌خط فارسی ممکن است دقت پایینی داشته باشد.</p>
             <button type="button" disabled={status === "loading" || status === "processing"} onClick={() => inputRef.current?.click()} onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }} onDragLeave={() => setIsDragging(false)} onDrop={(e) => { e.preventDefault(); setIsDragging(false); void runOcr(e.dataTransfer.files[0]); }} className={`flex min-h-60 w-full flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center transition ${isDragging ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/50"}`}><Upload className="text-[var(--primary)]" size={38} /><strong className="mt-4">{status === "loading" || status === "processing" ? "در حال پردازش..." : "فایل را اینجا رها کنید"}</strong><span className="mt-2 text-sm text-[var(--text-muted)]">یا برای انتخاب فایل کلیک کنید</span><span className="mt-4 text-xs text-[var(--text-muted)]">JPG، PNG، WEBP و PDF · حداکثر ۲۵ مگابایت</span><input ref={inputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void runOcr(f); }} /></button>
             {fileName && <div className="mt-4 break-all rounded-xl bg-[var(--surface-secondary)] p-3 text-sm font-bold">{fileName}</div>}
-            {(status === "loading" || status === "processing") && <div className="mt-4"><div className="mb-2 flex justify-between text-xs font-bold"><span>پیشرفت</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--surface-secondary)]"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${progress}%` }} /></div><div className="mt-2 text-xs text-[var(--text-muted)]">پردازش تصویر و تشخیص حروف ممکن است کمی زمان ببرد.</div></div>}
+            {(status === "loading" || status === "processing") && <div className="mt-4"><div className="mb-2 flex justify-between text-xs font-bold"><span>پیشرفت</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--surface-secondary)]"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${progress}%` }} /></div><div className="mt-2 text-xs text-[var(--text-muted)]">در حالت دقیق، چند روش تشخیص برای انتخاب نتیجه بهتر بررسی می‌شود.</div></div>}
             {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700">{error}</div>}
             <div className="mt-5 flex gap-2"><button type="button" onClick={reset} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold"><RotateCcw size={16}/> شروع مجدد</button>{text && <button type="button" onClick={cleanText} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2 text-sm font-bold text-white"><Sparkles size={16}/> پاک‌سازی متن</button>}</div>
           </section>
           <section className="space-y-6">
             {(previewOriginal || previewProcessed) && <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"><div className="mb-4 flex items-center gap-2 font-black"><Eye size={18}/> پیش‌نمایش پردازش تصویر</div><div className="grid gap-4 md:grid-cols-2">{previewOriginal && <div><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">تصویر اصلی</div><div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-2"><img src={previewOriginal} alt="تصویر اصلی" className="max-h-72 w-full object-contain" /></div></div>}{previewProcessed && <div><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">تصویر پردازش‌شده برای OCR</div><div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-white p-2"><img src={previewProcessed} alt="تصویر پردازش‌شده" className="max-h-72 w-full object-contain" /></div></div>}</div></div>}
             <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">متن استخراج‌شده</h2><p className="mt-1 text-xs text-[var(--text-muted)]">می‌توانید متن را مستقیماً ویرایش کنید.</p></div><div className="flex flex-wrap gap-2"><button type="button" disabled={!text} onClick={() => void copyText()} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold disabled:opacity-40"><Copy size={16}/> کپی</button><button type="button" disabled={!text} onClick={downloadTxt} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold disabled:opacity-40"><Download size={16}/> TXT</button><button type="button" disabled={!text} onClick={downloadWord} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold disabled:opacity-40"><FileText size={16}/> Word</button></div></div><textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="متن استخراج‌شده اینجا نمایش داده می‌شود..." className="min-h-[480px] w-full resize-y rounded-2xl border border-[var(--border)] bg-transparent p-4 text-sm leading-8 outline-none focus:border-[var(--primary)]" /></div>
-            {status === "done" && <div className="rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 p-4 text-sm leading-7 text-[var(--text-muted)]">نکته: برای رسیدها و اسناد چاپی، «حالت دقیق» و افزایش کنتراست معمولاً نتیجه بهتری می‌دهد. OCR دست‌خط فارسی محدودیت ذاتی دارد و ممکن است قابل استفاده نباشد.</div>}
+            {status === "done" && <div className="rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 p-4 text-sm leading-7 text-[var(--text-muted)]">نکته: برای رسیدها و اسناد چاپی، «حالت دقیق» همراه با صاف‌کردن زاویه و حذف حاشیه معمولاً نتیجه بهتری می‌دهد. OCR دست‌خط فارسی محدودیت ذاتی دارد و ممکن است قابل استفاده نباشد.</div>}
           </section>
         </div>
       </div>
