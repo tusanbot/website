@@ -2,152 +2,278 @@
 
 import { ChangeEvent, useEffect, useRef, useState } from "react";
 
-type Theme = "classic" | "modern" | "school" | "minimal";
+type Theme = "election" | "bold" | "school" | "clean" | "bwClassic" | "bwMinimal";
+type FontId = "Vazirmatn" | "Estedad" | "Lalezar" | "Noto Naskh Arabic" | "Noto Sans Arabic";
 
-const themes: { id: Theme; title: string; desc: string }[] = [
-  { id: "classic", title: "کلاسیک", desc: "رسمی و مناسب چاپ" },
-  { id: "modern", title: "مدرن", desc: "جوان‌پسند و پرانرژی" },
-  { id: "school", title: "مدرسه‌ای", desc: "شاد و مناسب دانش‌آموزان" },
-  { id: "minimal", title: "مینیمال", desc: "ساده و کم‌جوهر" },
+type ThemeConfig = {
+  title: string;
+  desc: string;
+  bg: string;
+  surface: string;
+  accent: string;
+  text: string;
+  muted: string;
+  monochrome?: boolean;
+  layout: "badge" | "diagonal" | "friendly" | "clean" | "bwClassic" | "bwMinimal";
+};
+
+const fonts: { id: FontId; title: string }[] = [
+  { id: "Vazirmatn", title: "وزیرمتن" },
+  { id: "Estedad", title: "استعداد" },
+  { id: "Lalezar", title: "لاله‌زار" },
+  { id: "Noto Naskh Arabic", title: "نوتو نسخ عربی" },
+  { id: "Noto Sans Arabic", title: "نوتو سنس عربی" },
 ];
 
-const presets: Record<Theme, { bg: string; accent: string; text: string; muted: string }> = {
-  classic: { bg: "#fffaf0", accent: "#991b1b", text: "#1f2937", muted: "#6b7280" },
-  modern: { bg: "#f8fafc", accent: "#7c3aed", text: "#172033", muted: "#64748b" },
-  school: { bg: "#fff7ed", accent: "#ea580c", text: "#263238", muted: "#64748b" },
-  minimal: { bg: "#ffffff", accent: "#111827", text: "#111827", muted: "#6b7280" },
+const themes: Record<Theme, ThemeConfig> = {
+  election: { title: "انتخاباتی", desc: "مخصوص شورای دانش‌آموزی", bg: "#fff7ed", surface: "#fff", accent: "#dc2626", text: "#171717", muted: "#525252", layout: "badge" },
+  bold: { title: "جسور", desc: "تیتر بزرگ و پرانرژی", bg: "#eff6ff", surface: "#fff", accent: "#2563eb", text: "#172033", muted: "#475569", layout: "diagonal" },
+  school: { title: "شاد مدرسه‌ای", desc: "مناسب دانش‌آموزان", bg: "#f0fdf4", surface: "#fff", accent: "#059669", text: "#17332a", muted: "#527267", layout: "friendly" },
+  clean: { title: "تمیز", desc: "ساده و حرفه‌ای", bg: "#ffffff", surface: "#fff", accent: "#111827", text: "#111827", muted: "#6b7280", layout: "clean" },
+  bwClassic: { title: "سیاه و سفید کلاسیک", desc: "کم‌جوهر و مناسب پرینتر", bg: "#fff", surface: "#fff", accent: "#111", text: "#111", muted: "#444", monochrome: true, layout: "bwClassic" },
+  bwMinimal: { title: "سیاه و سفید مینیمال", desc: "چاپ اقتصادی و خوانا", bg: "#fff", surface: "#fff", accent: "#000", text: "#111", muted: "#555", monochrome: true, layout: "bwMinimal" },
 };
+
+const fontUrls: Record<FontId, string> = {
+  "Vazirmatn": "https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap",
+  "Estedad": "https://fonts.googleapis.com/css2?family=Estedad:wght@400;500;600;700;800;900&display=swap",
+  "Lalezar": "https://fonts.googleapis.com/css2?family=Lalezar&display=swap",
+  "Noto Naskh Arabic": "https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;500;600;700&display=swap",
+  "Noto Sans Arabic": "https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;500;600;700;800;900&display=swap",
+};
+
+function loadFont(font: FontId) {
+  const id = `poster-font-${font.replace(/\s+/g, "-")}`;
+  if (!document.getElementById(id)) {
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = fontUrls[font];
+    document.head.appendChild(link);
+  }
+}
+
+function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, startSize: number, fontFamily: string, weight = 800) {
+  let size = startSize;
+  while (size > 20) {
+    ctx.font = `${weight} ${size}px "${fontFamily}"`;
+    if (ctx.measureText(text).width <= maxWidth) return size;
+    size -= 2;
+  }
+  return size;
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number) {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const candidate = line ? `${line} ${word}` : word;
+    if (ctx.measureText(candidate).width <= maxWidth || !line) line = candidate;
+    else { lines.push(line); line = word; }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
 
 export default function StudentCouncilPosterPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [name, setName] = useState("");
+  const [school, setSchool] = useState("");
   const [className, setClassName] = useState("");
   const [number, setNumber] = useState("");
   const [slogan, setSlogan] = useState("");
-  const [theme, setTheme] = useState<Theme>("modern");
+  const [promises, setPromises] = useState("");
+  const [achievements, setAchievements] = useState("");
+  const [electionDate, setElectionDate] = useState("");
+  const [theme, setTheme] = useState<Theme>("election");
+  const [font, setFont] = useState<FontId>("Vazirmatn");
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageUrl, setImageUrl] = useState("");
-  const [fontSize, setFontSize] = useState(58);
-  const [accent, setAccent] = useState(presets.modern.accent);
+  const [accent, setAccent] = useState("");
+  const [showPromises, setShowPromises] = useState(true);
+  const [showAchievements, setShowAchievements] = useState(false);
+  const [showDate, setShowDate] = useState(false);
+  const [showVoteBadge, setShowVoteBadge] = useState(true);
+  const [showNumberBadge, setShowNumberBadge] = useState(true);
+
+  useEffect(() => { loadFont(font); void document.fonts.ready; }, [font]);
+  useEffect(() => { setAccent(themes[theme].accent); }, [theme]);
 
   useEffect(() => {
-    setAccent(presets[theme].accent);
-  }, [theme]);
+    let cancelled = false;
+    const draw = async () => {
+      loadFont(font);
+      await document.fonts.ready;
+      if (cancelled) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      const p = themes[theme];
+      const W = canvas.width;
+      const H = canvas.height;
+      const family = font;
+      const primary = p.monochrome ? "#111" : accent || p.accent;
+      const ink = p.monochrome ? "#111" : p.text;
+      const muted = p.monochrome ? "#444" : p.muted;
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    const p = presets[theme];
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = p.bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = p.bg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.direction = "rtl";
+      ctx.textAlign = "center";
 
-    // Decorative frame / theme-specific header
-    ctx.fillStyle = accent;
-    if (theme === "modern") {
-      ctx.fillRect(0, 0, canvas.width, 190);
-      ctx.beginPath(); ctx.arc(1050, 80, 260, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,.12)"; ctx.fill();
-    } else if (theme === "school") {
-      ctx.fillRect(0, 0, canvas.width, 145);
-      ctx.fillStyle = "rgba(234,88,12,.12)"; ctx.fillRect(0, 145, canvas.width, 28);
-    } else if (theme === "classic") {
-      ctx.strokeStyle = accent; ctx.lineWidth = 10; ctx.strokeRect(35, 35, canvas.width - 70, canvas.height - 70);
-      ctx.lineWidth = 2; ctx.strokeRect(55, 55, canvas.width - 110, canvas.height - 110);
-    } else {
-      ctx.fillRect(0, 0, 24, canvas.height);
-      ctx.fillRect(24, 0, canvas.width - 24, 10);
-    }
+      if (p.layout === "badge") {
+        ctx.fillStyle = primary; ctx.fillRect(0, 0, W, 310);
+        ctx.fillStyle = "rgba(255,255,255,.11)"; ctx.beginPath(); ctx.arc(1120, 110, 300, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(80, 250, 150, 0, Math.PI * 2); ctx.fill();
+      } else if (p.layout === "diagonal") {
+        ctx.fillStyle = primary; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(W, 0); ctx.lineTo(W, 420); ctx.lineTo(0, 260); ctx.closePath(); ctx.fill();
+      } else if (p.layout === "friendly") {
+        ctx.fillStyle = primary; ctx.fillRect(0, 0, W, 220);
+        for (let i = 0; i < 7; i++) { ctx.fillStyle = i % 2 ? "rgba(255,255,255,.22)" : "rgba(255,255,255,.12)"; ctx.beginPath(); ctx.arc(90 + i * 180, 205, 45 + (i % 3) * 12, 0, Math.PI * 2); ctx.fill(); }
+      } else if (p.layout === "clean") {
+        ctx.fillStyle = primary; ctx.fillRect(0, 0, W, 18); ctx.fillRect(0, H - 18, W, 18);
+        ctx.strokeStyle = primary; ctx.lineWidth = 5; roundedRect(ctx, 45, 45, W - 90, H - 90, 28); ctx.stroke();
+      } else if (p.layout === "bwClassic") {
+        ctx.strokeStyle = primary; ctx.lineWidth = 12; ctx.strokeRect(45, 45, W - 90, H - 90);
+        ctx.lineWidth = 3; ctx.strokeRect(70, 70, W - 140, H - 140);
+        ctx.fillStyle = primary; ctx.fillRect(90, 115, W - 180, 185);
+      } else {
+        ctx.strokeStyle = primary; ctx.lineWidth = 6; ctx.setLineDash([18, 14]); ctx.strokeRect(55, 55, W - 110, H - 110); ctx.setLineDash([]);
+        ctx.fillStyle = primary; ctx.fillRect(0, 0, W, 12);
+      }
 
-    const center = canvas.width / 2;
-    ctx.textAlign = "center";
-    ctx.direction = "rtl";
-    ctx.fillStyle = theme === "modern" || theme === "school" ? "#fff" : p.text;
-    ctx.font = "bold 34px Arial";
-    ctx.fillText("انتخابات شورای دانش‌آموزی", center, 105);
+      const headerDark = p.layout === "clean" || p.layout === "bwMinimal" ? ink : "#fff";
+      ctx.fillStyle = headerDark;
+      ctx.font = `800 62px "${family}"`;
+      ctx.fillText("انتخابات شورای دانش‌آموزی", W / 2, 135);
+      ctx.font = `500 30px "${family}"`;
+      ctx.fillText(school || "نام مدرسه", W / 2, 195);
 
-    const photoX = center - 175, photoY = 225, photoSize = 350;
-    if (image) {
-      ctx.save(); ctx.beginPath(); ctx.arc(center, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2); ctx.clip();
-      const scale = Math.max(photoSize / image.width, photoSize / image.height);
-      const w = image.width * scale, h = image.height * scale;
-      ctx.drawImage(image, center - w / 2, photoY + photoSize / 2 - h / 2, w, h); ctx.restore();
-    } else {
-      ctx.fillStyle = "#e5e7eb"; ctx.beginPath(); ctx.arc(center, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = p.muted; ctx.font = "bold 28px Arial"; ctx.fillText("عکس کاندیدا", center, photoY + photoSize / 2 + 10);
-    }
+      const photoSize = 410;
+      const photoX = W / 2;
+      const photoY = p.layout === "badge" ? 500 : 520;
+      if (image) {
+        ctx.save();
+        ctx.beginPath();
+        if (p.layout === "diagonal") ctx.arc(photoX, photoY, photoSize / 2, 0, Math.PI * 2);
+        else roundedRect(ctx, photoX - photoSize / 2, photoY - photoSize / 2, photoSize, photoSize, 42);
+        ctx.clip();
+        const scale = Math.max(photoSize / image.width, photoSize / image.height);
+        const iw = image.width * scale, ih = image.height * scale;
+        ctx.drawImage(image, photoX - iw / 2, photoY - ih / 2, iw, ih);
+        ctx.restore();
+        ctx.strokeStyle = primary; ctx.lineWidth = 12;
+        if (p.layout === "diagonal") { ctx.beginPath(); ctx.arc(photoX, photoY, photoSize / 2, 0, Math.PI * 2); ctx.stroke(); }
+        else { roundedRect(ctx, photoX - photoSize / 2, photoY - photoSize / 2, photoSize, photoSize, 42); ctx.stroke(); }
+      } else {
+        ctx.fillStyle = p.monochrome ? "#eee" : "#e5e7eb";
+        ctx.beginPath(); ctx.arc(photoX, photoY, photoSize / 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = muted; ctx.font = `700 34px "${family}"`; ctx.fillText("عکس کاندیدا", photoX, photoY + 12);
+      }
 
-    ctx.fillStyle = p.text; ctx.font = `bold ${fontSize}px Arial`; ctx.fillText(name || "نام کاندیدا", center, 660);
-    ctx.fillStyle = accent; ctx.font = "bold 30px Arial"; ctx.fillText(slogan || "شعار انتخاباتی شما", center, 725);
-    ctx.fillStyle = p.muted; ctx.font = "24px Arial";
-    const meta = [className && `پایه/کلاس: ${className}`, number && `شماره: ${number}`].filter(Boolean).join("   •   ");
-    ctx.fillText(meta || "پایه و شماره کاندیدا", center, 785);
-    if (number) {
-      ctx.fillStyle = accent; ctx.beginPath(); ctx.arc(170, 790, 70, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.font = "bold 48px Arial"; ctx.fillText(number, 170, 807);
-    }
-    ctx.fillStyle = p.muted; ctx.font = "18px Arial"; ctx.fillText("رأی شما، انتخاب فردای بهتر", center, 845);
-  }, [name, className, number, slogan, theme, image, fontSize, accent]);
+      const nameSize = fitText(ctx, name || "نام کاندیدا", W - 180, 78, family, 900);
+      ctx.fillStyle = ink; ctx.font = `900 ${nameSize}px "${family}"`; ctx.fillText(name || "نام کاندیدا", W / 2, 820);
+      ctx.fillStyle = primary; ctx.font = `800 38px "${family}"`; ctx.fillText(slogan || "شعار انتخاباتی شما", W / 2, 890);
+
+      ctx.fillStyle = muted; ctx.font = `600 27px "${family}"`;
+      const meta = [className && `پایه/کلاس: ${className}`, electionDate && `تاریخ انتخابات: ${electionDate}`].filter(Boolean).join("   •   ");
+      ctx.fillText(meta || "پایه / کلاس", W / 2, 945);
+
+      if (showNumberBadge && number) {
+        ctx.fillStyle = primary; ctx.beginPath(); ctx.arc(170, 860, 92, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = p.monochrome ? "#fff" : "#fff"; ctx.font = `900 58px "${family}"`; ctx.fillText(number, 170, 880);
+        ctx.font = `600 22px "${family}"`; ctx.fillText("شماره", 170, 925);
+      }
+
+      let y = 1015;
+      const drawBox = (title: string, body: string) => {
+        if (!body.trim()) return;
+        ctx.fillStyle = p.monochrome ? "#fff" : "rgba(255,255,255,.72)";
+        ctx.strokeStyle = primary; ctx.lineWidth = 3;
+        roundedRect(ctx, 120, y, W - 240, 145, 28); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = primary; ctx.font = `800 28px "${family}"`; ctx.fillText(title, W / 2, y + 42);
+        ctx.fillStyle = ink; ctx.font = `500 24px "${family}"`;
+        const lines = wrapText(ctx, body.replace(/\n+/g, " • "), W - 300).slice(0, 3);
+        lines.forEach((line, i) => ctx.fillText(line, W / 2, y + 82 + i * 30));
+        y += 165;
+      };
+      if (showPromises) drawBox("برنامه‌ها و وعده‌ها", promises);
+      if (showAchievements) drawBox("سوابق و توانمندی‌ها", achievements);
+
+      if (showVoteBadge) {
+        ctx.fillStyle = primary; roundedRect(ctx, 290, H - 150, W - 580, 75, 38); ctx.fill();
+        ctx.fillStyle = "#fff"; ctx.font = `800 27px "${family}"`; ctx.fillText("رأی شما، انتخاب فردای بهتر", W / 2, H - 101);
+      }
+      ctx.fillStyle = muted; ctx.font = `500 19px "${family}"`; ctx.fillText("پوستر انتخاباتی شورای دانش‌آموزی", W / 2, H - 55);
+    };
+    void draw();
+    return () => { cancelled = true; };
+  }, [name, school, className, number, slogan, promises, achievements, electionDate, theme, font, image, accent, showPromises, showAchievements, showDate, showVoteBadge, showNumberBadge]);
 
   const onImage = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) return;
-    const url = URL.createObjectURL(file);
-    setImageUrl(url);
-    const img = new Image();
-    img.onload = () => setImage(img);
-    img.src = url;
+    const file = e.target.files?.[0]; if (!file || !file.type.startsWith("image/")) return;
+    if (imageUrl) URL.revokeObjectURL(imageUrl);
+    const url = URL.createObjectURL(file); setImageUrl(url);
+    const img = new Image(); img.onload = () => setImage(img); img.src = url;
   };
-
-  const download = (type: "png" | "jpeg") => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const a = document.createElement("a");
-    a.download = `poster-shora-${Date.now()}.${type === "png" ? "png" : "jpg"}`;
-    a.href = canvas.toDataURL(type === "png" ? "image/png" : "image/jpeg", 0.95);
-    a.click();
-  };
+  const download = (type: "png" | "jpeg") => { const canvas = canvasRef.current; if (!canvas) return; const a = document.createElement("a"); a.download = `poster-shora-${Date.now()}.${type === "png" ? "png" : "jpg"}`; a.href = canvas.toDataURL(type === "png" ? "image/png" : "image/jpeg", 0.96); a.click(); };
+  const print = () => window.print();
+  const updateTheme = (id: Theme) => setTheme(id);
 
   return (
     <main className="min-h-screen bg-[var(--background)] px-4 py-8" dir="rtl">
       <div className="mx-auto max-w-7xl">
-        <header className="mb-8">
-          <h1 className="text-3xl font-black text-[var(--text)]">پوستر انتخابات شورای دانش‌آموزی</h1>
-          <p className="mt-2 text-[var(--text-muted)]">پوستر انتخاباتی را بساز، شخصی‌سازی کن و با کیفیت چاپ دریافت کن.</p>
-        </header>
-        <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-          <aside className="order-2 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm lg:order-1">
-            <h2 className="text-lg font-black">اطلاعات پوستر</h2>
+        <header className="mb-8"><h1 className="text-3xl font-black text-[var(--text)]">پوستر انتخابات شورای دانش‌آموزی</h1><p className="mt-2 text-[var(--text-muted)]">پوستر واقعی انتخاباتی بساز، فونت فارسی انتخاب کن، برنامه‌ها و مشخصات کاندیدا را اضافه کن و برای چاپ خروجی بگیر.</p></header>
+        <div className="grid gap-6 lg:grid-cols-[380px_minmax(0,1fr)]">
+          <aside className="order-2 h-fit rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm lg:order-1">
+            <h2 className="text-lg font-black">اطلاعات کاندیدا</h2>
             <div className="mt-4 space-y-3">
-              {[["نام کاندیدا", name, setName], ["پایه / کلاس", className, setClassName], ["شماره کاندیدا", number, setNumber], ["شعار انتخاباتی", slogan, setSlogan]].map(([label, value, setter]) => (
-                <label key={label as string} className="block text-sm font-bold text-[var(--text)]">
-                  {label as string}
-                  <input value={value as string} onChange={(e) => (setter as (v: string) => void)(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 outline-none focus:border-[var(--primary)]" />
-                </label>
+              {[["نام کاندیدا", name, setName], ["نام مدرسه", school, setSchool], ["پایه / کلاس", className, setClassName], ["شماره کاندیدا", number, setNumber], ["شعار انتخاباتی", slogan, setSlogan], ["تاریخ انتخابات", electionDate, setElectionDate]].map(([label, value, setter]) => (
+                <label key={label as string} className="block text-sm font-bold text-[var(--text)]">{label as string}<input value={value as string} onChange={(e) => (setter as (v: string) => void)(e.target.value)} className="mt-1 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 outline-none focus:border-[var(--primary)]" /></label>
               ))}
+              <label className="block text-sm font-bold">برنامه‌ها و وعده‌ها<textarea value={promises} onChange={e => setPromises(e.target.value)} placeholder="مثلاً: برگزاری مسابقات ورزشی\nبهبود کتابخانه\nایجاد صندوق پیشنهادات" className="mt-1 min-h-24 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm outline-none" /></label>
+              <label className="block text-sm font-bold">سوابق و توانمندی‌ها<textarea value={achievements} onChange={e => setAchievements(e.target.value)} placeholder="مثلاً: عضو شورای کلاس، مسئول انجمن..." className="mt-1 min-h-20 w-full rounded-xl border border-[var(--border)] px-3 py-2.5 text-sm outline-none" /></label>
               <label className="block text-sm font-bold">عکس کاندیدا<input type="file" accept="image/*" onChange={onImage} className="mt-1 block w-full text-sm" /></label>
               {imageUrl && <button type="button" onClick={() => { setImage(null); URL.revokeObjectURL(imageUrl); setImageUrl(""); }} className="text-sm font-bold text-red-600">حذف عکس</button>}
-              <label className="block text-sm font-bold">اندازه نام: {fontSize}px<input type="range" min="38" max="72" value={fontSize} onChange={(e) => setFontSize(Number(e.target.value))} className="mt-2 w-full" /></label>
-              <label className="block text-sm font-bold">رنگ اصلی<input type="color" value={accent} onChange={(e) => setAccent(e.target.value)} className="mt-2 h-10 w-full cursor-pointer rounded-lg" /></label>
             </div>
-            <h2 className="mt-7 text-lg font-black">قالب</h2>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              {themes.map((t) => <button key={t.id} type="button" onClick={() => setTheme(t.id)} className={`rounded-xl border p-3 text-right transition ${theme === t.id ? "border-[var(--primary)] bg-[var(--primary)]/10" : "border-[var(--border)]"}`}><b className="block">{t.title}</b><span className="text-xs text-[var(--text-muted)]">{t.desc}</span></button>)}
+
+            <h2 className="mt-7 text-lg font-black">فونت فارسی</h2>
+            <select value={font} onChange={e => setFont(e.target.value as FontId)} className="mt-3 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-3 text-sm font-bold">{fonts.map(f => <option key={f.id} value={f.id}>{f.title}</option>)}</select>
+            <p className="mt-2 text-xs leading-5 text-[var(--text-muted)]">فونت انتخابی روی متن پوستر و خروجی تصویر اعمال می‌شود.</p>
+
+            <h2 className="mt-7 text-lg font-black">اجزای انتخاباتی</h2>
+            <div className="mt-3 space-y-2 text-sm font-bold">
+              <label className="flex items-center justify-between rounded-xl border border-[var(--border)] p-3"><span>نمایش برنامه‌ها</span><input type="checkbox" checked={showPromises} onChange={e => setShowPromises(e.target.checked)} /></label>
+              <label className="flex items-center justify-between rounded-xl border border-[var(--border)] p-3"><span>نمایش سوابق</span><input type="checkbox" checked={showAchievements} onChange={e => setShowAchievements(e.target.checked)} /></label>
+              <label className="flex items-center justify-between rounded-xl border border-[var(--border)] p-3"><span>نشان شماره رأی</span><input type="checkbox" checked={showNumberBadge} onChange={e => setShowNumberBadge(e.target.checked)} /></label>
+              <label className="flex items-center justify-between rounded-xl border border-[var(--border)] p-3"><span>نوار «رأی شما...»</span><input type="checkbox" checked={showVoteBadge} onChange={e => setShowVoteBadge(e.target.checked)} /></label>
             </div>
-            <div className="mt-6 grid grid-cols-2 gap-2">
-              <button type="button" onClick={() => download("png")} className="rounded-xl bg-[var(--primary)] px-3 py-3 text-sm font-black text-white">دانلود PNG</button>
-              <button type="button" onClick={() => download("jpeg")} className="rounded-xl border border-[var(--border)] px-3 py-3 text-sm font-black">دانلود JPG</button>
-            </div>
-            <button type="button" onClick={() => window.print()} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-3 text-sm font-black">چاپ پوستر</button>
+
+            <h2 className="mt-7 text-lg font-black">قالب پوستر</h2>
+            <div className="mt-3 grid grid-cols-2 gap-2">{Object.entries(themes).map(([id, t]) => <button key={id} type="button" onClick={() => updateTheme(id as Theme)} className={`rounded-xl border p-3 text-right transition ${theme === id ? "border-[var(--primary)] bg-[var(--primary)]/10" : "border-[var(--border)]"}`}><b className="block text-sm">{t.title}</b><span className="text-xs text-[var(--text-muted)]">{t.desc}</span></button>)}</div>
+            {!themes[theme].monochrome && <label className="mt-4 block text-sm font-bold">رنگ اصلی<input type="color" value={accent} onChange={e => setAccent(e.target.value)} className="mt-2 h-10 w-full cursor-pointer rounded-lg" /></label>}
+
+            <div className="mt-6 grid grid-cols-2 gap-2"><button type="button" onClick={() => download("png")} className="rounded-xl bg-[var(--primary)] px-3 py-3 text-sm font-black text-white">دانلود PNG</button><button type="button" onClick={() => download("jpeg")} className="rounded-xl border border-[var(--border)] px-3 py-3 text-sm font-black">دانلود JPG</button></div>
+            <button type="button" onClick={print} className="mt-2 w-full rounded-xl border border-[var(--border)] px-3 py-3 text-sm font-black">چاپ پوستر</button>
           </aside>
-          <section className="order-1 flex items-center justify-center rounded-3xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3 sm:p-6 lg:order-2">
-            <canvas ref={canvasRef} width={1200} height={900} className="h-auto w-full max-w-[760px] rounded-xl shadow-2xl" aria-label="پیش‌نمایش پوستر" />
-          </section>
+          <section className="order-1 flex items-center justify-center rounded-3xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3 sm:p-6 lg:order-2"><canvas ref={canvasRef} width={1240} height={1754} className="h-auto w-full max-w-[700px] rounded-xl shadow-2xl" aria-label="پیش‌نمایش پوستر" /></section>
         </div>
       </div>
-      <style jsx global>{`@media print { body * { visibility: hidden !important; } canvas { visibility: visible !important; position: fixed; inset: 0; width: 100vw !important; height: auto !important; } }`}</style>
+      <style jsx global>{`@media print { @page { size: A4 portrait; margin: 0; } body { margin: 0 !important; } body * { visibility: hidden !important; } canvas { visibility: visible !important; position: fixed; inset: 0; width: 210mm !important; height: 297mm !important; max-width: none !important; border-radius: 0 !important; box-shadow: none !important; } }`}</style>
     </main>
   );
 }
