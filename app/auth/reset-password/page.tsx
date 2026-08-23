@@ -42,15 +42,17 @@ export default function ResetPasswordPage() {
                 password,
             });
 
-            if (error) throw error;
+            if (error) {
+                throw new Error('PASSWORD_UPDATE_FAILED');
+            }
 
             setSuccess('رمز عبور با موفقیت تغییر کرد.');
 
             setTimeout(() => {
                 router.push('/auth');
             }, 1500);
-        } catch (err: any) {
-            setError(err?.message || 'تغییر رمز عبور انجام نشد.');
+        } catch {
+            setError('تغییر رمز عبور انجام نشد. لطفاً دوباره از لینک بازیابی استفاده کنید.');
         } finally {
             setLoading(false);
         }
