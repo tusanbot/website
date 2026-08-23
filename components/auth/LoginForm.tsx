@@ -39,12 +39,14 @@ export default function LoginForm({
                 password,
             });
 
-            if (error) throw error;
+            if (error) {
+                throw new Error('INVALID_CREDENTIALS');
+            }
 
             router.push('/dashboard');
             router.refresh();
-        } catch (err: any) {
-            setError(err?.message || 'ورود انجام نشد.');
+        } catch {
+            setError('ایمیل یا رمز عبور نادرست است.');
         } finally {
             setLoading(false);
         }
