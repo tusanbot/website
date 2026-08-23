@@ -27,5 +27,5 @@ export async function GET() {
       assets: { logoUrl: assets.logoUrl || "", iconUrl: assets.iconUrl || "", faviconUrl: assets.faviconUrl || "" },
       social: { icons: { telegram: icons.telegram || "", eitaa: icons.eitaa || "", rubika: icons.rubika || "" } },
     },
-  }, { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" } });
+  }, { headers: { "Cache-Control": "no-store, max-age=0" } });
 }
