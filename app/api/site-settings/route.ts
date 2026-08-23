@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
 export async function GET() {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin()
     .from("site_settings")
     .select("site_name, site_description, config")
     .limit(1)
@@ -23,26 +23,9 @@ export async function GET() {
     settings: {
       site_name: data.site_name,
       site_description: data.site_description,
-      business: {
-        address: business.address || "",
-        phone: business.phone || "",
-        email: business.email || "",
-        telegram: business.telegram || "",
-        eitaa: business.eitaa || "",
-        rubika: business.rubika || "",
-      },
-      assets: {
-        logoUrl: assets.logoUrl || "",
-        iconUrl: assets.iconUrl || "",
-        faviconUrl: assets.faviconUrl || "",
-      },
-      social: {
-        icons: {
-          telegram: icons.telegram || "",
-          eitaa: icons.eitaa || "",
-          rubika: icons.rubika || "",
-        },
-      },
+      business: { address: business.address || "", phone: business.phone || "", email: business.email || "", telegram: business.telegram || "", eitaa: business.eitaa || "", rubika: business.rubika || "" },
+      assets: { logoUrl: assets.logoUrl || "", iconUrl: assets.iconUrl || "", faviconUrl: assets.faviconUrl || "" },
+      social: { icons: { telegram: icons.telegram || "", eitaa: icons.eitaa || "", rubika: icons.rubika || "" } },
     },
   }, { headers: { "Cache-Control": "public, max-age=60, stale-while-revalidate=300" } });
 }
