@@ -40,16 +40,22 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
   const supabase = createSupabaseServerClient();
   const { data: related } = await supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("category", service.category).neq("id", service.id).limit(4);
   const jsonLd = { "@context": "https://schema.org", "@type": "Service", name: service.title, description: service.description || undefined, url: canonicalUrl, provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl }, areaServed: { "@type": "Country", name: "ایران" }, ...(service.price > 0 ? { offers: { "@type": "Offer", price: service.price, priceCurrency: "IRR", url: canonicalUrl } } : {}) };
-  const breadcrumbJsonLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "خانه", item: siteUrl }, { "@type": "ListItem", position: 2, name: "خدمات", item: `${siteUrl}/services` }, ...(service.category ? [{ "@type": "ListItem", position: 3, name: service.category }] : []), { "@type": "ListItem", position: service.category ? 4 : 3, name: service.title, item: canonicalUrl }] };
+  const breadcrumbItems = [
+    { "@type": "ListItem", position: 1, name: "خانه", item: siteUrl },
+    { "@type": "ListItem", position: 2, name: "خدمات", item: `${siteUrl}/services` },
+    ...(service.category ? [{ "@type": "ListItem", position: 3, name: service.category, item: `${siteUrl}/services` }] : []),
+    { "@type": "ListItem", position: service.category ? 4 : 3, name: service.title, item: canonicalUrl },
+  ];
+  const breadcrumbJsonLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: breadcrumbItems };
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
     <div dir="rtl" className="max-w-3xl mx-auto px-6 pt-5">
-      <nav aria-label="مسیر صفحه" className="text-sm text-[var(--text-muted)]" itemScope itemType="https://schema.org/BreadcrumbList">
-        <Link href="/" className="hover:underline" itemProp="item"><span itemProp="name">خانه</span></Link><span className="mx-2">/</span>
-        <Link href="/services" className="hover:underline" itemProp="item"><span itemProp="name">خدمات</span></Link><span className="mx-2">/</span>
-        {service.category && <><span>{service.category}</span><span className="mx-2">/</span></>}
-        <span className="font-medium text-[var(--text)]" itemProp="name">{service.title}</span>
+      <nav aria-label="مسیر صفحه" className="text-sm text-[var(--text-muted)]">
+        <Link href="/" className="hover:underline">خانه</Link><span className="mx-2">/</span>
+        <Link href="/services" className="hover:underline">خدمات</Link><span className="mx-2">/</span>
+        {service.category && <><Link href="/services" className="hover:underline">{service.category}</Link><span className="mx-2">/</span></>}
+        <span className="font-medium text-[var(--text)]" aria-current="page">{service.title}</span>
       </nav>
     </div>
     <ServiceOrderClient initialService={service} />
