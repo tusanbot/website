@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const ALLOWED_KEYS = new Set(["business", "social", "display", "orders", "announcements", "pricing"]);
+const ALLOWED_KEYS = new Set(["business", "assets", "social", "display", "orders", "announcements", "pricing"]);
 
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin(request);
@@ -24,15 +24,19 @@ export async function POST(request: NextRequest) {
     for (const key of ["site_name", "site_description", "theme", "primary_color", "primary_dark", "radius", "font_family"]) {
       if (key in body && typeof body[key] === "string") update[key] = body[key];
     }
-    const nextConfig: Record<string, unknown> = current.data?.config || {};
+    const currentConfig = current.data?.config && typeof current.data.config === "object" && !Array.isArray(current.data.config)
+      ? { ...(current.data.config as Record<string, unknown>) }
+      : {};
     if (body.config && typeof body.config === "object" && !Array.isArray(body.config)) {
-      for (const [key, value] of Object.entries(body.config)) if (ALLOWED_KEYS.has(key)) nextConfig[key] = value;
+      for (const [key, value] of Object.entries(body.config)) {
+        if (ALLOWED_KEYS.has(key)) currentConfig[key] = value;
+      }
     }
-    update.config = nextConfig;
+    update.config = currentConfig;
     update.updated_at = new Date().toISOString();
     const { error } = await supabaseAdmin().from("site_settings").update(update).eq("id", current.data.id);
     if (error) throw error;
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, settings: { ...body, config: currentConfig } });
   } catch (error) {
     console.error("[admin/site-settings] update failed", { adminId: admin.id, error });
     return NextResponse.json({ success: false, error: "ذخیره تنظیمات ناموفق بود." }, { status: 500 });
