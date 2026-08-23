@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import type { SocialCategory, SocialPlatform, SocialService } from "@/lib/social/types";
+import type { PublicSocialService, SocialCategory, SocialPlatform } from "@/lib/social/types";
 
 const iconMap: Record<string, LucideIcon> = {
     instagram: MessageCircle,
@@ -168,21 +168,16 @@ function formatNumber(value: number) {
     return new Intl.NumberFormat("fa-IR").format(value);
 }
 
-function serviceRate(service: SocialService) {
-    if (service.provider_rate == null) return null;
-    if (service.profit_type === "percentage") {
-        return service.provider_rate * (1 + service.profit_value / 100);
-    }
-    if (service.profit_type === "fixed") {
-        return service.provider_rate + service.profit_value;
-    }
-    return service.provider_rate;
+function serviceRate(service: PublicSocialService) {
+    if (service.customer_unit_price == null) return null;
+    const value = Number(service.customer_unit_price);
+    return Number.isFinite(value) ? value : null;
 }
 
 export default function SocialServicesPage() {
     const [platforms, setPlatforms] = useState<SocialPlatform[]>([]);
     const [categories, setCategories] = useState<SocialCategory[]>([]);
-    const [services, setServices] = useState<SocialService[]>([]);
+    const [services, setServices] = useState<PublicSocialService[]>([]);
     const [selectedPlatform, setSelectedPlatform] = useState("");
     const [selectedCategory, setSelectedCategory] = useState("");
     const [search, setSearch] = useState("");
@@ -194,11 +189,11 @@ export default function SocialServicesPage() {
             const [{ data: platformData }, { data: categoryData }, { data: serviceData }] = await Promise.all([
                 supabase.from("social_platforms").select("*").eq("is_active", true).order("sort_order"),
                 supabase.from("social_categories").select("*").eq("is_active", true).order("sort_order"),
-                supabase.from("social_services").select("*").eq("is_active", true).order("sort_order"),
+                supabase.from("social_services_public").select("*").order("sort_order"),
             ]);
             setPlatforms((platformData || []) as SocialPlatform[]);
             setCategories((categoryData || []) as SocialCategory[]);
-            setServices((serviceData || []) as SocialService[]);
+            setServices((serviceData || []) as PublicSocialService[]);
             setLoading(false);
         }
         loadCatalog();
@@ -392,7 +387,7 @@ export default function SocialServicesPage() {
                                                 </div>
                                                 <div className="mt-4 flex items-center justify-between gap-3">
                                                     <div>
-                                                        <span className="block text-xs text-[var(--text-muted)]">قیمت پایه</span>
+                                                        <span className="block text-xs text-[var(--text-muted)]">قیمت واحد</span>
                                                         <strong className="mt-1 block">{rate == null ? "استعلامی" : `${formatNumber(Math.round(rate))} ریال`}</strong>
                                                     </div>
                                                     <Link href={`/social/order?service=${service.id}`} className={`inline-flex items-center justify-center gap-2 rounded-2xl text-white px-4 py-3 font-black hover:opacity-90 transition ${theme.accent}`}>سفارش <ArrowLeft size={17} /></Link>
