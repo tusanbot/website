@@ -45,7 +45,9 @@ export default function RegisterForm({ onLogin }: Props) {
                 password,
             });
 
-            if (error) throw error;
+            if (error) {
+                throw new Error('SIGNUP_FAILED');
+            }
 
             const user = data.user;
 
@@ -65,8 +67,8 @@ export default function RegisterForm({ onLogin }: Props) {
             setSuccess(
                 'ثبت‌نام انجام شد. اگر تأیید ایمیل فعال باشد، لطفاً ایمیل خود را بررسی کنید.'
             );
-        } catch (err: any) {
-            setError(err?.message || 'ثبت‌نام انجام نشد.');
+        } catch {
+            setError('ثبت‌نام انجام نشد. لطفاً اطلاعات را بررسی کرده و دوباره تلاش کنید.');
         } finally {
             setLoading(false);
         }
