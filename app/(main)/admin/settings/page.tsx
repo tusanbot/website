@@ -5,7 +5,8 @@ import { GlassPanel, SectionHeader, TusanButton } from "@/components/ui";
 
 type Config = {
   business: { address?: string; phone?: string; email?: string; telegram?: string; eitaa?: string; rubika?: string };
-  social: { enabled?: boolean };
+  assets: { logoUrl?: string; iconUrl?: string; faviconUrl?: string };
+  social: { enabled?: boolean; icons?: { telegram?: string; eitaa?: string; rubika?: string } };
   display: { showAnnouncements?: boolean; showRegistrations?: boolean };
   orders: { enabled?: boolean; closedMessage?: string };
   announcements: { maxHomeItems?: number; showUndated?: boolean };
@@ -14,7 +15,8 @@ type Config = {
 
 const defaults: Config = {
   business: { address: "", phone: "", email: "", telegram: "", eitaa: "", rubika: "" },
-  social: { enabled: true },
+  assets: { logoUrl: "", iconUrl: "", faviconUrl: "" },
+  social: { enabled: true, icons: { telegram: "", eitaa: "", rubika: "" } },
   display: { showAnnouncements: true, showRegistrations: true },
   orders: { enabled: true, closedMessage: "ثبت سفارش موقتاً غیرفعال است." },
   announcements: { maxHomeItems: 4, showUndated: true },
@@ -32,7 +34,13 @@ export default function AdminSettingsPage() {
     fetch("/api/admin/site-settings").then((r) => r.json()).then((data) => {
       if (data.success) {
         setSite((prev) => ({ ...prev, ...data.settings }));
-        setConfig({ ...defaults, ...(data.settings.config || {}), business: { ...defaults.business, ...(data.settings.config?.business || {}) } });
+        setConfig({
+          ...defaults,
+          ...(data.settings.config || {}),
+          business: { ...defaults.business, ...(data.settings.config?.business || {}) },
+          assets: { ...defaults.assets, ...(data.settings.config?.assets || {}) },
+          social: { ...defaults.social, ...(data.settings.config?.social || {}), icons: { ...defaults.social.icons, ...(data.settings.config?.social?.icons || {}) } },
+        });
       }
     }).finally(() => setLoading(false));
   }, []);
@@ -46,6 +54,8 @@ export default function AdminSettingsPage() {
   }
 
   const updateBusiness = (key: keyof Config["business"], value: string) => setConfig((prev) => ({ ...prev, business: { ...prev.business, [key]: value } }));
+  const updateAsset = (key: keyof Config["assets"], value: string) => setConfig((prev) => ({ ...prev, assets: { ...prev.assets, [key]: value } }));
+  const updateSocialIcon = (key: keyof NonNullable<Config["social"]["icons"]>, value: string) => setConfig((prev) => ({ ...prev, social: { ...prev.social, icons: { ...prev.social.icons, [key]: value } } }));
 
   if (loading) return <div dir="rtl" className="p-8 text-center">در حال دریافت تنظیمات...</div>;
 
@@ -59,6 +69,20 @@ export default function AdminSettingsPage() {
           <div className="grid md:grid-cols-2 gap-4">
             {[["site_name","نام سایت"],["site_description","توضیح سایت"]].map(([key,label]) => <label key={key} className="font-bold text-sm">{label}<input value={(site as any)[key]} onChange={(e) => setSite({ ...site, [key]: e.target.value })} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label>)}
             {([["address","آدرس"],["phone","تلفن"],["email","ایمیل"],["telegram","آیدی تلگرام"],["eitaa","آیدی ایتا"],["rubika","آیدی روبیکا"]] as const).map(([key,label]) => <label key={key} className="font-bold text-sm">{label}<input value={config.business[key] || ""} onChange={(e) => updateBusiness(key, e.target.value)} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label>)}
+          </div>
+        </GlassPanel>
+
+        <GlassPanel className="p-6 space-y-6">
+          <div><h2 className="text-xl font-black">لوگو، آیکون و فاوآیکون</h2><p className="mt-2 text-sm text-[var(--text-muted)]">آدرس مستقیم فایل تصویر را وارد کنید. برای تغییر فایل کافی است URL جدید را جایگزین کنید؛ نیازی به تغییر کد سایت نیست.</p></div>
+          <div className="grid md:grid-cols-3 gap-4">
+            {([["logoUrl","آدرس لوگوی اصلی"],["iconUrl","آدرس آیکون سایت / PWA"],["faviconUrl","آدرس فاوآیکون"]] as const).map(([key,label]) => <label key={key} className="font-bold text-sm">{label}<input type="url" dir="ltr" placeholder="https://..." value={config.assets[key] || ""} onChange={(e) => updateAsset(key, e.target.value)} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" />{config.assets[key] && <img src={config.assets[key]} alt="پیش‌نمایش" className="mt-3 h-16 w-16 rounded-xl object-contain border border-[var(--border)] bg-white p-1" onError={(e) => { e.currentTarget.style.display = "none"; }} />}</label>)}
+          </div>
+        </GlassPanel>
+
+        <GlassPanel className="p-6 space-y-6">
+          <div><h2 className="text-xl font-black">آیکون شبکه‌های اجتماعی</h2><p className="mt-2 text-sm text-[var(--text-muted)]">برای هر پیام‌رسان می‌توان آیکون اختصاصی تعیین کرد. اگر خالی باشد، آیکون پیش‌فرض فعلی استفاده می‌شود.</p></div>
+          <div className="grid md:grid-cols-3 gap-4">
+            {([["telegram","تلگرام"],["eitaa","ایتا"],["rubika","روبیکا"]] as const).map(([key,label]) => <label key={key} className="font-bold text-sm">آیکون {label}<input type="url" dir="ltr" placeholder="https://..." value={config.social.icons?.[key] || ""} onChange={(e) => updateSocialIcon(key, e.target.value)} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" />{config.social.icons?.[key] && <img src={config.social.icons[key]} alt="پیش‌نمایش" className="mt-3 h-10 w-10 rounded-lg object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />}</label>)}
           </div>
         </GlassPanel>
 
