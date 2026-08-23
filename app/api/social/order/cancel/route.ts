@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,18 @@ export async function POST(request: NextRequest) {
         const userId = await getUserId(request);
         if (!userId) return NextResponse.json({ error: "احراز هویت لازم است." }, { status: 401 });
 
+        const bodySizeError = rejectOversizedJsonBody(request, 4 * 1024);
+        if (bodySizeError) return bodySizeError;
+
+        const rateLimitResponse = await checkRateLimit({
+            scope: "social:order:cancel",
+            request,
+            userId,
+            limit: 10,
+            windowSeconds: 60,
+        });
+        if (rateLimitResponse) return rateLimitResponse;
+
         const body = await request.json().catch(() => null) as { orderId?: unknown } | null;
         const orderId = typeof body?.orderId === "string" ? body.orderId.trim() : "";
         if (!orderId) return NextResponse.json({ error: "شناسه سفارش الزامی است." }, { status: 400 });
@@ -38,7 +51,10 @@ export async function POST(request: NextRequest) {
             .select("id,user_id,status,provider_order_id")
             .eq("id", orderId)
             .maybeSingle();
-        if (error) throw new Error(error.message);
+        if (error) {
+            console.error("[social/order/cancel] order lookup failed", error);
+            return NextResponse.json({ error: "بررسی سفارش ناموفق بود." }, { status: 500 });
+        }
         if (!order || order.user_id !== userId) return NextResponse.json({ error: "سفارش پیدا نشد." }, { status: 404 });
 
         const cancellable = ["pending", "awaiting_payment", "failed"].includes(order.status);
@@ -54,11 +70,14 @@ export async function POST(request: NextRequest) {
             .eq("id", order.id)
             .eq("user_id", userId)
             .in("status", ["pending", "awaiting_payment", "failed"]);
-        if (updateError) throw new Error(updateError.message);
+        if (updateError) {
+            console.error("[social/order/cancel] order update failed", updateError);
+            return NextResponse.json({ error: "لغو سفارش ناموفق بود." }, { status: 500 });
+        }
 
         return NextResponse.json({ success: true });
     } catch (error) {
-        console.error("[social/order/cancel]", error);
-        return NextResponse.json({ error: error instanceof Error ? error.message : "لغو سفارش ناموفق بود." }, { status: 500 });
+        console.error("[social/order/cancel] unexpected error", error);
+        return NextResponse.json({ error: "خطایی هنگام لغو سفارش رخ داد." }, { status: 500 });
     }
 }
