@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
-import ServiceFormBuilder, { FormField } from "@/components/ServiceFormBuilderV2";
+import ServiceFormBuilder from "@/components/ServiceFormBuilderV2";
+import type { FormField } from "@/types/forms";
 import FormHierarchyManager from "@/components/FormHierarchyManager";
 import { GlassPanel, TusanCard, TusanButton, TusanInput, SectionHeader } from "@/components/ui";
 
