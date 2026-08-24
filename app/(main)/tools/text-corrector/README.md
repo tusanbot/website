@@ -1,0 +1,1 @@
+AI text corrector tool. Uses the existing AI profile/session infrastructure and /api/ai/text-corrector.
