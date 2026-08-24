@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { createSessionToken, decryptApiKey, hashApiKey, hashSessionToken } from "@/lib/ai/crypto";
+import { createSessionToken, decryptApiKey, encryptApiKey, hashApiKey, hashSessionToken } from "@/lib/ai/crypto";
 
 export const AI_SESSION_COOKIE = "tusan_ai_session";
 const SESSION_DAYS = 30;
@@ -8,19 +8,19 @@ const SESSION_DAYS = 30;
 export async function validateGeminiKey(apiKey: string) {
   const key = apiKey.trim();
   if (!key) return { ok: false as const, message: "کلید API را وارد کنید." };
-  const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(key), {
-    method: "GET",
-    cache: "no-store",
-    signal: AbortSignal.timeout(10000),
-  });
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) return { ok: false as const, message: "کلید Gemini معتبر نیست یا دسترسی لازم را ندارد." };
-    if (response.status === 429) return { ok: false as const, message: "محدودیت درخواست Gemini فعال است؛ کمی بعد دوباره تلاش کنید." };
-    return { ok: false as const, message: "اعتبارسنجی کلید Gemini انجام نشد." };
+  try {
+    const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(key), { method: "GET", cache: "no-store", signal: AbortSignal.timeout(10000) });
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) return { ok: false as const, message: "کلید Gemini معتبر نیست یا دسترسی لازم را ندارد." };
+      if (response.status === 429) return { ok: false as const, message: "محدودیت درخواست Gemini فعال است؛ کمی بعد دوباره تلاش کنید." };
+      return { ok: false as const, message: "اعتبارسنجی کلید Gemini انجام نشد." };
+    }
+    const data = await response.json() as { models?: Array<{ name?: string }> };
+    const hasFlash = data.models?.some((model) => model.name === "models/gemini-2.5-flash");
+    return { ok: true as const, model: hasFlash ? "gemini-2.5-flash" : "gemini-2.0-flash" };
+  } catch {
+    return { ok: false as const, message: "اتصال به Gemini برقرار نشد؛ اتصال اینترنت را بررسی کنید." };
   }
-  const data = await response.json() as { models?: Array<{ name?: string }> };
-  const hasFlash = data.models?.some((model) => model.name === "models/gemini-2.5-flash");
-  return { ok: true as const, model: hasFlash ? "gemini-2.5-flash" : "gemini-2.0-flash" };
 }
 
 export async function createAiSession(apiKey: string) {
