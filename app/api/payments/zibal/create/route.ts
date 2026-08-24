@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
     });
     if (rateLimitResponse) return rateLimitResponse;
 
-    const body = await request.json().catch(() => null);
+    const body = await request.json().catch((): null => null);
     const orderId = String(body?.orderId || "").trim();
     if (!orderId) {
       return NextResponse.json({ error: "شناسه سفارش الزامی است." }, { status: 400 });
@@ -74,8 +74,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "این سفارش قبلاً پرداخت شده است." }, { status: 409 });
     }
 
-    // Treat an existing active payment as the canonical payment attempt for this order.
-    // This prevents double gateway requests caused by double-clicks, retries or concurrent tabs.
     const { data: existingActive, error: existingActiveError } = await supabase
       .from("payments")
       .select("id,authority,status")
@@ -159,10 +157,7 @@ export async function POST(request: NextRequest) {
 
       const { error: updateError } = await supabase
         .from("payments")
-        .update({
-          authority: result.authority,
-          status: "redirected",
-        })
+        .update({ authority: result.authority, status: "redirected" })
         .eq("id", payment.id)
         .eq("user_id", user.id)
         .eq("status", "pending");
@@ -175,16 +170,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ paymentId: payment.id, paymentUrl: result.paymentUrl });
     } catch (gatewayError) {
       console.error("[payments/zibal/create] gateway error", gatewayError);
-      await supabase
-        .from("payments")
-        .update({ status: "failed", gateway_response: { message: "gateway_error" } })
-        .eq("id", payment.id)
-        .eq("status", "pending");
-
-      return NextResponse.json(
-        { error: "ارتباط با درگاه پرداخت ناموفق بود. لطفاً دوباره تلاش کنید." },
-        { status: 502 }
-      );
+      await supabase.from("payments").update({ status: "failed", gateway_response: { message: "gateway_error" } }).eq("id", payment.id).eq("status", "pending");
+      return NextResponse.json({ error: "ارتباط با درگاه پرداخت ناموفق بود. لطفاً دوباره تلاش کنید." }, { status: 502 });
     }
   } catch (error) {
     console.error("[payments/zibal/create] unexpected error", error);
