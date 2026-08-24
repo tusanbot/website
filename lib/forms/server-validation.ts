@@ -1,4 +1,4 @@
-import type { FormField, FormSchema } from '@/types/forms';
+import type { FormField, FormSchema, FieldCondition } from '@/types/forms';
 
 type FormValue = unknown;
 
@@ -14,11 +14,12 @@ export type FormValidationResult = {
 };
 
 function isVisible(field: FormField, values: Record<string, FormValue>): boolean {
-  const conditions = field.conditions ?? [];
+  const conditions: FieldCondition[] = field.conditions ?? [];
   if (!conditions.length) return true;
 
-  const results = conditions.map((condition) => {
-    const value = values[condition.fieldId];
+  const results = conditions.map((condition: FieldCondition) => {
+    const conditionFieldId = condition.fieldId ?? condition.field;
+    const value = values[conditionFieldId];
     switch (condition.operator) {
       case 'equals': return value === condition.value;
       case 'not_equals': return value !== condition.value;
