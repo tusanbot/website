@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAiProfile } from '@/lib/ai/server';
+import { getProfileApiKey, requireAiProfile } from '@/lib/ai/server';
 
 const prompts: Record<string, string> = {
   grammar: 'غلط‌های املایی و دستوری فارسی را اصلاح کن؛ معنی و لحن متن را حفظ کن.',
@@ -13,15 +13,15 @@ const prompts: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const profile = await requireAiProfile();
-    if (!profile) return NextResponse.json({ error: 'AI_PROFILE_REQUIRED' }, { status: 401 });
+    const session = await requireAiProfile();
     const body = await req.json();
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     const mode = typeof body.mode === 'string' ? body.mode : 'grammar';
     if (!text) return NextResponse.json({ error: 'متنی برای پردازش ارسال نشده است.' }, { status: 400 });
+
     const instruction = prompts[mode] ?? prompts.grammar;
-    const apiKey = profile.apiKey;
-    const model = profile.model || 'gemini-2.5-flash';
+    const apiKey = await getProfileApiKey(session.profile.id);
+    const model = session.profile.model || 'gemini-2.5-flash';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -31,11 +31,12 @@ export async function POST(req: NextRequest) {
     if (response.status === 401 || response.status === 403) return NextResponse.json({ error: 'کلید Gemini معتبر نیست یا دسترسی آن کافی نیست.' }, { status: 401 });
     if (response.status === 429) return NextResponse.json({ error: 'سهمیه یا محدودیت درخواست Gemini پر شده است. کمی بعد دوباره تلاش کنید.' }, { status: 429 });
     if (!response.ok) return NextResponse.json({ error: 'خطا در ارتباط با Gemini.' }, { status: 502 });
-    const data = await response.json();
-    const output = data?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text || '').join('').trim();
+    const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+    const output = data.candidates?.[0]?.content?.parts?.map((part) => part.text || '').join('').trim();
     if (!output) return NextResponse.json({ error: 'Gemini متن قابل استفاده‌ای برنگرداند.' }, { status: 502 });
     return NextResponse.json({ text: output });
   } catch (error) {
+    if (error instanceof Error && error.message === 'AI_PROFILE_REQUIRED') return NextResponse.json({ error: 'AI_PROFILE_REQUIRED' }, { status: 401 });
     if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) return NextResponse.json({ error: 'زمان پاسخ Gemini تمام شد. دوباره تلاش کنید.' }, { status: 504 });
     console.error('text-corrector:', error);
     return NextResponse.json({ error: 'پردازش متن انجام نشد.' }, { status: 500 });
