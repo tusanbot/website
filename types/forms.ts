@@ -1,44 +1,12 @@
 export type FieldType =
-  | "text"
-  | "textarea"
-  | "number"
-  | "phone"
-  | "email"
-  | "date"
-  | "select"
-  | "multiselect"
-  | "boolean"
-  | "checkbox"
-  | "password"
-  | "national_code";
+  | "text" | "textarea" | "number" | "phone" | "email" | "date"
+  | "select" | "multiselect" | "boolean" | "checkbox" | "password" | "national_code"
+  | "repeatable";
 
-export type FormOption = {
-  label: string;
-  value: string;
-};
-
-export type ConditionOperator =
-  | "equals"
-  | "not_equals"
-  | "contains"
-  | "not_contains"
-  | "is_true"
-  | "is_false";
-
-export type FieldCondition = {
-  fieldId?: string;
-  field: string;
-  operator: ConditionOperator;
-  value?: string | boolean;
-};
-
-export type FieldValidationRules = {
-  minLength?: number;
-  maxLength?: number;
-  min?: number;
-  max?: number;
-  pattern?: string;
-};
+export type FormOption = { label: string; value: string };
+export type ConditionOperator = "equals" | "not_equals" | "contains" | "not_contains" | "is_true" | "is_false";
+export type FieldCondition = { fieldId?: string; field: string; operator: ConditionOperator; value?: string | boolean };
+export type FieldValidationRules = { minLength?: number; maxLength?: number; min?: number; max?: number; pattern?: string };
 
 export type FormField = {
   id: string;
@@ -53,8 +21,9 @@ export type FormField = {
   conditionLogic?: "AND" | "OR";
   defaultValue?: string | number | boolean | string[];
   validation?: FieldValidationRules;
+  fields?: FormField[];
+  minItems?: number;
+  maxItems?: number;
 };
 
-export type FormSchema = {
-  fields: FormField[];
-};
+export type FormSchema = { fields: FormField[] };
