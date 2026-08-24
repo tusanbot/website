@@ -1,0 +1,1 @@
+Server-side form validation is implemented in server-validation.ts. Integrate validateFormData() at the order creation boundary before inserting orders.
