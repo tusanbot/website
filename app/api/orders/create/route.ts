@@ -50,6 +50,7 @@ export async function POST(request: Request): Promise<Response> {
     const validation = validateFormData(schema, body.formData);
     if (!validation.valid) return NextResponse.json({ error: 'اطلاعات فرم کامل یا معتبر نیست.', errors: validation.errors }, { status: 422 });
 
+    // Keep every order tied to the exact form version used for validation.
     const { data: order, error: orderError } = await supabase.from('orders').insert({ user_id: user.id, service_id: service.id, form_id: formId, form_version_id: formVersionId, tracking_code: generateTrackingCode(), status: 'registered', form_data: validation.data, form_schema_snapshot: schema, price: orderPrice }).select('id,tracking_code,price,form_version_id').single();
     if (orderError) throw new Error(orderError.message);
     return NextResponse.json({ order });
