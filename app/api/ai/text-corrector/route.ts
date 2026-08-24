@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAiProfile } from '@/lib/ai/server';
 
-const prompts: Record<string,string> = {
+const prompts: Record<string, string> = {
   grammar: 'غلط‌های املایی و دستوری فارسی را اصلاح کن؛ معنی و لحن متن را حفظ کن.',
   punctuation: 'علائم نگارشی فارسی، نقطه، ویرگول، دو نقطه، علامت سؤال و پاراگراف‌بندی را اصلاح کن.',
   spacing: 'فاصله‌گذاری و نیم‌فاصله‌های فارسی را استاندارد کن؛ به کلمات و معنی دست نزن.',
@@ -23,7 +23,8 @@ export async function POST(req: NextRequest) {
     const apiKey = profile.apiKey;
     const model = profile.model || 'gemini-2.5-flash';
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: `${instruction}\n\nفقط متن نهایی را برگردان و هیچ توضیح اضافه‌ای ننویس.\n\nمتن:\n${text}` }] }] }),
       signal: AbortSignal.timeout(30000),
     });
@@ -35,7 +36,8 @@ export async function POST(req: NextRequest) {
     if (!output) return NextResponse.json({ error: 'Gemini متن قابل استفاده‌ای برنگرداند.' }, { status: 502 });
     return NextResponse.json({ text: output });
   } catch (error) {
-    if (error instanceof Error && error.name === 'TimeoutError') return NextResponse.json({ error: 'زمان پاسخ Gemini تمام شد. دوباره تلاش کنید.' }, { status: 504 });
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) return NextResponse.json({ error: 'زمان پاسخ Gemini تمام شد. دوباره تلاش کنید.' }, { status: 504 });
+    console.error('text-corrector:', error);
     return NextResponse.json({ error: 'پردازش متن انجام نشد.' }, { status: 500 });
   }
 }
