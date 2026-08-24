@@ -19,6 +19,8 @@ function isVisible(field: FormField, values: Record<string, FormValue>): boolean
 
   const results = conditions.map((condition: FieldCondition) => {
     const conditionFieldId = condition.fieldId ?? condition.field;
+    if (!conditionFieldId) return false;
+
     const value = values[conditionFieldId];
     switch (condition.operator) {
       case 'equals': return value === condition.value;
@@ -48,7 +50,7 @@ function validateField(field: FormField, value: FormValue): string | null {
   }
 
   if (field.type === 'email' && typeof value === 'string') {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'ایمیل معتبر نیست.';
+    if (!/^\S+@\S+\.\S+$/.test(value)) return 'ایمیل معتبر نیست.';
   }
 
   if (field.type === 'phone' && typeof value === 'string') {
