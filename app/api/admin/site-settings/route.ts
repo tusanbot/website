@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
   const admin = await requireAdmin(request);
   if (isNextResponse(admin)) return admin;
   try {
-    const body = await request.json().catch(() => null);
+    const body = await request.json().catch((): null => null);
     if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ success: false, error: "اطلاعات درخواست نامعتبر است." }, { status: 400 });
     const current = await supabaseAdmin().from("site_settings").select("id,config").limit(1).single();
     if (current.error) throw current.error;
