@@ -32,6 +32,14 @@ export type FieldCondition = {
   value?: string | boolean;
 };
 
+export type FieldValidationRules = {
+  minLength?: number;
+  maxLength?: number;
+  min?: number;
+  max?: number;
+  pattern?: string;
+};
+
 export type FormField = {
   id: string;
   type: FieldType;
@@ -44,6 +52,7 @@ export type FormField = {
   conditions?: FieldCondition[];
   conditionLogic?: "AND" | "OR";
   defaultValue?: string | number | boolean | string[];
+  validation?: FieldValidationRules;
 };
 
 export type FormSchema = {
