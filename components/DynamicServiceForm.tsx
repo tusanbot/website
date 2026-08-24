@@ -1,17 +1,284 @@
 "use client";
-import { useEffect,useMemo,useState } from "react";
-import type { ConditionOperator,FieldCondition,FormField } from "@/types/forms";
-import DatePicker from "react-multi-date-picker"; import persian from "react-date-object/calendars/persian"; import persian_fa from "react-date-object/locales/persian_fa";
-type Props={fields:FormField[];onSubmit:(formData:Record<string,any>)=>void;submitting?:boolean};
-const empty=(f:FormField):any=>f.defaultValue!==undefined?f.defaultValue:f.type==="boolean"?null:f.type==="checkbox"?false:f.type==="multiselect"?[]:f.type==="repeatable"?[]:"";
-const norm=(v:any)=>v==null?"":String(v).trim();
-function evalC(c:FieldCondition,d:Record<string,any>){const a=d[c.field],e=c.value;switch(c.operator as ConditionOperator){case"equals":return Array.isArray(a)?a.some(v=>norm(v)===norm(e)):norm(a)===norm(e);case"not_equals":return Array.isArray(a)?!a.some(v=>norm(v)===norm(e)):norm(a)!==norm(e);case"contains":return Array.isArray(a)?a.some(v=>norm(v)===norm(e)):norm(a).toLowerCase().includes(norm(e).toLowerCase());case"not_contains":return Array.isArray(a)?!a.some(v=>norm(v)===norm(e)):!norm(a).toLowerCase().includes(norm(e).toLowerCase());case"is_true":return a===true;case"is_false":return a===false;default:return false}}
-function isVisible(f:FormField,d:Record<string,any>){return !f.conditions?.length||f.conditions.every(c=>c.field in d&&evalC(c,d))}
-function visible(fields:FormField[],d:Record<string,any>){return fields.filter(f=>isVisible(f,d))}
-function isEmpty(v:any){return v==null||v===""||(Array.isArray(v)&&v.length===0)}
-function validate(f:FormField,v:any):string|null{if(f.required&&isEmpty(v))return"تکمیل این فیلد الزامی است.";if(isEmpty(v))return null;if(f.type==="repeatable"){if(!Array.isArray(v))return"مقدار گروه نامعتبر است.";if(f.minItems!==undefined&&v.length<f.minItems)return`حداقل ${f.minItems} مورد وارد کنید.`;if(f.maxItems!==undefined&&v.length>f.maxItems)return`حداکثر ${f.maxItems} مورد مجاز است.`;for(const item of v)for(const c of f.fields||[]){if(!isVisible(c,item))continue;const e=validate(c,item[c.name]);if(e)return`${c.label}: ${e}`}}if(f.type==="number"&&!Number.isFinite(Number(v)))return"مقدار باید عددی باشد.";if(f.type==="email"&&typeof v==="string"&&!/^\S+@\S+\.\S+$/.test(v))return"ایمیل معتبر نیست.";if(f.type==="phone"&&typeof v==="string"&&!/^(?:\+98|0098|0)?9\d{9}$/.test(v.replace(/[\s-]/g,"")))return"شماره موبایل معتبر نیست.";if(f.type==="national_code"&&typeof v==="string"&&!/^\d{10}$/.test(v))return"کد ملی باید ۱۰ رقم باشد.";const r=f.validation;if(r){if(r.minLength!==undefined&&String(v).length<r.minLength)return`حداقل ${r.minLength} کاراکتر وارد کنید.`;if(r.maxLength!==undefined&&String(v).length>r.maxLength)return`حداکثر ${r.maxLength} کاراکتر مجاز است.`;if(f.type==="number"||typeof v==="number"){const n=Number(v);if(r.min!==undefined&&n<r.min)return`مقدار باید حداقل ${r.min} باشد.`;if(r.max!==undefined&&n>r.max)return`مقدار باید حداکثر ${r.max} باشد.`}if(r.pattern!==undefined){try{if(!new RegExp(r.pattern).test(String(v)))return"فرمت واردشده صحیح نیست."}catch{return"قانون اعتبارسنجی فرم نامعتبر است."}}}return null}
-export default function DynamicServiceForm({fields,onSubmit,submitting=false}:Props){const[data,setData]=useState<Record<string,any>>({});const[errors,setErrors]=useState<Record<string,string>>({});useEffect(()=>{const x:Record<string,any>={};fields.forEach(f=>x[f.name]=empty(f));setData(x);setErrors({})},[fields]);const shown=useMemo(()=>visible(fields,data),[fields,data]);const setValue=(n:string,v:any)=>{setData(p=>({...p,[n]:v}));setErrors(p=>({...p,[n]:validate(fields.find(f=>f.name===n)!,v)||""}))};
-const submit=(e:React.FormEvent)=>{e.preventDefault();const er:Record<string,string>={};for(const f of shown){const x=validate(f,data[f.name]);if(x)er[f.name]=x}setErrors(er);if(Object.keys(er).length)return;const out:Record<string,any>={};shown.forEach(f=>out[f.name]=f.type==="number"?(data[f.name]===""?null:Number(data[f.name])):data[f.name]);onSubmit(out)};
-const base="w-full border rounded-xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-[#09967C]";
-const render=(f:FormField,v:any,set:(x:any)=>void,err?:string)=><div key={f.id} className="space-y-2"><label className="block font-bold text-gray-800">{f.label}{f.required&&<span className="text-red-500 mr-1">*</span>}</label>{f.description&&<p className="text-sm text-gray-500 leading-6">{f.description}</p>}{f.type==="text"&&<input value={v??""} onChange={e=>set(e.target.value)} placeholder={f.placeholder||""} disabled={submitting} className={base}/>} {f.type==="password"&&<input type="password" value={v??""} onChange={e=>set(e.target.value)} placeholder={f.placeholder||""} disabled={submitting} className={base}/>} {f.type==="textarea"&&<textarea value={v??""} onChange={e=>set(e.target.value)} rows={5} disabled={submitting} className={`${base} resize-none`}/>} {f.type==="number"&&<input type="number" value={v??""} onChange={e=>set(e.target.value)} disabled={submitting} className={base}/>} {f.type==="phone"&&<input type="tel" value={v??""} onChange={e=>set(e.target.value)} dir="ltr" disabled={submitting} className={`${base} text-right`}/>} {f.type==="national_code"&&<input inputMode="numeric" maxLength={10} value={v??""} onChange={e=>set(e.target.value.replace(/\D/g,""))} dir="ltr" disabled={submitting} className={`${base} text-right`}/>} {f.type==="email"&&<input type="email" value={v??""} onChange={e=>set(e.target.value)} dir="ltr" className={`${base} text-left`}/>} {f.type==="date"&&<DatePicker value={v||""} onChange={d=>set(d?d.format("YYYY/MM/DD"):"")} calendar={persian} locale={persian_fa} format="YYYY/MM/DD" disabled={submitting} inputClass={`${base} cursor-pointer`} containerClassName="w-full"/>} {f.type==="select"&&<select value={v??""} onChange={e=>set(e.target.value)} disabled={submitting} className={base}><option value="">{f.placeholder||"انتخاب کنید"}</option>{(f.options||[]).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}</select>} {f.type==="multiselect"&&<div className="space-y-2 border rounded-xl p-4 bg-white">{(f.options||[]).map(o=>{const s=Array.isArray(v)&&v.includes(o.value);return<label key={o.value} className="flex items-center gap-3"><input type="checkbox" checked={s} onChange={e=>set(e.target.checked?[...(Array.isArray(v)?v:[]),o.value]:(Array.isArray(v)?v:[]).filter((x:string)=>x!==o.value))} className="accent-[#09967C]"/><span>{o.label}</span></label>})}</div>} {f.type==="boolean"&&<div className="grid grid-cols-2 gap-3">{[[true,"بله"],[false,"خیر"]].map(([x,l])=><label key={String(x)} className={`flex justify-center gap-2 border rounded-xl p-4 ${v===x?"border-[#09967C]":"border-gray-200"}`}><input type="radio" checked={v===x} onChange={()=>set(x)} className="accent-[#09967C]"/><span>{l as string}</span></label>)}</div>} {f.type==="checkbox"&&<label className="flex items-center gap-3 border rounded-xl p-4"><input type="checkbox" checked={Boolean(v)} onChange={e=>set(e.target.checked)} className="accent-[#09967C]"/><span>{f.placeholder||f.label}</span></label>} {f.type==="repeatable"&&<div className="border-2 border-dashed border-[#09967C]/30 rounded-2xl p-4 space-y-4"><div className="flex justify-between"><b>موارد {f.label}</b><button type="button" onClick={()=>set([...(Array.isArray(v)?v:[]),Object.fromEntries((f.fields||[]).map(c=>[c.name,empty(c)]))])} className="text-[#09967C] font-bold">+ افزودن مورد</button></div>{(Array.isArray(v)?v:[]).map((item:any,i:number)=><div key={i} className="rounded-xl border bg-gray-50 p-4 space-y-4"><div className="flex justify-between"><b>مورد {i+1}</b><button type="button" onClick={()=>set((v as any[]).filter((_,n)=>n!==i))} className="text-red-600 text-sm">حذف</button></div>{(f.fields||[]).filter(c=>isVisible(c,item)).map(c=>render(c,item[c.name],x=>set((v as any[]).map((row,n)=>n===i?{...row,[c.name]:x}:row)))}</div>)}</div>} {err&&<p className="text-sm text-red-600" role="alert">{err}</p>}</div>;
-return <form dir="rtl" onSubmit={submit} className="space-y-6">{shown.map(f=>render(f,data[f.name],v=>setValue(f.name,v),errors[f.name]))}<button type="submit" disabled={submitting} className="w-full rounded-xl bg-[#09967C] text-white py-3 font-bold">{submitting?"در حال ارسال...":"ثبت اطلاعات"}</button></form>}
+
+import { useEffect, useMemo, useState } from "react";
+import type { ConditionOperator, FieldCondition, FormField } from "@/types/forms";
+import DatePicker from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
+
+type Props = {
+  fields: FormField[];
+  onSubmit: (formData: Record<string, any>) => void;
+  submitting?: boolean;
+};
+
+const emptyValue = (field: FormField): any => {
+  if (field.defaultValue !== undefined) return field.defaultValue;
+  if (field.type === "boolean") return null;
+  if (field.type === "checkbox") return false;
+  if (field.type === "multiselect" || field.type === "repeatable") return [];
+  return "";
+};
+
+const normalize = (value: any) => (value == null ? "" : String(value).trim());
+
+function evaluateCondition(condition: FieldCondition, data: Record<string, any>) {
+  const actual = data[condition.field];
+  const expected = condition.value;
+
+  switch (condition.operator as ConditionOperator) {
+    case "equals":
+      return Array.isArray(actual)
+        ? actual.some((value) => normalize(value) === normalize(expected))
+        : normalize(actual) === normalize(expected);
+    case "not_equals":
+      return Array.isArray(actual)
+        ? !actual.some((value) => normalize(value) === normalize(expected))
+        : normalize(actual) !== normalize(expected);
+    case "contains":
+      return Array.isArray(actual)
+        ? actual.some((value) => normalize(value) === normalize(expected))
+        : normalize(actual).toLowerCase().includes(normalize(expected).toLowerCase());
+    case "not_contains":
+      return Array.isArray(actual)
+        ? !actual.some((value) => normalize(value) === normalize(expected))
+        : !normalize(actual).toLowerCase().includes(normalize(expected).toLowerCase());
+    case "is_true":
+      return actual === true;
+    case "is_false":
+      return actual === false;
+    default:
+      return false;
+  }
+}
+
+function isVisible(field: FormField, data: Record<string, any>) {
+  return !field.conditions?.length || field.conditions.every((condition) => condition.field in data && evaluateCondition(condition, data));
+}
+
+function isEmpty(value: any) {
+  return value == null || value === "" || (Array.isArray(value) && value.length === 0);
+}
+
+function validateField(field: FormField, value: any): string | null {
+  if (field.required && isEmpty(value)) return "تکمیل این فیلد الزامی است.";
+  if (isEmpty(value)) return null;
+
+  if (field.type === "repeatable") {
+    if (!Array.isArray(value)) return "مقدار گروه نامعتبر است.";
+    if (field.minItems !== undefined && value.length < field.minItems) return `حداقل ${field.minItems} مورد وارد کنید.`;
+    if (field.maxItems !== undefined && value.length > field.maxItems) return `حداکثر ${field.maxItems} مورد مجاز است.`;
+
+    for (const item of value) {
+      for (const child of field.fields || []) {
+        if (!isVisible(child, item)) continue;
+        const error = validateField(child, item[child.name]);
+        if (error) return `${child.label}: ${error}`;
+      }
+    }
+  }
+
+  if (field.type === "number" && !Number.isFinite(Number(value))) return "مقدار باید عددی باشد.";
+  if (field.type === "email" && typeof value === "string" && !/^\S+@\S+\.\S+$/.test(value)) return "ایمیل معتبر نیست.";
+  if (field.type === "phone" && typeof value === "string" && !/^(?:\+98|0098|0)?9\d{9}$/.test(value.replace(/[\s-]/g, ""))) return "شماره موبایل معتبر نیست.";
+  if (field.type === "national_code" && typeof value === "string" && !/^\d{10}$/.test(value)) return "کد ملی باید ۱۰ رقم باشد.";
+
+  const rules = field.validation;
+  if (rules) {
+    if (rules.minLength !== undefined && String(value).length < rules.minLength) return `حداقل ${rules.minLength} کاراکتر وارد کنید.`;
+    if (rules.maxLength !== undefined && String(value).length > rules.maxLength) return `حداکثر ${rules.maxLength} کاراکتر مجاز است.`;
+
+    if (field.type === "number" || typeof value === "number") {
+      const number = Number(value);
+      if (rules.min !== undefined && number < rules.min) return `مقدار باید حداقل ${rules.min} باشد.`;
+      if (rules.max !== undefined && number > rules.max) return `مقدار باید حداکثر ${rules.max} باشد.`;
+    }
+
+    if (rules.pattern !== undefined) {
+      try {
+        if (!new RegExp(rules.pattern).test(String(value))) return "فرمت واردشده صحیح نیست.";
+      } catch {
+        return "قانون اعتبارسنجی فرم نامعتبر است.";
+      }
+    }
+  }
+
+  return null;
+}
+
+export default function DynamicServiceForm({ fields, onSubmit, submitting = false }: Props) {
+  const [data, setData] = useState<Record<string, any>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const initial: Record<string, any> = {};
+    fields.forEach((field) => {
+      initial[field.name] = emptyValue(field);
+    });
+    setData(initial);
+    setErrors({});
+  }, [fields]);
+
+  const visibleFields = useMemo(() => fields.filter((field) => isVisible(field, data)), [fields, data]);
+
+  const setValue = (name: string, value: any) => {
+    setData((previous) => ({ ...previous, [name]: value }));
+    const field = fields.find((item) => item.name === name);
+    setErrors((previous) => ({ ...previous, [name]: field ? validateField(field, value) || "" : "" }));
+  };
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const nextErrors: Record<string, string> = {};
+
+    visibleFields.forEach((field) => {
+      const error = validateField(field, data[field.name]);
+      if (error) nextErrors[field.name] = error;
+    });
+
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+
+    const output: Record<string, any> = {};
+    visibleFields.forEach((field) => {
+      output[field.name] = field.type === "number" && data[field.name] !== "" ? Number(data[field.name]) : data[field.name];
+    });
+    onSubmit(output);
+  };
+
+  const baseClass = "w-full border rounded-xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-[#09967C]";
+
+  const renderField = (field: FormField, value: any, set: (next: any) => void, error?: string) => {
+    const common = { disabled: submitting };
+
+    return (
+      <div key={field.id} className="space-y-2">
+        <label className="block font-bold text-gray-800">
+          {field.label}
+          {field.required && <span className="text-red-500 mr-1">*</span>}
+        </label>
+        {field.description && <p className="text-sm text-gray-500 leading-6">{field.description}</p>}
+
+        {field.type === "text" && <input {...common} value={value ?? ""} onChange={(e) => set(e.target.value)} placeholder={field.placeholder || ""} className={baseClass} />}
+        {field.type === "password" && <input {...common} type="password" value={value ?? ""} onChange={(e) => set(e.target.value)} placeholder={field.placeholder || ""} className={baseClass} />}
+        {field.type === "textarea" && <textarea {...common} value={value ?? ""} onChange={(e) => set(e.target.value)} rows={5} className={`${baseClass} resize-none`} />}
+        {field.type === "number" && <input {...common} type="number" value={value ?? ""} onChange={(e) => set(e.target.value)} className={baseClass} />}
+        {field.type === "phone" && <input {...common} type="tel" value={value ?? ""} onChange={(e) => set(e.target.value)} dir="ltr" className={`${baseClass} text-right`} />}
+        {field.type === "national_code" && <input {...common} inputMode="numeric" maxLength={10} value={value ?? ""} onChange={(e) => set(e.target.value.replace(/\D/g, ""))} dir="ltr" className={`${baseClass} text-right`} />}
+        {field.type === "email" && <input {...common} type="email" value={value ?? ""} onChange={(e) => set(e.target.value)} dir="ltr" className={`${baseClass} text-left`} />}
+
+        {field.type === "date" && (
+          <DatePicker
+            value={value || ""}
+            onChange={(date) => set(date ? date.format("YYYY/MM/DD") : "")}
+            calendar={persian}
+            locale={persian_fa}
+            format="YYYY/MM/DD"
+            disabled={submitting}
+            inputClass={`${baseClass} cursor-pointer`}
+            containerClassName="w-full"
+          />
+        )}
+
+        {field.type === "select" && (
+          <select {...common} value={value ?? ""} onChange={(e) => set(e.target.value)} className={baseClass}>
+            <option value="">{field.placeholder || "انتخاب کنید"}</option>
+            {(field.options || []).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        )}
+
+        {field.type === "multiselect" && (
+          <div className="space-y-2 border rounded-xl p-4 bg-white">
+            {(field.options || []).map((option) => {
+              const selected = Array.isArray(value) && value.includes(option.value);
+              return (
+                <label key={option.value} className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    onChange={(event) => {
+                      const current = Array.isArray(value) ? value : [];
+                      set(event.target.checked ? [...current, option.value] : current.filter((item: string) => item !== option.value));
+                    }}
+                    className="accent-[#09967C]"
+                  />
+                  <span>{option.label}</span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+
+        {field.type === "boolean" && (
+          <div className="grid grid-cols-2 gap-3">
+            {[[true, "بله"], [false, "خیر"]].map(([optionValue, label]) => (
+              <label key={String(optionValue)} className={`flex justify-center gap-2 border rounded-xl p-4 ${value === optionValue ? "border-[#09967C]" : "border-gray-200"}`}>
+                <input type="radio" checked={value === optionValue} onChange={() => set(optionValue)} className="accent-[#09967C]" />
+                <span>{label as string}</span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {field.type === "checkbox" && (
+          <label className="flex items-center gap-3 border rounded-xl p-4">
+            <input type="checkbox" checked={Boolean(value)} onChange={(e) => set(e.target.checked)} className="accent-[#09967C]" />
+            <span>{field.placeholder || field.label}</span>
+          </label>
+        )}
+
+        {field.type === "repeatable" && (
+          <div className="border-2 border-dashed border-[#09967C]/30 rounded-2xl p-4 space-y-4">
+            <div className="flex justify-between">
+              <b>موارد {field.label}</b>
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={() => set([...(Array.isArray(value) ? value : []), Object.fromEntries((field.fields || []).map((child) => [child.name, emptyValue(child)]))])}
+                className="text-[#09967C] font-bold"
+              >
+                + افزودن مورد
+              </button>
+            </div>
+
+            {(Array.isArray(value) ? value : []).map((item: any, index: number) => (
+              <div key={index} className="rounded-xl border bg-gray-50 p-4 space-y-4">
+                <div className="flex justify-between">
+                  <b>مورد {index + 1}</b>
+                  <button type="button" disabled={submitting} onClick={() => set((value as any[]).filter((_, itemIndex) => itemIndex !== index))} className="text-red-600 text-sm">
+                    حذف
+                  </button>
+                </div>
+
+                {(field.fields || []).filter((child) => isVisible(child, item)).map((child) => (
+                  <div key={child.id}>
+                    {renderField(
+                      child,
+                      item[child.name],
+                      (next) => {
+                        const nextRows = (value as any[]).map((row, rowIndex) => rowIndex === index ? { ...row, [child.name]: next } : row);
+                        set(nextRows);
+                      },
+                      undefined,
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
+      </div>
+    );
+  };
+
+  return (
+    <form dir="rtl" onSubmit={submit} className="space-y-6">
+      {visibleFields.map((field) => renderField(field, data[field.name], (value) => setValue(field.name, value), errors[field.name]))}
+      <button type="submit" disabled={submitting} className="w-full rounded-xl bg-[#09967C] text-white py-3 font-bold">
+        {submitting ? "در حال ارسال..." : "ثبت اطلاعات"}
+      </button>
+    </form>
+  );
+}
