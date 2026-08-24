@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createSupabaseServerClient } from '@/lib/supabaseServer';
+import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { validateFormData } from '@/lib/forms/server-validation';
 import type { FormSchema } from '@/types/forms';
 
@@ -41,11 +41,12 @@ export async function POST(request: Request): Promise<Response> {
 
     let schema = normalizeSchema(service.form_schema);
     let formId: string | null = body.formId ?? null;
+    let orderPrice = Number(service.price || 0);
 
     if (formId) {
       const { data: customForm, error: formError } = await supabase
         .from('custom_forms')
-        .select('id,schema,service_id,is_public')
+        .select('id,schema,service_id,is_public,price')
         .eq('id', formId)
         .eq('service_id', service.id)
         .eq('is_public', true)
@@ -53,6 +54,7 @@ export async function POST(request: Request): Promise<Response> {
       if (formError) throw new Error(formError.message);
       if (!customForm) return NextResponse.json({ error: 'فرم انتخاب‌شده معتبر نیست.' }, { status: 400 });
       schema = normalizeSchema(customForm.schema);
+      orderPrice = Number(customForm.price ?? service.price ?? 0);
     }
 
     const validation = validateFormData(schema, body.formData);
@@ -70,7 +72,7 @@ export async function POST(request: Request): Promise<Response> {
         status: 'registered',
         form_data: validation.data,
         form_schema_snapshot: schema,
-        price: Number(service.price || 0),
+        price: orderPrice,
       })
       .select('id,tracking_code,price')
       .single();
