@@ -3,8 +3,19 @@ import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
 import { generateWithGemini, parseGeminiJson } from "@/lib/ai/gemini";
 import { requireAiProfile } from "@/lib/ai/server";
 
-const SERVICE_SCHEMA = `{"title":"","category":"","description":"","icon":"","formSchema":[]}`;
-const BLOG_SCHEMA = `{"title":"","slug":"","excerpt":"","content":"","meta_title":"","meta_description":""}`;
+const SERVICE_SCHEMA = `{"title":"","slug":"","category":"","description":"","icon":"","meta_title":"","meta_description":"","seo_keywords":[],"formSchema":[]}`;
+const BLOG_SCHEMA = `{"title":"","slug":"","excerpt":"","content":"","meta_title":"","meta_description":"","seo_keywords":[],"headings":[],"faq":[]}`;
+
+function cleanSlug(value: unknown) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06ff\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 90);
+}
 
 export async function POST(request: NextRequest) {
   const admin = await requireAdmin(request);
@@ -16,11 +27,14 @@ export async function POST(request: NextRequest) {
     const current = body.current || {};
     const schema = target === "blog" ? BLOG_SCHEMA : SERVICE_SCHEMA;
     const task = target === "blog"
-      ? "برای وبلاگ کافی‌نت توسن یک پست فارسی حرفه‌ای و سئو شده تولید کن. عنوان جذاب، slug انگلیسی کوتاه، خلاصه، محتوای HTML ساده با H2/H3 در صورت نیاز، meta title و meta description بده. ادعاهای factual را بدون منبع نساز و از تبلیغات اغراق‌آمیز پرهیز کن."
-      : "برای یک خدمت کافی‌نت توسن اطلاعات حرفه‌ای تولید کن: عنوان، دسته‌بندی، توضیحات روشن، یک آیکون emoji مناسب و در صورت نیاز formSchema شامل فیلدهای منطقی. فرم را فقط وقتی لازم است پیشنهاد بده و فیلدها را با ساختار ساده {name,label,type,required,options} برگردان.";
-    const prompt = `${task}\n\nورودی فعلی مدیر: ${JSON.stringify(current)}\n\nدستور تکمیلی: ${body.instruction || ""}\n\nفقط JSON معتبر مطابق این ساختار برگردان و هیچ Markdown یا توضیح بیرونی ننویس:\n${schema}`;
+      ? "برای وبلاگ کافی‌نت توسن یک پیش‌نویس حرفه‌ای و سئو محور تولید کن. موضوع را بر اساس هدف جست‌وجو و استراتژی محتوایی سایت تنظیم کن. یک کلمه کلیدی اصلی و کلیدواژه‌های مرتبط انتخاب کن، عنوان و slug مناسب بساز، H2/H3 منطقی ایجاد کن، محتوای HTML ساده و خوانا بنویس، meta title را ترجیحاً حدود 50 تا 60 کاراکتر و meta description را حدود 140 تا 160 کاراکتر نگه دار. در موضوعات زمان‌مند تاریخ و وضعیت را صریحاً مشخص کن و اطلاعات متغیر را قطعی و دائمی ننویس. در صورت مناسب بودن FAQ تولید کن. ادعای factual بدون منبع نساز و از keyword stuffing و تبلیغات اغراق‌آمیز پرهیز کن."
+      : "برای یک خدمت کافی‌نت توسن یک پیش‌نویس حرفه‌ای و سئو محور تولید کن. عنوان، slug کوتاه و یکتا، دسته‌بندی، توضیحات، آیکون و متادیتای سئو بساز. meta title را ترجیحاً حدود 50 تا 60 کاراکتر و meta description را حدود 140 تا 160 کاراکتر نگه دار. یک کلمه کلیدی اصلی و چند کلیدواژه مرتبط بر اساس نیت جست‌وجوی کاربر پیشنهاد بده. اگر خدمت نیازمند ثبت اطلاعات است formSchema شامل فیلدهای منطقی با ساختار ساده {name,label,type,required,options} برگردان."
+    const prompt = `${task}\n\nورودی فعلی مدیر: ${JSON.stringify(current)}\n\nدستور تکمیلی: ${String(body.instruction || "").slice(0, 1200)}\n\nفقط JSON معتبر مطابق این ساختار برگردان و هیچ Markdown یا توضیح بیرونی ننویس:\n${schema}`;
     const result = await generateWithGemini(session.profile.id, prompt, session.profile.model || "gemini-2.5-flash");
     const data = parseGeminiJson<Record<string, unknown>>(result.text);
+    if (typeof data.slug === "string") data.slug = cleanSlug(data.slug);
+    if (Array.isArray(data.seo_keywords)) data.seo_keywords = data.seo_keywords.map(String).filter(Boolean).slice(0, 12);
+    if (Array.isArray(data.headings)) data.headings = data.headings.map(String).filter(Boolean).slice(0, 20);
     return NextResponse.json({ data, model: result.model });
   } catch (error) {
     const message = error instanceof Error ? error.message : "AI generation failed";
