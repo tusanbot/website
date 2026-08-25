@@ -6,8 +6,8 @@ const MAX_CHARS = 8000;
 
 export async function POST(req: NextRequest) {
   try {
-    const profile = await requireAiProfile();
-    if (!profile) return NextResponse.json({ error: "AI_PROFILE_REQUIRED" }, { status: 401 });
+    const session = await requireAiProfile();
+    const profile = session.profile;
     const body = await req.json();
     const text = typeof body.text === "string" ? body.text.trim() : "";
     const voice = typeof body.voice === "string" ? body.voice : "Kore";
@@ -19,6 +19,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ audioBase64: result.audioBase64, mimeType: result.mimeType, model: result.model });
   } catch (error) {
     const status = typeof error === "object" && error && "status" in error ? Number((error as { status?: number }).status) : 500;
+    if (error instanceof Error && error.message === "AI_PROFILE_REQUIRED") return NextResponse.json({ error: "برای استفاده از ابزار هوش مصنوعی ابتدا پروفایل Gemini را فعال کنید." }, { status: 401 });
     if (status === 401 || status === 403) return NextResponse.json({ error: "کلید Gemini معتبر نیست یا دسترسی صوتی فعال نیست." }, { status: 401 });
     if (status === 429) return NextResponse.json({ error: "سهمیه Gemini پر شده است. کمی بعد دوباره تلاش کنید." }, { status: 429 });
     if (status === 504) return NextResponse.json({ error: "زمان پردازش تمام شد. دوباره تلاش کنید." }, { status: 504 });
