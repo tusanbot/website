@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { GlassPanel, SectionHeader, TusanButton } from "@/components/ui";
+import { supabase } from "@/lib/supabase";
 
 type Config = {
   business: { address?: string; phone?: string; email?: string; telegram?: string; eitaa?: string; rubika?: string };
@@ -30,27 +31,58 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
 
+  async function getAuthHeaders() {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    const token = data.session?.access_token;
+    if (!token) throw new Error("احراز هویت لازم است.");
+    return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+  }
+
   useEffect(() => {
-    fetch("/api/admin/site-settings").then((r) => r.json()).then((data) => {
-      if (data.success) {
-        setSite((prev) => ({ ...prev, ...data.settings }));
-        setConfig({
-          ...defaults,
-          ...(data.settings.config || {}),
-          business: { ...defaults.business, ...(data.settings.config?.business || {}) },
-          assets: { ...defaults.assets, ...(data.settings.config?.assets || {}) },
-          social: { ...defaults.social, ...(data.settings.config?.social || {}), icons: { ...defaults.social.icons, ...(data.settings.config?.social?.icons || {}) } },
-        });
+    let active = true;
+
+    async function loadSettings() {
+      try {
+        const headers = await getAuthHeaders();
+        const response = await fetch("/api/admin/site-settings", { headers });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || "دریافت تنظیمات ناموفق بود.");
+
+        if (active) {
+          setSite((prev) => ({ ...prev, ...data.settings }));
+          setConfig({
+            ...defaults,
+            ...(data.settings.config || {}),
+            business: { ...defaults.business, ...(data.settings.config?.business || {}) },
+            assets: { ...defaults.assets, ...(data.settings.config?.assets || {}) },
+            social: { ...defaults.social, ...(data.settings.config?.social || {}), icons: { ...defaults.social.icons, ...(data.settings.config?.social?.icons || {}) } },
+          });
+        }
+      } catch (error) {
+        if (active) setMessage(error instanceof Error ? error.message : "دریافت تنظیمات ناموفق بود.");
+      } finally {
+        if (active) setLoading(false);
       }
-    }).finally(() => setLoading(false));
+    }
+
+    void loadSettings();
+    return () => { active = false; };
   }, []);
 
   async function save() {
     setSaving(true); setMessage("");
-    const response = await fetch("/api/admin/site-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...site, config }) });
-    const data = await response.json();
-    setSaving(false);
-    setMessage(data.success ? "تنظیمات با موفقیت ذخیره شد." : data.error || "خطا در ذخیره تنظیمات");
+    try {
+      const headers = await getAuthHeaders();
+      const response = await fetch("/api/admin/site-settings", { method: "POST", headers, body: JSON.stringify({ ...site, config }) });
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || "ذخیره تنظیمات ناموفق بود.");
+      setMessage("تنظیمات با موفقیت ذخیره شد.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ذخیره تنظیمات ناموفق بود.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const updateBusiness = (key: keyof Config["business"], value: string) => setConfig((prev) => ({ ...prev, business: { ...prev.business, [key]: value } }));
