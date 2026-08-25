@@ -33,5 +33,22 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="fa" dir="rtl"><body className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}><ThemeProvider>{children}</ThemeProvider></body></html>;
+  const localBusinessJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: "کافی نت توسن",
+    url: siteUrl,
+    description: "خدمات آنلاین کافی نت توسن؛ ثبت نام، امور اداری، اینترنتی و کامپیوتری.",
+    areaServed: { "@type": "Country", name: "ایران" },
+    serviceType: ["خدمات کافی نت", "خدمات اینترنتی", "خدمات اداری آنلاین", "ثبت نام آنلاین"],
+  };
+
+  return (
+    <html lang="fa" dir="rtl">
+      <body className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }} />
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
+    </html>
+  );
 }
