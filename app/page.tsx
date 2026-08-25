@@ -1,5 +1,4 @@
 import FloatingHeader from "@/components/home/FloatingHeader";
-import PageLoader from "@/components/home/PageLoader";
 import HeroSection from "@/components/home/HeroSection";
 import ActiveAnnouncements from "@/components/home/ActiveAnnouncements";
 import PopularServices from "@/components/home/PopularServices";
@@ -15,7 +14,6 @@ import HomeFooter from "@/components/home/HomeFooter";
 export default function HomePage() {
   return (
     <>
-      <PageLoader />
       <FloatingHeader />
       <HeroSection />
       <ActiveAnnouncements />
