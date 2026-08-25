@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 const SITE = "sc-domain:tusancn.ir";
 
 type Row = { keys?: string[]; clicks?: number; impressions?: number; ctr?: number; position?: number };
+type Totals = { clicks: number; impressions: number };
 
 export default function SeoDashboardPage() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -25,7 +26,7 @@ export default function SeoDashboardPage() {
     return () => { active = false; };
   }, []);
 
-  const totals = useMemo(() => rows.reduce((a, r) => ({
+  const totals = useMemo<Totals>(() => rows.reduce<Totals>((a, r) => ({
     clicks: a.clicks + (r.clicks ?? 0),
     impressions: a.impressions + (r.impressions ?? 0),
   }), { clicks: 0, impressions: 0 }), [rows]);
