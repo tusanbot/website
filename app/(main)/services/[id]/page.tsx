@@ -5,22 +5,25 @@ import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import ServiceOrderClient from "./ServiceOrderClient";
 import type { PricingRule } from "@/lib/forms/pricing";
 
-type Service = { id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null; form_schema: any[]; pricing_rules: PricingRule[]; is_active: boolean; parent_service_id: string | null; created_at?: string | null };
+type Service = { id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null; form_schema: any[]; pricing_rules: PricingRule[]; is_active: boolean; parent_service_id: string | null; meta_title?: string | null; meta_description?: string | null; seo_keywords?: string[] | null; created_at?: string | null };
 function normalizeSchema(value: any): any[] { if (Array.isArray(value)) return value; if (typeof value === "string") { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } } return []; }
 function normalizeRules(value: any): PricingRule[] { if (typeof value === "string") { try { value = JSON.parse(value); } catch { value = []; } } return Array.isArray(value) ? value : []; }
+function normalizeKeywords(value: any): string[] { if (Array.isArray(value)) return value.map(String).filter(Boolean); return []; }
 function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 function normalizeSlug(value: string) { return decodeURIComponent(value).normalize("NFC").replace(/\u200c/g, "").replace(/\u200d/g, "").trim(); }
+const SERVICE_SELECT = "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,created_at";
 async function getService(path: string): Promise<Service | null> {
   const supabase = createSupabaseServerClient();
-  const query = supabase.from("services").select("id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,created_at").eq("is_active", true);
-  if (isUuid(path)) { const { data, error } = await query.eq("id", path).maybeSingle(); if (error || !data) return null; return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules) } as Service; }
+  const query = supabase.from("services").select(SERVICE_SELECT).eq("is_active", true);
+  const normalize = (data: any): Service => ({ ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules), seo_keywords: normalizeKeywords(data.seo_keywords) });
+  if (isUuid(path)) { const { data, error } = await query.eq("id", path).maybeSingle(); if (error || !data) return null; return normalize(data); }
   const requestedSlug = normalizeSlug(path); const { data, error } = await query.eq("slug", requestedSlug).maybeSingle();
-  if (!error && data) return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules) } as Service;
-  const { data: services, error: fallbackError } = await supabase.from("services").select("id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,created_at").eq("is_active", true).not("slug", "is", null);
+  if (!error && data) return normalize(data);
+  const { data: services, error: fallbackError } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).not("slug", "is", null);
   if (fallbackError) return null; const match = (services || []).find((item: any) => normalizeSlug(item.slug) === requestedSlug); if (!match) return null;
-  return { ...match, price: Number(match.price || 0), form_schema: normalizeSchema(match.form_schema), pricing_rules: normalizeRules(match.pricing_rules) } as Service;
+  return normalize(match);
 }
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> { const { id } = await params; const service = await getService(id); if (!service) return { title: "خدمت پیدا نشد", robots: { index: false, follow: false } }; const title = `${service.title} | کافی نت توسن`; const description = service.description?.trim() || `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`; const canonical = `/services/${encodeURIComponent(service.slug)}`; return { title, description, keywords: [service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[], alternates: { canonical }, openGraph: { type: "website", locale: "fa_IR", url: canonical, siteName: "کافی نت توسن", title, description }, robots: { index: true, follow: true } }; }
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> { const { id } = await params; const service = await getService(id); if (!service) return { title: "خدمت پیدا نشد", robots: { index: false, follow: false } }; const title = service.meta_title?.trim() || `${service.title} | کافی نت توسن`; const description = service.meta_description?.trim() || service.description?.trim() || `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`; const canonical = `/services/${encodeURIComponent(service.slug)}`; const keywords = [...(service.seo_keywords || []), service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[]; return { title, description, keywords, alternates: { canonical }, openGraph: { type: "website", locale: "fa_IR", url: canonical, siteName: "کافی نت توسن", title, description }, robots: { index: true, follow: true } }; }
 export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params; const service = await getService(id); if (!service) notFound(); if (isUuid(id)) permanentRedirect(`/services/${encodeURIComponent(service.slug)}`);
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tusancn.ir"; const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`; const supabase = createSupabaseServerClient();
