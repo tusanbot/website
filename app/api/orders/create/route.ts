@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { validateFormData } from '@/lib/forms/server-validation';
+import { calculateServicePrice, type PricingRule } from '@/lib/forms/pricing';
 import type { FormSchema } from '@/types/forms';
 
 function normalizeSchema(value: unknown): FormSchema {
@@ -9,6 +10,10 @@ function normalizeSchema(value: unknown): FormSchema {
   if (Array.isArray(parsed)) return { fields: parsed as FormSchema['fields'] };
   if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { fields?: unknown }).fields)) return parsed as FormSchema;
   return { fields: [] };
+}
+function normalizeRules(value: unknown): PricingRule[] {
+  if (typeof value === 'string') { try { value = JSON.parse(value); } catch { value = []; } }
+  return Array.isArray(value) ? value as PricingRule[] : [];
 }
 function generateTrackingCode(): string { return `TUS-${Date.now().toString().slice(-6)}-${Math.floor(100000 + Math.random() * 900000)}`; }
 
@@ -20,7 +25,7 @@ export async function POST(request: Request): Promise<Response> {
     const body = await request.json() as { serviceId?: string; formId?: string | null; formData?: Record<string, unknown> };
     if (!body.serviceId || !body.formData || typeof body.formData !== 'object' || Array.isArray(body.formData)) return NextResponse.json({ error: 'اطلاعات فرم ناقص است.' }, { status: 400 });
 
-    const { data: service, error: serviceError } = await supabase.from('services').select('id,title,price,form_schema,is_active,parent_service_id').eq('id', body.serviceId).eq('is_active', true).maybeSingle();
+    const { data: service, error: serviceError } = await supabase.from('services').select('id,title,price,form_schema,is_active,parent_service_id,pricing_rules').eq('id', body.serviceId).eq('is_active', true).maybeSingle();
     if (serviceError) throw new Error(serviceError.message);
     if (!service) return NextResponse.json({ error: 'خدمت انتخاب‌شده در دسترس نیست.' }, { status: 404 });
 
@@ -28,6 +33,7 @@ export async function POST(request: Request): Promise<Response> {
     let formId: string | null = body.formId ?? null;
     let formVersionId: string | null = null;
     let orderPrice = Number(service.price || 0);
+    let pricingRules = normalizeRules(service.pricing_rules);
 
     if (formId) {
       const { data: customForm, error: formError } = await supabase.from('custom_forms').select('id,schema,service_id,is_public,price,active_version_id').eq('id', formId).eq('service_id', service.id).eq('is_public', true).maybeSingle();
@@ -50,8 +56,8 @@ export async function POST(request: Request): Promise<Response> {
     const validation = validateFormData(schema, body.formData);
     if (!validation.valid) return NextResponse.json({ error: 'اطلاعات فرم کامل یا معتبر نیست.', errors: validation.errors }, { status: 422 });
 
-    // Keep every order tied to the exact form version used for validation.
-    const { data: order, error: orderError } = await supabase.from('orders').insert({ user_id: user.id, service_id: service.id, form_id: formId, form_version_id: formVersionId, tracking_code: generateTrackingCode(), status: 'registered', form_data: validation.data, form_schema_snapshot: schema, price: orderPrice }).select('id,tracking_code,price,form_version_id').single();
+    const finalPrice = calculateServicePrice(orderPrice, pricingRules, validation.data as Record<string, unknown>);
+    const { data: order, error: orderError } = await supabase.from('orders').insert({ user_id: user.id, service_id: service.id, form_id: formId, form_version_id: formVersionId, tracking_code: generateTrackingCode(), status: 'registered', form_data: validation.data, form_schema_snapshot: schema, price: finalPrice }).select('id,tracking_code,price,form_version_id').single();
     if (orderError) throw new Error(orderError.message);
     return NextResponse.json({ order });
   } catch (error) {
