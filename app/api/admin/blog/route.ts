@@ -13,9 +13,15 @@ async function requireAdmin() {
 export async function GET() {
   if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = supabaseAdmin();
-  const { data, error } = await db.from("blog_posts").select("*,blog_categories(name),blog_post_services(service_id,services(id,title,slug))").order("created_at", { ascending: false });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ posts: data });
+  const [postsRes, categoriesRes, servicesRes] = await Promise.all([
+    db.from("blog_posts").select("*,blog_categories(name),blog_post_services(service_id,services(id,title,slug))").order("created_at", { ascending: false }),
+    db.from("blog_categories").select("id,name,slug").order("name"),
+    db.from("services").select("id,title,slug").eq("is_active", true).order("title"),
+  ]);
+  if (postsRes.error) return NextResponse.json({ error: postsRes.error.message }, { status: 500 });
+  if (categoriesRes.error) return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
+  if (servicesRes.error) return NextResponse.json({ error: servicesRes.error.message }, { status: 500 });
+  return NextResponse.json({ posts: postsRes.data || [], categories: categoriesRes.data || [], services: servicesRes.data || [] });
 }
 
 export async function POST(request: Request) {
