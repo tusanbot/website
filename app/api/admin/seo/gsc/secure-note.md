@@ -1,0 +1,1 @@
+The GSC dashboard UI is scaffolded. Production Search Console data must be wired through the repository's existing secure Google integration rather than exposing a token to the browser.
