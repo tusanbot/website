@@ -1,11 +1,11 @@
 "use client";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { getAdminUnreadMessagesCount } from "@/lib/notifications";
 import AdminNavigation, { type AdminTab } from "@/components/admin/AdminNavigation";
 import AdminStats from "@/components/admin/AdminStats";
-import AdminOrderTrend from "@/components/admin/AdminOrderTrend";
 import AdminRevenueStats from "@/components/admin/AdminRevenueStats";
 import AdminOrderStatus, { type OrderStatusStats } from "@/components/admin/AdminOrderStatus";
 import AdminTopServices, { type ServiceStat } from "@/components/admin/AdminTopServices";
@@ -15,6 +15,10 @@ import AdminMessages from "@/components/admin/AdminMessages";
 import AdminReports from "@/components/admin/AdminReports";
 import AdminSettings from "@/components/admin/AdminSettings";
 import { GlassPanel, TusanButton, SectionHeader } from "@/components/ui";
+
+const AdminOrderTrend = dynamic(() => import("@/components/admin/AdminOrderTrend"), {
+ loading: () => <div className="h-[320px] rounded-2xl border border-[var(--border)] bg-[var(--surface)] animate-pulse" aria-hidden="true" />,
+});
 
 type Stats = { totalOrders:number; todayOrders:number; processingOrders:number; totalRevenue:number; completedRevenue:number; averageOrderValue:number; usersCount:number; unreadMessages:number; completedOrders:number };
 type TrendItem = { date:string; orders:number };
