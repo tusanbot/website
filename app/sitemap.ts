@@ -34,3 +34,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [...staticPages, ...servicePages, ...blogPages];
 }
+
+// Keep sitemap generation aligned with canonical production URLs and normalized service slugs.
