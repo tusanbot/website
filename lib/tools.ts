@@ -22,7 +22,7 @@ export const tools: ToolDefinition[] = [
     { id: "cybercafe-form-builder", title: "فرم‌ساز کافی‌نت", description: "ساخت پیش‌فرم برای ثبت اطلاعات و آماده‌سازی ثبت‌نام، با فیلدهای شرطی.", icon: "📝", category: "cybercafe", type: "normal", href: "/tools/form-builder", featured: true, enabled: true },
     { id: "ai-profile", title: "پروفایل هوش مصنوعی", description: "ورود و مدیریت پروفایل شخصی Gemini برای استفاده از ابزارهای هوش مصنوعی.", icon: "🔐", category: "general", type: "ai", href: "/tools/ai-profile", featured: true, enabled: true },
     { id: "official-letter-ai", title: "تدوین نامه اداری", description: "کمک هوش مصنوعی برای تدوین و بازنویسی نامه‌های اداری.", icon: "✉️", category: "general", type: "ai", href: "/tools/official-letter", featured: true, enabled: true },
-    { id: "text-to-speech-ai", title: "تبدیل متن به صوت", description: "تبدیل متن به صدای طبیعی با کمک هوش مصنوعی.", icon: "🔊", category: "general", type: "ai", featured: false, enabled: false },
+    { id: "text-to-speech-ai", title: "تبدیل متن به صوت", description: "تبدیل متن فارسی و انگلیسی به صدای طبیعی با کمک Gemini.", icon: "🔊", category: "general", type: "ai", href: "/tools/text-to-speech", featured: true, enabled: true },
     { id: "thesis-idea-ai", title: "ایده پایان‌نامه", description: "کمک برای پیدا کردن و توسعه ایده‌های مناسب پایان‌نامه.", icon: "🎓", category: "general", type: "ai", featured: false, enabled: false },
     { id: "writing-correction-ai", title: "اصلاح نگارش متن", description: "اصلاح نگارشی، روان‌سازی و بهبود متن فارسی.", icon: "✍️", category: "general", type: "ai", href: "/tools/text-corrector", featured: true, enabled: true },
 ];
