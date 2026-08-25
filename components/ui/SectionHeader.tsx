@@ -1,6 +1,5 @@
 "use client";
 
-
 import { ReactNode } from "react";
 
 interface SectionHeaderProps {
@@ -26,9 +25,9 @@ export default function SectionHeader({
     return (
         <div className="flex items-start justify-between gap-4 mb-6">
             <div className={`flex flex-col ${alignClass}`}>
-                <h1 className="text-2xl md:text-3xl font-bold text-[var(--text)]">
+                <h2 className="text-2xl md:text-3xl font-bold text-[var(--text)]">
                     {title}
-                </h1>
+                </h2>
                 {description && (
                     <p className="mt-2 text-[var(--text-muted)] max-w-2xl">
                         {description}
