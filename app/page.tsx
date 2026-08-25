@@ -1,21 +1,21 @@
-import dynamic from "next/dynamic";
 import FloatingHeader from "@/components/home/FloatingHeader";
+import PageLoader from "@/components/home/PageLoader";
 import HeroSection from "@/components/home/HeroSection";
-
-const ActiveAnnouncements = dynamic(() => import("@/components/home/ActiveAnnouncements"));
-const PopularServices = dynamic(() => import("@/components/home/PopularServices"));
-const BlogPreview = dynamic(() => import("@/components/home/BlogPreview"));
-const SocialServicesPreview = dynamic(() => import("@/components/home/SocialServicesPreview"));
-const ToolsPreview = dynamic(() => import("@/components/home/ToolsPreview"));
-const ProcessTimeline = dynamic(() => import("@/components/home/ProcessTimeline"));
-const StatsSection = dynamic(() => import("@/components/home/StatsSection"));
-const FeaturesSection = dynamic(() => import("@/components/home/FeaturesSection"));
-const FinalCTA = dynamic(() => import("@/components/home/FinalCTA"));
-const HomeFooter = dynamic(() => import("@/components/home/HomeFooter"));
+import ActiveAnnouncements from "@/components/home/ActiveAnnouncements";
+import PopularServices from "@/components/home/PopularServices";
+import BlogPreview from "@/components/home/BlogPreview";
+import SocialServicesPreview from "@/components/home/SocialServicesPreview";
+import ToolsPreview from "@/components/home/ToolsPreview";
+import ProcessTimeline from "@/components/home/ProcessTimeline";
+import StatsSection from "@/components/home/StatsSection";
+import FeaturesSection from "@/components/home/FeaturesSection";
+import FinalCTA from "@/components/home/FinalCTA";
+import HomeFooter from "@/components/home/HomeFooter";
 
 export default function HomePage() {
   return (
     <>
+      <PageLoader />
       <FloatingHeader />
       <HeroSection />
       <ActiveAnnouncements />
