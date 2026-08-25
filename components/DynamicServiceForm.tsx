@@ -22,18 +22,25 @@ const emptyValue = (field: FormField): any => {
 };
 const normalize = (value: any) => (value == null ? "" : String(value).trim());
 
+function resolveConditionValue(condition: FieldCondition, data: Record<string, any>) {
+  const key = condition.field || condition.fieldId;
+  if (!key) return undefined;
+  if (Object.prototype.hasOwnProperty.call(data, key)) return data[key];
+  return undefined;
+}
+
 function evaluateCondition(condition: FieldCondition, data: Record<string, any>) {
-  const actual = condition.field ? data[condition.field] : condition.fieldId ? data[condition.fieldId] : undefined;
+  const actual = resolveConditionValue(condition, data);
   const expected = condition.value;
   const left = normalize(actual);
   const right = normalize(expected);
   switch (condition.operator as ConditionOperator) {
     case "equals": return Array.isArray(actual) ? actual.some((value) => normalize(value) === right) : left === right;
     case "not_equals": return Array.isArray(actual) ? !actual.some((value) => normalize(value) === right) : left !== right;
-    case "contains": return Array.isArray(actual) ? actual.some((value) => normalize(value) === right) : left.toLowerCase().includes(right.toLowerCase());
-    case "not_contains": return Array.isArray(actual) ? !actual.some((value) => normalize(value) === right) : !left.toLowerCase().includes(right.toLowerCase());
-    case "is_true": return actual === true || left === "true";
-    case "is_false": return actual === false || left === "false";
+    case "contains": return Array.isArray(actual) ? actual.some((value) => normalize(value).toLowerCase().includes(right.toLowerCase())) : left.toLowerCase().includes(right.toLowerCase());
+    case "not_contains": return Array.isArray(actual) ? !actual.some((value) => normalize(value).toLowerCase().includes(right.toLowerCase())) : !left.toLowerCase().includes(right.toLowerCase());
+    case "is_true": return actual === true || left.toLowerCase() === "true" || left === "1";
+    case "is_false": return actual === false || left.toLowerCase() === "false" || left === "0";
     case "gt": return Number(actual) > Number(expected);
     case "gte": return Number(actual) >= Number(expected);
     case "lt": return Number(actual) < Number(expected);
@@ -67,9 +74,22 @@ function validateField(field: FormField, value: any): string | null {
     if (rules.minLength !== undefined && String(value).length < rules.minLength) return `حداقل ${rules.minLength} کاراکتر وارد کنید.`;
     if (rules.maxLength !== undefined && String(value).length > rules.maxLength) return `حداکثر ${rules.maxLength} کاراکتر مجاز است.`;
     if (field.type === "number" || typeof value === "number") { const number = Number(value); if (rules.min !== undefined && number < rules.min) return `مقدار باید حداقل ${rules.min} باشد.`; if (rules.max !== undefined && number > rules.max) return `مقدار باید حداکثر ${rules.max} باشد.`; }
-    if (rules.pattern !== undefined) { try { if (!new RegExp(rules.pattern).test(String(value))) return "فرمت واردشده صحیح نیست."; } catch { return "قانون اعتبارسنجی فرم نامعتبر است."; } }
+    if (rules.pattern !== undefined) { try { if (!new RegExp(rules.pattern).test(String(value))) return "فرمت واردشده صحیح نیست."; } catch { return "قانون اعتبارسنجی فرم نامعتبر است."; }
+    }
   }
   return null;
+}
+
+function clearHiddenValues(fields: FormField[], data: Record<string, any>) {
+  const next = { ...data };
+  let changed = false;
+  for (const field of fields) {
+    if (!isVisible(field, next)) {
+      const empty = emptyValue(field);
+      if (JSON.stringify(next[field.name]) !== JSON.stringify(empty)) { next[field.name] = empty; changed = true; }
+    }
+  }
+  return changed ? next : data;
 }
 
 export default function DynamicServiceForm({ fields, onSubmit, onChange, submitting = false }: Props) {
@@ -77,8 +97,35 @@ export default function DynamicServiceForm({ fields, onSubmit, onChange, submitt
   const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => { const initial: Record<string, any> = {}; fields.forEach((field) => { initial[field.name] = emptyValue(field); }); setData(initial); setErrors({}); onChange?.(initial); }, [fields, onChange]);
   const visibleFields = useMemo(() => fields.filter((field) => isVisible(field, data)), [fields, data]);
-  const setValue = (name: string, value: any) => { setData((previous) => { const next = { ...previous, [name]: value }; onChange?.(next); return next; }); const field = fields.find((item) => item.name === name); setErrors((previous) => ({ ...previous, [name]: field ? validateField(field, value) || "" : "" })); };
-  const submit = (event: React.FormEvent) => { event.preventDefault(); const nextErrors: Record<string, string> = {}; visibleFields.forEach((field) => { const error = validateField(field, data[field.name]); if (error) nextErrors[field.name] = error; }); setErrors(nextErrors); if (Object.keys(nextErrors).length > 0) return; const output: Record<string, any> = {}; visibleFields.forEach((field) => { output[field.name] = field.type === "number" && data[field.name] !== "" ? Number(data[field.name]) : data[field.name]; }); onSubmit(output); };
+
+  const updateData = (updater: (previous: Record<string, any>) => Record<string, any>) => {
+    setData((previous) => {
+      const updated = updater(previous);
+      const cleaned = clearHiddenValues(fields, updated);
+      onChange?.(cleaned);
+      return cleaned;
+    });
+  };
+
+  const setValue = (name: string, value: any) => {
+    updateData((previous) => ({ ...previous, [name]: value }));
+    const field = fields.find((item) => item.name === name);
+    setErrors((previous) => ({ ...previous, [name]: field ? validateField(field, value) || "" : "" }));
+  };
+
+  const submit = (event: React.FormEvent) => {
+    event.preventDefault();
+    const cleaned = clearHiddenValues(fields, data);
+    if (cleaned !== data) setData(cleaned);
+    const nextErrors: Record<string, string> = {};
+    fields.filter((field) => isVisible(field, cleaned)).forEach((field) => { const error = validateField(field, cleaned[field.name]); if (error) nextErrors[field.name] = error; });
+    setErrors(nextErrors);
+    if (Object.keys(nextErrors).length > 0) return;
+    const output: Record<string, any> = {};
+    fields.filter((field) => isVisible(field, cleaned)).forEach((field) => { output[field.name] = field.type === "number" && cleaned[field.name] !== "" ? Number(cleaned[field.name]) : cleaned[field.name]; });
+    onSubmit(output);
+  };
+
   const baseClass = "w-full border rounded-xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-[#09967C]";
   const renderField = (field: FormField, value: any, set: (next: any) => void, error?: string): React.ReactNode => {
     const common = { disabled: submitting };
