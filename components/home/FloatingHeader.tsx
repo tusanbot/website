@@ -6,10 +6,17 @@ import { motion } from "framer-motion";
 import { TusanButton } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 
+type PublicSettings = {
+    site_name?: string;
+    site_description?: string;
+    assets?: { logoUrl?: string };
+};
+
 export default function FloatingHeader() {
     const [scrolled, setScrolled] = useState(false);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loggingOut, setLoggingOut] = useState(false);
+    const [settings, setSettings] = useState<PublicSettings>({});
 
     useEffect(() => {
         function onScroll() {
@@ -25,7 +32,20 @@ export default function FloatingHeader() {
             if (mounted) setIsAuthenticated(Boolean(data.session?.user));
         }
 
+        async function loadSettings() {
+            try {
+                const response = await fetch("/api/site-settings", { cache: "no-store" });
+                const data = await response.json();
+                if (mounted && response.ok && data.success) {
+                    setSettings(data.settings || {});
+                }
+            } catch {
+                // Keep the built-in fallback branding when public settings are unavailable.
+            }
+        }
+
         loadSession();
+        loadSettings();
 
         const {
             data: { subscription },
@@ -51,6 +71,10 @@ export default function FloatingHeader() {
         setLoggingOut(false);
     }
 
+    const siteName = settings.site_name || "توسن";
+    const siteDescription = settings.site_description || "خدمات آنلاین کافی‌نت";
+    const logoUrl = settings.assets?.logoUrl || "";
+
     const links = [
         { label: "خدمات", href: "/services" },
         { label: "پیگیری سفارش", href: "/orders" },
@@ -68,10 +92,12 @@ export default function FloatingHeader() {
             <div className="mx-auto max-w-7xl px-4 pt-4">
                 <div className={`flex items-center justify-between rounded-2xl border transition-all duration-300 ${scrolled ? "border-white/10 bg-[var(--surface)]/80 backdrop-blur-xl shadow-xl px-5 py-3" : "border-transparent bg-transparent px-3 py-2"}`}>
                     <Link href="/" className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-xl">🛡️</div>
+                        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-[var(--primary)]/10 text-xl">
+                            {logoUrl ? <img src={logoUrl} alt={`لوگوی ${siteName}`} className="h-full w-full object-contain p-1" /> : "🛡️"}
+                        </div>
                         <div className="hidden sm:block">
-                            <div className="font-black text-[var(--text)]">توسن</div>
-                            <div className="text-xs text-[var(--text-muted)]">خدمات آنلاین کافی‌نت</div>
+                            <div className="font-black text-[var(--text)]">{siteName}</div>
+                            <div className="text-xs text-[var(--text-muted)]">{siteDescription}</div>
                         </div>
                     </Link>
 
