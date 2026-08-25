@@ -21,19 +21,33 @@ const emptyValue = (field: FormField): any => {
   return "";
 };
 const normalize = (value: any) => (value == null ? "" : String(value).trim());
+
 function evaluateCondition(condition: FieldCondition, data: Record<string, any>) {
-  const actual = data[condition.field]; const expected = condition.value;
+  const actual = condition.field ? data[condition.field] : condition.fieldId ? data[condition.fieldId] : undefined;
+  const expected = condition.value;
+  const left = normalize(actual);
+  const right = normalize(expected);
   switch (condition.operator as ConditionOperator) {
-    case "equals": return Array.isArray(actual) ? actual.some((value) => normalize(value) === normalize(expected)) : normalize(actual) === normalize(expected);
-    case "not_equals": return Array.isArray(actual) ? !actual.some((value) => normalize(value) === normalize(expected)) : normalize(actual) !== normalize(expected);
-    case "contains": return Array.isArray(actual) ? actual.some((value) => normalize(value) === normalize(expected)) : normalize(actual).toLowerCase().includes(normalize(expected).toLowerCase());
-    case "not_contains": return Array.isArray(actual) ? !actual.some((value) => normalize(value) === normalize(expected)) : !normalize(actual).toLowerCase().includes(normalize(expected).toLowerCase());
-    case "is_true": return actual === true;
-    case "is_false": return actual === false;
+    case "equals": return Array.isArray(actual) ? actual.some((value) => normalize(value) === right) : left === right;
+    case "not_equals": return Array.isArray(actual) ? !actual.some((value) => normalize(value) === right) : left !== right;
+    case "contains": return Array.isArray(actual) ? actual.some((value) => normalize(value) === right) : left.toLowerCase().includes(right.toLowerCase());
+    case "not_contains": return Array.isArray(actual) ? !actual.some((value) => normalize(value) === right) : !left.toLowerCase().includes(right.toLowerCase());
+    case "is_true": return actual === true || left === "true";
+    case "is_false": return actual === false || left === "false";
+    case "gt": return Number(actual) > Number(expected);
+    case "gte": return Number(actual) >= Number(expected);
+    case "lt": return Number(actual) < Number(expected);
+    case "lte": return Number(actual) <= Number(expected);
     default: return false;
   }
 }
-function isVisible(field: FormField, data: Record<string, any>) { return !field.conditions?.length || field.conditions.every((condition) => condition.field in data && evaluateCondition(condition, data)); }
+
+function isVisible(field: FormField, data: Record<string, any>) {
+  if (!field.conditions?.length) return true;
+  const results = field.conditions.map((condition) => evaluateCondition(condition, data));
+  return field.conditionLogic === "OR" ? results.some(Boolean) : results.every(Boolean);
+}
+
 function isEmpty(value: any) { return value == null || value === "" || (Array.isArray(value) && value.length === 0); }
 function validateField(field: FormField, value: any): string | null {
   if (field.required && isEmpty(value)) return "تکمیل این فیلد الزامی است.";
