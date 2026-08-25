@@ -1,0 +1,1 @@
+SEO dashboard initial scaffold. Google Search Console server integration is intentionally deferred until the repository's secure GSC credentials/integration path is identified.
