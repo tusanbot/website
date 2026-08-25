@@ -148,7 +148,7 @@ export default function DynamicServiceForm({ fields, onSubmit, submitting = fals
 
   const baseClass = "w-full border rounded-xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-[#09967C]";
 
-  const renderField = (field: FormField, value: any, set: (next: any) => void, error?: string) => {
+  const renderField = (field: FormField, value: any, set: (next: any) => void, error?: string): React.ReactNode => {
     const common = { disabled: submitting };
 
     return (
