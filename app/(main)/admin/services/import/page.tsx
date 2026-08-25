@@ -6,147 +6,23 @@ import * as XLSX from "xlsx";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, TusanButton, TusanCard, SectionHeader } from "@/components/ui";
 
-type ImportRow = {
-  rowNumber: number;
-  title: string;
-  category: string | null;
-  description: string | null;
-  price: number;
-  icon: string | null;
-  service_type: "parent" | "normal";
-  parent_title: string | null;
-  is_active: boolean;
-  form_schema: unknown[];
-  pricing_rules: unknown[];
-  error?: string;
-};
+type ImportRow = { rowNumber:number; title:string; category:string|null; description:string|null; price:number; icon:string|null; service_type:"parent"|"normal"; parent_title:string|null; is_active:boolean; form_schema:unknown[]; pricing_rules:unknown[]; error?:string };
+type ExistingService = { id:string; title:string; parent_service_id:string|null; parent_form_id:string|null; service_type:string|null };
+const HEADERS=["title","category","description","price","service_type","parent_title","is_active","icon","form_schema","pricing_rules"];
+function text(v:unknown){return v==null?"":String(v).trim()}
+function parseBool(v:unknown){const s=text(v).toLowerCase();return s===""?true:["true","1","yes","بله","فعال"].includes(s)}
+function parseJson(value:unknown,row:number,field:string):unknown[]{const raw=text(value);if(!raw)return[];try{const parsed=JSON.parse(raw);if(!Array.isArray(parsed))throw new Error(`${field} باید آرایه JSON باشد.`);return parsed}catch(e:any){throw new Error(`ردیف ${row}: ${field} نامعتبر است (${e?.message||"JSON نامعتبر"}).`)}}
+function normalizeTitle(v:string){return v.replace(/\u200c/g," ").replace(/\s+/g," ").trim().toLocaleLowerCase("fa-IR")}
+function parseRows(file:File):Promise<ImportRow[]>{return file.arrayBuffer().then(buffer=>{const workbook=XLSX.read(buffer,{type:"array"});const sheet=workbook.Sheets[workbook.SheetNames[0]];const raw=XLSX.utils.sheet_to_json<Record<string,unknown>>(sheet,{defval:""});if(!raw.length)throw new Error("فایل اکسل خالی است.");return raw.map((item,index)=>{const row=index+2;const title=text(item.title||item["عنوان"]);if(!title)return{rowNumber:row,title:"",category:null,description:null,price:0,icon:null,service_type:"normal",parent_title:null,is_active:true,form_schema:[],pricing_rules:[],error:"عنوان خدمت الزامی است."};const priceRaw=text(item.price||item["قیمت"]);const price=priceRaw===""?0:Number(priceRaw.replace(/[,،\s]/g,""));if(!Number.isFinite(price)||price<0)return{rowNumber:row,title,category:text(item.category||item["دسته‌بندی"])||null,description:text(item.description||item["توضیحات"])||null,price:0,icon:text(item.icon||item["آیکون"])||null,service_type:"normal",parent_title:text(item.parent_title||item["خدمت مادر"])||null,is_active:parseBool(item.is_active??item["فعال"]),form_schema:[],pricing_rules:[],error:"قیمت باید عدد صفر یا بیشتر باشد."};try{const kind=normalizeTitle(text(item.service_type||item["نوع خدمت"]));const service_type=["parent","مادر","خدمت مادر"].includes(kind)?"parent":"normal";return{rowNumber:row,title,category:text(item.category||item["دسته‌بندی"])||null,description:text(item.description||item["توضیحات"])||null,price:service_type==="parent"?0:price,icon:text(item.icon||item["آیکون"])||null,service_type,parent_title:text(item.parent_title||item["خدمت مادر"])||null,is_active:parseBool(item.is_active??item["فعال"]),form_schema:parseJson(item.form_schema||item["فرم JSON"],row,"form_schema"),pricing_rules:parseJson(item.pricing_rules||item["قوانین قیمت JSON"],row,"pricing_rules")}}catch(e:any){return{rowNumber:row,title,category:null,description:null,price:0,icon:null,service_type:"normal",parent_title:null,is_active:true,form_schema:[],pricing_rules:[],error:e?.message||"ردیف نامعتبر"}}})})}
 
-type ExistingService = { id: string; title: string; parent_service_id: string | null; service_type: string | null };
-
-const HEADERS = ["title", "category", "description", "price", "service_type", "parent_title", "is_active", "icon", "form_schema", "pricing_rules"];
-
-function text(v: unknown) { return v == null ? "" : String(v).trim(); }
-function parseBool(v: unknown) { const s = text(v).toLowerCase(); return s === "" ? true : ["true", "1", "yes", "بله", "فعال"].includes(s); }
-function parseJson(value: unknown, row: number, field: string): unknown[] {
-  const raw = text(value);
-  if (!raw) return [];
-  try { const parsed = JSON.parse(raw); if (!Array.isArray(parsed)) throw new Error(`${field} باید آرایه JSON باشد.`); return parsed; }
-  catch (e: any) { throw new Error(`ردیف ${row}: ${field} نامعتبر است (${e?.message || "JSON نامعتبر"}).`); }
-}
-function normalizeTitle(v: string) { return v.replace(/\u200c/g, " ").replace(/\s+/g, " ").trim().toLocaleLowerCase("fa-IR"); }
-function parseRows(file: File): Promise<ImportRow[]> {
-  return file.arrayBuffer().then(buffer => {
-    const workbook = XLSX.read(buffer, { type: "array" });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-    if (!raw.length) throw new Error("فایل اکسل خالی است.");
-    return raw.map((item, index) => {
-      const row = index + 2;
-      const title = text(item.title || item["عنوان"]);
-      if (!title) return { rowNumber: row, title: "", category: null, description: null, price: 0, icon: null, service_type: "normal", parent_title: null, is_active: true, form_schema: [], pricing_rules: [], error: "عنوان خدمت الزامی است." };
-      const priceRaw = text(item.price || item["قیمت"]);
-      const price = priceRaw === "" ? 0 : Number(priceRaw.replace(/[,،\s]/g, ""));
-      if (!Number.isFinite(price) || price < 0) return { rowNumber: row, title, category: text(item.category || item["دسته‌بندی"]) || null, description: text(item.description || item["توضیحات"]) || null, price: 0, icon: text(item.icon || item["آیکون"]) || null, service_type: "normal", parent_title: text(item.parent_title || item["خدمت مادر"]) || null, is_active: parseBool(item.is_active ?? item["فعال"]), form_schema: [], pricing_rules: [], error: "قیمت باید عدد صفر یا بیشتر باشد." };
-      try {
-        const kind = normalizeTitle(text(item.service_type || item["نوع خدمت"]));
-        const service_type = ["parent", "مادر", "خدمت مادر"].includes(kind) ? "parent" : "normal";
-        return { rowNumber: row, title, category: text(item.category || item["دسته‌بندی"]) || null, description: text(item.description || item["توضیحات"]) || null, price: service_type === "parent" ? 0 : price, icon: text(item.icon || item["آیکون"]) || null, service_type, parent_title: text(item.parent_title || item["خدمت مادر"]) || null, is_active: parseBool(item.is_active ?? item["فعال"]), form_schema: parseJson(item.form_schema || item["فرم JSON"], row, "form_schema"), pricing_rules: parseJson(item.pricing_rules || item["قوانین قیمت JSON"], row, "pricing_rules") };
-      } catch (e: any) { return { rowNumber: row, title, category: null, description: null, price: 0, icon: null, service_type: "normal", parent_title: null, is_active: true, form_schema: [], pricing_rules: [], error: e?.message || "ردیف نامعتبر" }; }
-    });
-  });
-}
-
-export default function ImportServicesPage() {
-  const [rows, setRows] = useState<ImportRow[]>([]);
-  const [fileName, setFileName] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [errors, setErrors] = useState<string[]>([]);
-
-  const validRows = useMemo(() => rows.filter(r => !r.error && r.title), [rows]);
-  const invalidRows = useMemo(() => rows.filter(r => r.error), [rows]);
-
-  async function verifyAdmin() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error("ابتدا وارد حساب مدیریت شوید.");
-    const { data: profile, error } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    if (error || profile?.role !== "admin") throw new Error("دسترسی مدیریت مجاز نیست.");
-  }
-
-  async function importServices() {
-    setBusy(true); setMessage(""); setErrors([]);
-    try {
-      await verifyAdmin();
-      const { data: existing, error: loadError } = await supabase.from("services").select("id,title,parent_service_id,service_type");
-      if (loadError) throw new Error(loadError.message);
-      const services: ExistingService[] = existing || [];
-      const parentRows = validRows.filter(r => r.service_type === "parent");
-      const childRows = validRows.filter(r => r.service_type !== "parent");
-      const failures: string[] = [];
-      const serviceByKey = new Map<string, ExistingService>();
-      services.forEach(s => serviceByKey.set(`${normalizeTitle(s.title)}|${s.parent_service_id || ""}`, s));
-      let created = 0, updated = 0;
-
-      async function saveRow(row: ImportRow, parentId: string | null) {
-        const key = `${normalizeTitle(row.title)}|${parentId || ""}`;
-        const current = serviceByKey.get(key);
-        const payload = { title: row.title, category: row.category, description: row.description, price: row.service_type === "parent" ? 0 : row.price, icon: row.icon, is_active: row.is_active, form_schema: row.form_schema, pricing_rules: row.pricing_rules, parent_service_id: parentId, parent_form_id: null, service_type: row.service_type };
-        let service: ExistingService | null = null;
-        if (current) {
-          const { data, error } = await supabase.from("services").update(payload).eq("id", current.id).select("id,title,parent_service_id,service_type").single();
-          if (error || !data) throw new Error(error?.message || "به‌روزرسانی خدمت انجام نشد.");
-          service = data; updated++;
-        } else {
-          const { data, error } = await supabase.from("services").insert(payload).select("id,title,parent_service_id,service_type").single();
-          if (error || !data) throw new Error(error?.message || "ایجاد خدمت انجام نشد.");
-          service = data; created++;
-        }
-        serviceByKey.set(key, service);
-
-        const { data: form, error: formLookupError } = await supabase.from("custom_forms").select("id").eq("service_id", service.id).eq("form_type", row.service_type).limit(1).maybeSingle();
-        if (formLookupError) throw new Error(formLookupError.message);
-        const formPayload = { title: row.title, description: row.description, schema: row.form_schema, is_public: true, form_type: row.service_type, parent_form_id: null, service_id: service.id, sort_order: 0 };
-        if (form) {
-          const { error } = await supabase.from("custom_forms").update(formPayload).eq("id", form.id);
-          if (error) throw new Error(error.message);
-        } else {
-          const { data: userData } = await supabase.auth.getUser();
-          const { error } = await supabase.from("custom_forms").insert({ ...formPayload, created_by: userData.user?.id || null });
-          if (error) throw new Error(error.message);
-        }
-      }
-
-      for (const row of parentRows) {
-        try { await saveRow(row, null); }
-        catch (e: any) { failures.push(`ردیف ${row.rowNumber} (${row.title}): ${e?.message || "خطا"}`); }
-      }
-      for (const row of childRows) {
-        try {
-          const parent = row.parent_title ? [...serviceByKey.values()].find(s => !s.parent_service_id && normalizeTitle(s.title) === normalizeTitle(row.parent_title!)) : null;
-          if (row.parent_title && !parent) throw new Error(`خدمت مادر «${row.parent_title}» پیدا نشد.`);
-          await saveRow(row, parent?.id || null);
-        } catch (e: any) { failures.push(`ردیف ${row.rowNumber} (${row.title}): ${e?.message || "خطا"}`); }
-      }
-      setErrors(failures); setMessage(`عملیات تمام شد: ${created.toLocaleString("fa-IR")} خدمت ایجاد و ${updated.toLocaleString("fa-IR")} خدمت به‌روزرسانی شد.${failures.length ? ` ${failures.length.toLocaleString("fa-IR")} ردیف با خطا باقی ماند.` : ""}`);
-    } catch (e: any) { setErrors([e?.message || "خطای ناشناخته"]); }
-    finally { setBusy(false); }
-  }
-
-  function downloadTemplate() {
-    const sample = [{ title: "مالیات", category: "مالیات", description: "", price: 0, service_type: "parent", parent_title: "", is_active: true, icon: "💰", form_schema: "[]", pricing_rules: "[]" }, { title: "اظهارنامه گروه ۱", category: "مالیات", description: "", price: 450000, service_type: "normal", parent_title: "مالیات", is_active: true, icon: "📄", form_schema: JSON.stringify([{ id: "national_id", type: "national_code", label: "کد ملی", name: "national_id", required: true }]), pricing_rules: "[]" }];
-    const sheet = XLSX.utils.json_to_sheet(sample, { header: HEADERS });
-    const book = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(book, sheet, "خدمات");
-    XLSX.writeFile(book, "tusan-services-template.xlsx");
-  }
-
-  return <div dir="rtl" className="min-h-screen page-background p-6 text-[var(--text)]"><div className="max-w-6xl mx-auto space-y-6">
-    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4"><SectionHeader title="ورود انبوه خدمات" description="خدمات، فرم‌ها و قوانین قیمت‌گذاری را از فایل Excel وارد یا به‌روزرسانی کنید." /><Link href="/admin/services"><TusanButton variant="secondary">بازگشت</TusanButton></Link></div>
-    <GlassPanel className="p-6 space-y-5">
-      <div className="flex flex-wrap gap-3"><TusanButton variant="outline" onClick={downloadTemplate}>دانلود قالب Excel</TusanButton><label className="inline-flex"><input type="file" accept=".xlsx,.xls" className="hidden" onChange={async e => { const file=e.target.files?.[0]; if(!file)return; setFileName(file.name); setMessage(""); setErrors([]); try { setRows(await parseRows(file)); } catch(err:any) { setRows([]); setErrors([err?.message || "خواندن فایل انجام نشد."]); } }} /><span className="inline-flex items-center justify-center rounded-xl bg-[#09967C] text-white px-5 py-3 font-bold cursor-pointer">انتخاب فایل Excel</span></label>{rows.length > 0 && <TusanButton disabled={busy || invalidRows.length > 0 || validRows.length === 0} onClick={importServices}>{busy ? "در حال وارد کردن..." : "شروع Import"}</TusanButton>}</div>
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm"><b>{fileName || "فایلی انتخاب نشده"}</b>{rows.length > 0 && <span className="mr-4">{rows.length.toLocaleString("fa-IR")} ردیف · {validRows.length.toLocaleString("fa-IR")} معتبر · {invalidRows.length.toLocaleString("fa-IR")} خطادار</span>}</div>
-      {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{message}</div>}
-      {errors.length > 0 && <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 space-y-1">{errors.slice(0, 30).map((e,i)=><div key={i}>{e}</div>)}</div>}
-    </GlassPanel>
-    <TusanCard className="p-6"><h3 className="font-black text-lg mb-3">ساختار فایل</h3><p className="text-sm text-[var(--muted)] mb-4">هر ردیف یک خدمت است. ابتدا خدمات مادر و سپس زیرمجموعه‌ها پردازش می‌شوند. برای فرم و قوانین قیمت‌گذاری، JSON آرایه‌ای وارد کنید.</p><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b"><th className="p-2 text-right">ستون</th><th className="p-2 text-right">توضیح</th></tr></thead><tbody>{HEADERS.map(h=><tr key={h} className="border-b border-[var(--border)]"><td className="p-2 font-mono" dir="ltr">{h}</td><td className="p-2">{h === "parent_title" ? "عنوان دقیق خدمت مادر؛ خالی برای خدمت مستقل" : h === "form_schema" ? "آرایه JSON مطابق FormField" : h === "pricing_rules" ? "آرایه JSON قوانین قیمت‌گذاری" : h === "service_type" ? "parent یا normal" : "اطلاعات پایه خدمت"}</td></tr>)}</tbody></table></div></TusanCard>
-  </div></div>;
-}
+export default function ImportServicesPage(){
+ const[rows,setRows]=useState<ImportRow[]>([]),[fileName,setFileName]=useState(""),[busy,setBusy]=useState(false),[message,setMessage]=useState(""),[errors,setErrors]=useState<string[]>([]);
+ const validRows=useMemo(()=>rows.filter(r=>!r.error&&r.title),[rows]),invalidRows=useMemo(()=>rows.filter(r=>r.error),[rows]);
+ async function verifyAdmin(){const{data:{user}}=await supabase.auth.getUser();if(!user)throw new Error("ابتدا وارد حساب مدیریت شوید.");const{data:profile,error}=await supabase.from("profiles").select("role").eq("id",user.id).single();if(error||profile?.role!=="admin")throw new Error("دسترسی مدیریت مجاز نیست.")}
+ async function importServices(){setBusy(true);setMessage("");setErrors([]);try{await verifyAdmin();const{data:existing,error:loadError}=await supabase.from("services").select("id,title,parent_service_id,parent_form_id,service_type");if(loadError)throw new Error(loadError.message);const services:ExistingService[]=existing||[];const parentRows=validRows.filter(r=>r.service_type==="parent"),childRows=validRows.filter(r=>r.service_type!=="parent"),failures:string[]=[];const serviceByKey=new Map<string,ExistingService>();services.forEach(s=>serviceByKey.set(`${normalizeTitle(s.title)}|${s.parent_service_id||""}`,s));let created=0,updated=0;
+  async function saveRow(row:ImportRow,parent:ExistingService|null){const parentId=parent?.id||null,parentFormId=parent?.parent_form_id||null,key=`${normalizeTitle(row.title)}|${parentId||""}`,current=serviceByKey.get(key);const payload={title:row.title,category:row.category,description:row.description,price:row.service_type==="parent"?0:row.price,icon:row.icon,is_active:row.is_active,form_schema:row.form_schema,pricing_rules:row.pricing_rules,parent_service_id:parentId,parent_form_id:parentFormId,service_type:row.service_type};let service:ExistingService|null=null;if(current){const{data,error}=await supabase.from("services").update(payload).eq("id",current.id).select("id,title,parent_service_id,parent_form_id,service_type").single();if(error||!data)throw new Error(error?.message||"به‌روزرسانی خدمت انجام نشد.");service=data;updated++}else{const{data,error}=await supabase.from("services").insert(payload).select("id,title,parent_service_id,parent_form_id,service_type").single();if(error||!data)throw new Error(error?.message||"ایجاد خدمت انجام نشد.");service=data;created++}serviceByKey.set(key,service);const{data:form,error:formLookupError}=await supabase.from("custom_forms").select("id").eq("service_id",service.id).eq("form_type",row.service_type).limit(1).maybeSingle();if(formLookupError)throw new Error(formLookupError.message);const formPayload={title:row.title,description:row.description,schema:row.form_schema,is_public:true,form_type:row.service_type,parent_form_id:parentFormId,service_id:service.id,sort_order:0};if(form){const{error}=await supabase.from("custom_forms").update(formPayload).eq("id",form.id);if(error)throw new Error(error.message)}else{const{data:userData}=await supabase.auth.getUser();const{error}=await supabase.from("custom_forms").insert({...formPayload,created_by:userData.user?.id||null});if(error)throw new Error(error.message)}}
+  for(const row of parentRows){try{await saveRow(row,null)}catch(e:any){failures.push(`ردیف ${row.rowNumber} (${row.title}): ${e?.message||"خطا"}`)}}
+  for(const row of childRows){try{const parent=row.parent_title?[...serviceByKey.values()].find(s=>!s.parent_service_id&&normalizeTitle(s.title)===normalizeTitle(row.parent_title!))||null:null;if(row.parent_title&&!parent)throw new Error(`خدمت مادر «${row.parent_title}» پیدا نشد.`);await saveRow(row,parent)}catch(e:any){failures.push(`ردیف ${row.rowNumber} (${row.title}): ${e?.message||"خطا"}`)}}
+  setErrors(failures);setMessage(`عملیات تمام شد: ${created.toLocaleString("fa-IR")} خدمت ایجاد و ${updated.toLocaleString("fa-IR")} خدمت به‌روزرسانی شد.${failures.length?` ${failures.length.toLocaleString("fa-IR")} ردیف با خطا باقی ماند.`:""}`)}catch(e:any){setErrors([e?.message||"خطای ناشناخته"])}finally{setBusy(false)}}
+ function downloadTemplate(){const sample=[{title:"مالیات",category:"مالیات",description:"",price:0,service_type:"parent",parent_title:"",is_active:true,icon:"💰",form_schema:"[]",pricing_rules:"[]"},{title:"اظهارنامه گروه ۱",category:"مالیات",description:"",price:450000,service_type:"normal",parent_title:"مالیات",is_active:true,icon:"📄",form_schema:JSON.stringify([{id:"national_id",type:"national_code",label:"کد ملی",name:"national_id",required:true}]),pricing_rules:"[]}];const sheet=XLSX.utils.json_to_sheet(sample,{header:HEADERS});const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,"خدمات");XLSX.writeFile(book,"tusan-services-template.xlsx")}
+ return <div dir="rtl" className="min-h-screen page-background p-6 text-[var(--text)]"><div className="max-w-6xl mx-auto space-y-6"><div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4"><SectionHeader title="ورود انبوه خدمات" description="خدمات، فرم‌ها و قوانین قیمت‌گذاری را از فایل Excel وارد یا به‌روزرسانی کنید."/><Link href="/admin/services"><TusanButton variant="secondary">بازگشت</TusanButton></Link></div><GlassPanel className="p-6 space-y-5"><div className="flex flex-wrap gap-3"><TusanButton variant="outline" onClick={downloadTemplate}>دانلود قالب Excel</TusanButton><label className="inline-flex"><input type="file" accept=".xlsx,.xls" className="hidden" onChange={async e=>{const file=e.target.files?.[0];if(!file)return;setFileName(file.name);setMessage("");setErrors([]);try{setRows(await parseRows(file))}catch(err:any){setRows([]);setErrors([err?.message||"خواندن فایل انجام نشد."])}}}/><span className="inline-flex items-center justify-center rounded-xl bg-[#09967C] text-white px-5 py-3 font-bold cursor-pointer">انتخاب فایل Excel</span></label>{rows.length>0&&<TusanButton disabled={busy||invalidRows.length>0||validRows.length===0} onClick={importServices}>{busy?"در حال وارد کردن...":"شروع Import"}</TusanButton>}</div><div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-sm"><b>{fileName||"فایلی انتخاب نشده"}</b>{rows.length>0&&<span className="mr-4">{rows.length.toLocaleString("fa-IR")} ردیف · {validRows.length.toLocaleString("fa-IR")} معتبر · {invalidRows.length.toLocaleString("fa-IR")} خطادار</span>}</div>{message&&<div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{message}</div>}{errors.length>0&&<div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 space-y-1">{errors.slice(0,30).map((e,i)=><div key={i}>{e}</div>)}</div>}</GlassPanel><TusanCard className="p-6"><h3 className="font-black text-lg mb-3">ساختار فایل</h3><p className="text-sm text-[var(--muted)] mb-4">هر ردیف یک خدمت است. ابتدا خدمات مادر و سپس زیرمجموعه‌ها پردازش می‌شوند. برای فرم و قوانین قیمت‌گذاری، JSON آرایه‌ای وارد کنید.</p><div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b"><th className="p-2 text-right">ستون</th><th className="p-2 text-right">توضیح</th></tr></thead><tbody>{HEADERS.map(h=><tr key={h} className="border-b border-[var(--border)]"><td className="p-2 font-mono" dir="ltr">{h}</td><td className="p-2">{h==="parent_title"?"عنوان دقیق خدمت مادر؛ خالی برای خدمت مستقل":h==="form_schema"?"آرایه JSON مطابق FormField":h==="pricing_rules"?"آرایه JSON قوانین قیمت‌گذاری":h==="service_type"?"parent یا normal":"اطلاعات پایه خدمت"}</td></tr>)}</tbody></table></div></TusanCard></div></div>}
