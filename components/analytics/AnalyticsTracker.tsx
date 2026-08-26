@@ -16,7 +16,11 @@ export default function AnalyticsTracker() {
     const serviceId = serviceIdFromPath(pathname);
     trackEvent("page_view", { page_path: pathname, page_location: window.location.href });
     if (serviceId) trackEvent("service_view", { service_id: serviceId });
-    if (pathname.startsWith("/payment/")) trackEvent("order_created", { order_id: pathname.split("/")[2] || undefined });
+
+    if (pathname.startsWith("/payment/") && sessionStorage.getItem("tusan_order_flow_started") === "1") {
+      trackEvent("order_created", { order_id: pathname.split("/")[2] || undefined });
+      sessionStorage.removeItem("tusan_order_flow_started");
+    }
   }, [pathname]);
 
   useEffect(() => {
@@ -30,6 +34,7 @@ export default function AnalyticsTracker() {
     };
     const onSubmit = () => {
       if (!pathname.startsWith("/services/")) return;
+      sessionStorage.setItem("tusan_order_flow_started", "1");
       trackEvent("form_submit", { service_id: serviceIdFromPath(pathname) });
     };
     const onClick = (event: MouseEvent) => {
