@@ -4,6 +4,7 @@ import { Vazirmatn } from "next/font/google";
 import "./globals.css";
 import "./design-system-accessibility.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
+import AnalyticsTracker from "@/components/analytics/AnalyticsTracker";
 import { getSiteSettings } from "@/lib/siteSettings";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir";
@@ -42,9 +43,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 function gtag(){dataLayer.push(arguments);}
 window.gtag = gtag;
 gtag('js', new Date());
-gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: true });`}
+gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: false });`}
         </Script>
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider><AnalyticsTracker />{children}</ThemeProvider>
       </body>
     </html>
   );
