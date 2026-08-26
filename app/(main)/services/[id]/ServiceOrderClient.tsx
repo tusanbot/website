@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
@@ -41,8 +41,6 @@ function normalizeRules(value: any): PricingRule[] {
   }
   return Array.isArray(value) ? value : [];
 }
-
-/** Merge shared parent fields with service-specific fields without duplicating fields by name/id. */
 function mergeFormSchemas(parentFields: any[], childFields: any[]): any[] {
   const result: any[] = [];
   const seen = new Set<string>();
@@ -69,106 +67,54 @@ export default function ServiceOrderClient({ initialService }: { initialService:
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState<Record<string, any>>({});
+  const idempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => { loadChildren(); }, [serviceId]);
 
   async function loadSharedParentFields(parentFormId?: string | null) {
-    if (!parentFormId) {
-      setParentFields([]);
-      return;
-    }
-    const { data, error: parentError } = await supabase
-      .from("custom_forms")
-      .select("schema")
-      .eq("id", parentFormId)
-      .maybeSingle();
+    if (!parentFormId) { setParentFields([]); return; }
+    const { data, error: parentError } = await supabase.from("custom_forms").select("schema").eq("id", parentFormId).maybeSingle();
     if (parentError) throw new Error(parentError.message);
     setParentFields(normalizeSchema(data?.schema));
   }
 
   async function loadChildren() {
     try {
-      const { data: childServices, error: childServiceError } = await supabase
-        .from("services")
-        .select("id,title,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,parent_form_id")
-        .eq("parent_service_id", serviceId)
-        .eq("is_active", true)
-        .order("created_at", { ascending: true });
+      const { data: childServices, error: childServiceError } = await supabase.from("services").select("id,title,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,parent_form_id").eq("parent_service_id", serviceId).eq("is_active", true).order("created_at", { ascending: true });
       if (childServiceError) throw new Error(childServiceError.message);
-
-      const normalized = (childServices || []).map((item: any) => ({
-        ...item,
-        price: Number(item.price || 0),
-        form_schema: normalizeSchema(item.form_schema),
-        pricing_rules: normalizeRules(item.pricing_rules),
-      })) as Service[];
-
+      const normalized = (childServices || []).map((item: any) => ({ ...item, price: Number(item.price || 0), form_schema: normalizeSchema(item.form_schema), pricing_rules: normalizeRules(item.pricing_rules) })) as Service[];
       setChildren(normalized);
-
       if (normalized.length > 0) {
         await loadSharedParentFields(normalized.find((item) => item.parent_form_id)?.parent_form_id);
-        setLegacyChildren([]);
-        setHasChildren(true);
-        return;
+        setLegacyChildren([]); setHasChildren(true); return;
       }
-
-      // Direct links to a child service still need the shared parent form.
-      if (initialService.parent_form_id) await loadSharedParentFields(initialService.parent_form_id);
-      else setParentFields([]);
-
-      const { data: parentForm } = await supabase
-        .from("custom_forms")
-        .select("id")
-        .eq("service_id", serviceId)
-        .eq("form_type", "parent")
-        .is("parent_form_id", null)
-        .eq("is_public", true)
-        .maybeSingle();
-
+      if (initialService.parent_form_id) await loadSharedParentFields(initialService.parent_form_id); else setParentFields([]);
+      const { data: parentForm } = await supabase.from("custom_forms").select("id").eq("service_id", serviceId).eq("form_type", "parent").is("parent_form_id", null).eq("is_public", true).maybeSingle();
       if (parentForm) {
-        const { data: oldChildren, error: oldError } = await supabase
-          .from("custom_forms")
-          .select("id,title,description,price,schema,sort_order")
-          .eq("service_id", serviceId)
-          .eq("parent_form_id", parentForm.id)
-          .eq("form_type", "normal")
-          .eq("is_public", true)
-          .order("sort_order", { ascending: true })
-          .order("created_at", { ascending: true });
+        const { data: oldChildren, error: oldError } = await supabase.from("custom_forms").select("id,title,description,price,schema,sort_order").eq("service_id", serviceId).eq("parent_form_id", parentForm.id).eq("form_type", "normal").eq("is_public", true).order("sort_order", { ascending: true }).order("created_at", { ascending: true });
         if (oldError) throw new Error(oldError.message);
         setLegacyChildren((oldChildren || []).map((form: any) => ({ ...form, price: Number(form.price || 0), schema: normalizeSchema(form.schema) })));
-      } else {
-        setLegacyChildren([]);
-      }
+      } else setLegacyChildren([]);
       setHasChildren(normalized.length > 0);
     } catch (err: any) {
-      console.error(err);
-      setError(err?.message || "خطایی هنگام دریافت اطلاعات خدمت رخ داد.");
+      console.error(err); setError(err?.message || "خطایی هنگام دریافت اطلاعات خدمت رخ داد.");
     }
   }
 
   async function submitOrder(submittedData: Record<string, any>) {
+    if (submitting) return;
     const chosenService = selectedChild;
     const chosenLegacy = selectedLegacy;
-    if ((hasChildren || legacyChildren.length > 0) && !chosenService && !chosenLegacy) {
-      setError("ابتدا یکی از خدمات موردنظر را انتخاب کنید.");
-      return;
-    }
-    setSubmitting(true);
-    setError("");
+    if ((hasChildren || legacyChildren.length > 0) && !chosenService && !chosenLegacy) { setError("ابتدا یکی از خدمات موردنظر را انتخاب کنید."); return; }
+    setSubmitting(true); setError("");
+    if (!idempotencyKeyRef.current) idempotencyKeyRef.current = crypto.randomUUID();
+    const idempotencyKey = idempotencyKeyRef.current;
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push("/login");
-        return;
-      }
+      if (!user) { router.push("/login"); return; }
       const orderServiceId = chosenService?.id || service!.id;
       const orderFormId = chosenLegacy?.id || null;
-      const response = await fetch("/api/orders/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceId: orderServiceId, formId: orderFormId, formData: submittedData }),
-      });
+      const response = await fetch("/api/orders/create", { method: "POST", headers: { "Content-Type": "application/json", "X-Idempotency-Key": idempotencyKey }, body: JSON.stringify({ serviceId: orderServiceId, formId: orderFormId, formData: submittedData, idempotencyKey }) });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         const details = Array.isArray(payload?.errors) ? payload.errors.map((item: any) => item.message).filter(Boolean).join("\n") : "";
@@ -176,37 +122,28 @@ export default function ServiceOrderClient({ initialService }: { initialService:
       }
       const order = payload?.order;
       if (!order?.id) throw new Error("سفارش ثبت شد اما اطلاعات سفارش دریافت نشد.");
-      router.push(`/payment/${order.id}`);
-      router.refresh();
+      idempotencyKeyRef.current = null;
+      router.push(`/payment/${order.id}`); router.refresh();
     } catch (err: any) {
-      console.error(err);
-      setError(err?.message || "خطایی هنگام ثبت سفارش رخ داد.");
-    } finally {
-      setSubmitting(false);
-    }
+      console.error(err); setError(err?.message || "خطایی هنگام ثبت سفارش رخ داد.");
+    } finally { setSubmitting(false); }
   }
 
   const handleFormChange = useCallback((next: Record<string, any>) => setFormData(next), []);
-
-  const activeSchema = useMemo(() => {
-    if (selectedChild) return mergeFormSchemas(parentFields, selectedChild.form_schema);
-    if (selectedLegacy) return mergeFormSchemas(parentFields, selectedLegacy.schema);
-    return mergeFormSchemas(parentFields, service?.form_schema || []);
-  }, [parentFields, selectedChild, selectedLegacy, service]);
+  const activeSchema = useMemo(() => { if (selectedChild) return mergeFormSchemas(parentFields, selectedChild.form_schema); if (selectedLegacy) return mergeFormSchemas(parentFields, selectedLegacy.schema); return mergeFormSchemas(parentFields, service?.form_schema || []); }, [parentFields, selectedChild, selectedLegacy, service]);
   const activeRules = selectedChild ? selectedChild.pricing_rules : service?.pricing_rules || [];
   const activeBasePrice = selectedChild?.price ?? selectedLegacy?.price ?? service?.price ?? 0;
   const currentPrice = calculateServicePrice(activeBasePrice, activeRules, formData);
   const showingChildPicker = !selectedChild && !selectedLegacy && (children.length > 0 || legacyChildren.length > 0);
 
   if (!service) return <div dir="rtl" className="min-h-screen page-background p-6"><GlassPanel className="p-8 text-center"><div className="text-5xl mb-4">⚠️</div><h1 className="text-xl font-bold">خدمت پیدا نشد</h1><p className="text-[var(--text-muted)] mt-2">{error}</p><div className="mt-6"><Link href="/services"><TusanButton>بازگشت به خدمات</TusanButton></Link></div></GlassPanel></div>;
-
   return <div dir="rtl" className="min-h-screen bg-gray-100 p-6"><div className="max-w-3xl mx-auto">
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6"><div><h1 className="text-2xl font-extrabold leading-9">{service.icon || "📋"} {service.title}</h1><p className="text-sm text-[var(--text-muted)] mt-1">{service.category || "ثبت سفارش خدمت"}</p></div><Link href="/services"><TusanButton variant="secondary">← بازگشت به خدمات</TusanButton></Link></div>
     {service.description && <GlassPanel className="p-6 mb-5"><h2 className="font-bold mb-2">درباره این خدمت</h2><p className="text-[var(--text-secondary)] leading-7">{service.description}</p></GlassPanel>}
-    {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-5 whitespace-pre-line">{error}</div>}
+    {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-5 whitespace-pre-line" role="alert">{error}</div>}
     {showingChildPicker ? <GlassPanel className="bg-white rounded-2xl shadow p-6"><div className="mb-6"><h2 className="text-xl font-bold">انتخاب خدمت</h2><p className="text-sm text-[var(--text-muted)] mt-1">یکی از خدمات زیرمجموعه را انتخاب کنید.</p></div><div className="grid sm:grid-cols-2 gap-4">
-      {children.map(child => <button key={child.id} type="button" onClick={() => { setSelectedChild(child); setSelectedLegacy(null); setFormData({}); setError(""); }} className="text-right border rounded-2xl p-5 bg-white hover:border-[#09967C] hover:shadow-md transition"><div className="flex items-center gap-3"><div className="text-2xl">{child.icon || "📄"}</div><div className="font-bold text-lg">{child.title}</div></div>{child.description && <div className="text-sm text-gray-500 mt-2 leading-6">{child.description}</div>}<div className="mt-3 text-[#09967C] font-bold">{child.price > 0 ? `${child.price.toLocaleString("fa-IR")} تومان` : "تماس بگیرید"}</div><div className="text-[#09967C] font-bold text-sm mt-2">انتخاب خدمت ←</div></button>)}
-      {legacyChildren.map(child => <button key={child.id} type="button" onClick={() => { setSelectedLegacy(child); setSelectedChild(null); setFormData({}); setError(""); }} className="text-right border rounded-2xl p-5 bg-white hover:border-[#09967C] hover:shadow-md transition"><div className="font-bold text-lg">{child.title}</div>{child.description && <div className="text-sm text-gray-500 mt-2 leading-6">{child.description}</div>}<div className="mt-3 text-[#09967C] font-bold">{child.price > 0 ? `${child.price.toLocaleString("fa-IR")} تومان` : "تماس بگیرید"}</div><div className="text-[#09967C] font-bold text-sm mt-2">انتخاب فرم ←</div></button>)}
-    </div></GlassPanel> : <GlassPanel className="bg-white rounded-2xl shadow p-6"><div className="flex items-center justify-between gap-3 mb-6"><div><h2 className="text-xl font-bold">{selectedChild ? selectedChild.title : selectedLegacy ? selectedLegacy.title : "اطلاعات سفارش"}</h2><p className="text-sm text-[var(--text-muted)] mt-1">مبلغ فعلی خدمت: <strong className="text-[#09967C]">{currentPrice.toLocaleString("fa-IR")} تومان</strong></p></div>{(selectedChild || selectedLegacy) && <TusanButton type="button" variant="secondary" onClick={() => { setSelectedChild(null); setSelectedLegacy(null); setFormData({}); }}>تغییر خدمت</TusanButton>}</div>{activeSchema.length === 0 ? <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center"><p className="text-[var(--text-muted)]">این فرم هنوز فیلدی ندارد.</p></div> : <DynamicServiceForm fields={activeSchema} onSubmit={submitOrder} onChange={handleFormChange} submitting={submitting} />}</GlassPanel>}
+      {children.map(child => <button key={child.id} type="button" onClick={() => { setSelectedChild(child); setSelectedLegacy(null); setFormData({}); setError(""); idempotencyKeyRef.current = null; }} className="text-right border rounded-2xl p-5 bg-white hover:border-[#09967C] hover:shadow-md transition"><div className="flex items-center gap-3"><div className="text-2xl">{child.icon || "📄"}</div><div className="font-bold text-lg">{child.title}</div></div>{child.description && <div className="text-sm text-gray-500 mt-2 leading-6">{child.description}</div>}<div className="mt-3 text-[#09967C] font-bold">{child.price > 0 ? `${child.price.toLocaleString("fa-IR")} تومان` : "تماس بگیرید"}</div><div className="text-[#09967C] font-bold text-sm mt-2">انتخاب خدمت ←</div></button>)}
+      {legacyChildren.map(child => <button key={child.id} type="button" onClick={() => { setSelectedLegacy(child); setSelectedChild(null); setFormData({}); setError(""); idempotencyKeyRef.current = null; }} className="text-right border rounded-2xl p-5 bg-white hover:border-[#09967C] hover:shadow-md transition"><div className="font-bold text-lg">{child.title}</div>{child.description && <div className="text-sm text-gray-500 mt-2 leading-6">{child.description}</div>}<div className="mt-3 text-[#09967C] font-bold">{child.price > 0 ? `${child.price.toLocaleString("fa-IR")} تومان` : "تماس بگیرید"}</div><div className="text-[#09967C] font-bold text-sm mt-2">انتخاب فرم ←</div></button>)}
+    </div></GlassPanel> : <GlassPanel className="bg-white rounded-2xl shadow p-6"><div className="flex items-center justify-between gap-3 mb-6"><div><h2 className="text-xl font-bold">{selectedChild ? selectedChild.title : selectedLegacy ? selectedLegacy.title : "اطلاعات سفارش"}</h2><p className="text-sm text-[var(--text-muted)] mt-1">مبلغ فعلی خدمت: <strong className="text-[#09967C]">{currentPrice.toLocaleString("fa-IR")} تومان</strong></p></div>{(selectedChild || selectedLegacy) && <TusanButton type="button" variant="secondary" onClick={() => { setSelectedChild(null); setSelectedLegacy(null); setFormData({}); idempotencyKeyRef.current = null; }}>تغییر خدمت</TusanButton>}</div>{activeSchema.length === 0 ? <div className="border border-dashed border-gray-300 rounded-xl p-6 text-center"><p className="text-[var(--text-muted)]">این فرم هنوز فیلدی ندارد.</p></div> : <DynamicServiceForm fields={activeSchema} onSubmit={submitOrder} onChange={handleFormChange} submitting={submitting} />}</GlassPanel>}
   </div></div>;
 }
