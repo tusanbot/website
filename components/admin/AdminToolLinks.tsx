@@ -2,10 +2,12 @@ import Link from "next/link";
 import { GlassPanel, TusanButton } from "@/components/ui";
 
 const links = [
+  { href: "/tools/ai-profile", icon: "🔑", title: "پروفایل هوش مصنوعی", text: "ورود با کلید شخصی Gemini و مدیریت نشست AI." },
   { href: "/admin/services/new", icon: "🤖", title: "ایجاد خدمت با هوش مصنوعی", text: "تولید اطلاعات خدمت و تنظیمات SEO با Gemini." },
   { href: "/admin/blog", icon: "📝", title: "مدیریت وبلاگ و AI", text: "ایجاد، ویرایش و انتشار مقاله و تولید پیش‌نویس سئو محور با Gemini." },
   { href: "/admin/seo", icon: "📈", title: "مدیریت SEO و Search Console", text: "Performance، سلامت SEO و تحلیل داده‌های Google." },
-  { href: "/tools", icon: "🧰", title: "مشاهده همه ابزارها", text: "بررسی ابزارهای عمومی و هوش مصنوعی سایت." },
+  { href: "/admin/seo/indexation", icon: "🔎", title: "پایش Index و Sitemap", text: "مقایسه Sitemap با GSC و بررسی وضعیت URL در Google." },
+  { href: "/tools", icon: "🧰", title: "همه ابزارها", text: "مشاهده ابزارهای عمومی و هوش مصنوعی سایت." },
 ];
 
 export default function AdminToolLinks() {
@@ -15,7 +17,7 @@ export default function AdminToolLinks() {
         <h2 className="text-xl font-black">🧰 ابزارها و هوش مصنوعی</h2>
         <p className="mt-1 text-sm text-[var(--text-muted)]">دسترسی سریع به ابزارهای متصل‌شده به سایت و بخش‌های مدیریتی آن‌ها.</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {links.map((item) => (
           <div key={item.href} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4">
             <div className="text-2xl">{item.icon}</div>
