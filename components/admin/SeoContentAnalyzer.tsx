@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { supabase } from "@/lib/supabase";
 
 type Check = { id: string; label: string; status: "pass" | "warning" | "fail" | "info"; score: number; detail: string };
 type Result = { score: number; checks: Check[]; critical: Check[]; warnings: Check[]; metrics: { wordCount: number; averageSentenceWords: number; focusKeyword: string | null; focusOccurrences: number; focusDensity: number; internalLinks: number; externalLinks: number; images: number; missingAlt: number; headings: Array<{ level: number; text: string }> }; ai?: { summary?: string; intent?: string; priority?: string; suggestions?: string[] } | null };
@@ -13,7 +14,9 @@ export default function SeoContentAnalyzer({ target, current }: { target: "blog"
   async function analyze() {
     setLoading(true); setError("");
     try {
-      const response = await fetch("/api/admin/seo/content-analyzer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target, title: current.title, metaTitle: current.meta_title, metaDescription: current.meta_description, content: current.content || current.description, excerpt: current.excerpt, focusKeyword: current.focus_keyword || current.primary_keyword, seoKeywords: current.seo_keywords, url: current.url || current.slug }) });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("ابتدا وارد حساب مدیریت شوید.");
+      const response = await fetch("/api/admin/seo/content-analyzer", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ target, title: current.title, metaTitle: current.meta_title, metaDescription: current.meta_description, content: current.content || current.description, excerpt: current.excerpt, focusKeyword: current.focus_keyword || current.primary_keyword, seoKeywords: current.seo_keywords, url: current.url || current.slug }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تحلیل محتوا انجام نشد.");
       setResult(data);
