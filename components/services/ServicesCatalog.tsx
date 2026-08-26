@@ -1,13 +1,13 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GlassPanel, TusanCard, PrimaryLinkButton, SectionHeader, TusanInput } from "@/components/ui";
 import { SERVICE_TAXONOMY, getTaxonomySlug } from "@/lib/serviceTaxonomy";
 
 const ServiceAnnouncementsSlider = dynamic(
   () => import("@/components/ServiceAnnouncementsSlider"),
-  { ssr: false, loading: () => null }
+  { loading: () => null }
 );
 
 type Service = { id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null; is_active: boolean; parent_service_id: string | null };
@@ -15,6 +15,12 @@ type Service = { id: string; title: string; slug: string; category: string | nul
 export default function ServicesCatalog({ services, initialCategory = "all" }: { services: Service[]; initialCategory?: string }) {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(initialCategory);
+
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get("category");
+    if (value) setCategory(value);
+  }, []);
+
   const categories = useMemo(() => {
     const counts = new Map<string, number>();
     services.forEach(service => {
