@@ -22,8 +22,22 @@ export async function POST(request: Request): Promise<Response> {
     const supabase = await createSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'برای ثبت سفارش ابتدا وارد حساب شوید.' }, { status: 401 });
-    const body = await request.json() as { serviceId?: string; formId?: string | null; formData?: Record<string, unknown> };
+    const body = await request.json() as { serviceId?: string; formId?: string | null; formData?: Record<string, unknown>; idempotencyKey?: string };
     if (!body.serviceId || !body.formData || typeof body.formData !== 'object' || Array.isArray(body.formData)) return NextResponse.json({ error: 'اطلاعات فرم ناقص است.' }, { status: 400 });
+
+    const idempotencyKey = String(body.idempotencyKey || request.headers.get('x-idempotency-key') || '').trim();
+    if (idempotencyKey.length > 128) return NextResponse.json({ error: 'شناسه تکرارنشدنی نامعتبر است.' }, { status: 400 });
+
+    if (idempotencyKey) {
+      const { data: existingOrder, error: existingOrderError } = await supabase
+        .from('orders')
+        .select('id,tracking_code,price,form_version_id')
+        .eq('user_id', user.id)
+        .eq('idempotency_key', idempotencyKey)
+        .maybeSingle();
+      if (existingOrderError) throw new Error(existingOrderError.message);
+      if (existingOrder) return NextResponse.json({ order: existingOrder, idempotent: true });
+    }
 
     const { data: service, error: serviceError } = await supabase.from('services').select('id,title,price,form_schema,is_active,parent_service_id,pricing_rules').eq('id', body.serviceId).eq('is_active', true).maybeSingle();
     if (serviceError) throw new Error(serviceError.message);
@@ -33,7 +47,7 @@ export async function POST(request: Request): Promise<Response> {
     let formId: string | null = body.formId ?? null;
     let formVersionId: string | null = null;
     let orderPrice = Number(service.price || 0);
-    let pricingRules = normalizeRules(service.pricing_rules);
+    const pricingRules = normalizeRules(service.pricing_rules);
 
     if (formId) {
       const { data: customForm, error: formError } = await supabase.from('custom_forms').select('id,schema,service_id,is_public,price,active_version_id').eq('id', formId).eq('service_id', service.id).eq('is_public', true).maybeSingle();
@@ -57,8 +71,19 @@ export async function POST(request: Request): Promise<Response> {
     if (!validation.valid) return NextResponse.json({ error: 'اطلاعات فرم کامل یا معتبر نیست.', errors: validation.errors }, { status: 422 });
 
     const finalPrice = calculateServicePrice(orderPrice, pricingRules, validation.data as Record<string, unknown>);
-    const { data: order, error: orderError } = await supabase.from('orders').insert({ user_id: user.id, service_id: service.id, form_id: formId, form_version_id: formVersionId, tracking_code: generateTrackingCode(), status: 'registered', form_data: validation.data, form_schema_snapshot: schema, price: finalPrice }).select('id,tracking_code,price,form_version_id').single();
-    if (orderError) throw new Error(orderError.message);
+    const { data: order, error: orderError } = await supabase.from('orders').insert({ user_id: user.id, service_id: service.id, form_id: formId, form_version_id: formVersionId, idempotency_key: idempotencyKey || null, tracking_code: generateTrackingCode(), status: 'registered', form_data: validation.data, form_schema_snapshot: schema, price: finalPrice }).select('id,tracking_code,price,form_version_id').single();
+    if (orderError) {
+      if (orderError.code === '23505' && idempotencyKey) {
+        const { data: concurrentOrder } = await supabase
+          .from('orders')
+          .select('id,tracking_code,price,form_version_id')
+          .eq('user_id', user.id)
+          .eq('idempotency_key', idempotencyKey)
+          .maybeSingle();
+        if (concurrentOrder) return NextResponse.json({ order: concurrentOrder, idempotent: true });
+      }
+      throw new Error(orderError.message);
+    }
     return NextResponse.json({ order });
   } catch (error) {
     console.error('Order creation error:', error);
