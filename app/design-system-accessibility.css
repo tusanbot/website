@@ -1,4 +1,4 @@
-/* Global contrast guardrails for the Tusan design system. */
+/* Global contrast and interaction guardrails for the Tusan design system. */
 
 :root {
   --text-secondary: #4b5563;
@@ -53,4 +53,39 @@ option {
 ::placeholder {
   color: var(--text-muted);
   opacity: 1;
+}
+
+/* Keyboard users must always have a visible focus indicator. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid #09967C;
+  outline-offset: 3px;
+}
+
+/* Do not let utility classes remove the keyboard focus indicator. */
+:where(a, button, input, select, textarea, [tabindex]):focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Respect users who request reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Keep interactive controls usable in Windows High Contrast / forced-colors mode. */
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea) {
+    forced-color-adjust: auto;
+  }
+
+  :where(a, button, input, select, textarea):focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
 }
