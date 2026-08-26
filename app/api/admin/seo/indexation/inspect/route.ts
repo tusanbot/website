@@ -1,11 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
 
 const SITE = "sc-domain:tusancn.ir";
 const INSPECTION_URL = "https://searchconsole.googleapis.com/v1/urlInspection/index:inspect";
 
 type InspectionRequest = { url?: string };
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const admin = await requireAdmin(request);
+  if (isNextResponse(admin)) return admin;
+
   const token = process.env.GSC_API_TOKEN;
   if (!token) return NextResponse.json({ error: "اتصال Google Search Console پیکربندی نشده است" }, { status: 503 });
 
