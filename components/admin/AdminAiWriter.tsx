@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import AiSeoApplyPanel from "@/components/admin/AiSeoApplyPanel";
+import SeoContentAnalyzer from "@/components/admin/SeoContentAnalyzer";
 
 type Target = "service" | "blog";
 
@@ -35,6 +36,7 @@ export default function AdminAiWriter({ target, current, onApply }: { target: Ta
       {error && <div className="rounded-xl bg-red-50 border border-red-200 p-3 text-sm text-red-700">{error}</div>}
       <button type="button" onClick={generate} disabled={loading} className="rounded-xl bg-[#09967C] px-4 py-2 text-sm font-bold text-white disabled:opacity-50">{loading ? "در حال تولید..." : target === "blog" ? "تولید پیش‌نویس با AI" : "تولید خدمت با AI"}</button>
     </section>
+    <SeoContentAnalyzer target={target} current={current} />
     <AiSeoApplyPanel target={target} onApply={onApply} />
   </div>;
 }
