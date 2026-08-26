@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import ServicesCatalog from "@/components/services/ServicesCatalog";
 
+export const revalidate = 300;
+
 export const metadata: Metadata = {
   title: "خدمات کافی نت توسن",
   description: "فهرست خدمات آنلاین کافی نت توسن؛ خدمات اینترنتی، اداری و کامپیوتری را مشاهده و ثبت سفارش کنید.",
@@ -10,9 +12,7 @@ export const metadata: Metadata = {
 
 type Service = { id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null; is_active: boolean; parent_service_id: string | null };
 
-type ServicesPageProps = { searchParams?: Promise<{ category?: string }> };
-
-export default async function ServicesPage({ searchParams }: ServicesPageProps) {
+export default async function ServicesPage() {
   const supabase = createSupabaseServerClient();
   const { data } = await supabase
     .from("services")
@@ -22,8 +22,6 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
     .order("created_at", { ascending: false });
 
   const services: Service[] = (data || []).map((item: any) => ({ ...item, price: Number(item.price || 0) }));
-  const params = searchParams ? await searchParams : {};
-  const initialCategory = typeof params.category === "string" ? params.category : "all";
 
   return <main dir="rtl" className="min-h-screen page-background text-[var(--text)]">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
@@ -34,7 +32,7 @@ export default async function ServicesPage({ searchParams }: ServicesPageProps) 
           <p className="mt-4 text-white/80 leading-8">خدمات بر اساس حوزه دسته‌بندی شده‌اند و خدمات زیرمجموعه پس از ورود به خدمت مادر قابل انتخاب هستند.</p>
         </div>
       </section>
-      <ServicesCatalog services={services} initialCategory={initialCategory} />
+      <ServicesCatalog services={services} />
     </div>
   </main>;
 }
