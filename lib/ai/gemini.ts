@@ -30,10 +30,10 @@ function pcm16ToWavBase64(base64: string, sampleRate = 24000) {
   return Buffer.concat([header, binary]).toString("base64");
 }
 
-export async function generateWithGemini(profileId: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}): Promise<GeminiResult> {
+export async function generateWithGemini(profileId: string, prompt: string, model = "gemini-3.6-flash", options: GeminiOptions = {}): Promise<GeminiResult> {
   const apiKey = await getProfileApiKey(profileId);
-  const requestedModel = model || "gemini-2.5-flash";
-  const models = Array.from(new Set([requestedModel, "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]));
+  const requestedModel = model || "gemini-3.6-flash";
+  const models = Array.from(new Set([requestedModel, "gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]));
   let lastError: (Error & { status?: number; detail?: string }) | null = null;
 
   for (const candidate of models) {
@@ -59,9 +59,7 @@ export async function generateWithGemini(profileId: string, prompt: string, mode
     break;
   }
 
-  if (lastError) {
-    console.error("Gemini upstream error", { status: lastError.status, detail: lastError.detail });
-  }
+  if (lastError) console.error("Gemini upstream error", { status: lastError.status, detail: lastError.detail });
   throw Object.assign(new Error("GEMINI_UPSTREAM"), { status: 502 });
 }
 
