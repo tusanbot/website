@@ -4,6 +4,9 @@ import { createSessionToken, decryptApiKey, encryptApiKey, hashApiKey, hashSessi
 
 export const AI_SESSION_COOKIE = "tusan_ai_session";
 const SESSION_DAYS = 30;
+const PREFERRED_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+
+type GeminiModel = { name?: string; supportedGenerationMethods?: string[] };
 
 export async function validateGeminiKey(apiKey: string) {
   const key = apiKey.trim();
@@ -16,9 +19,13 @@ export async function validateGeminiKey(apiKey: string) {
       if (response.status === 429) return { ok: false as const, message: "محدودیت درخواست Gemini فعال است؛ کمی بعد دوباره تلاش کنید." };
       return { ok: false as const, message: "اعتبارسنجی کلید Gemini انجام نشد." };
     }
-    const data = await response.json() as { models?: Array<{ name?: string }> };
-    const hasFlash = data.models?.some((model) => model.name === "models/gemini-2.5-flash");
-    return { ok: true as const, model: hasFlash ? "gemini-2.5-flash" : "gemini-2.0-flash" };
+    const data = await response.json() as { models?: GeminiModel[] };
+    const available = (data.models || [])
+      .map((model) => ({ name: model.name?.replace(/^models\//, ""), methods: model.supportedGenerationMethods || [] }))
+      .filter((model): model is { name: string; methods: string[] } => Boolean(model.name) && model.methods.includes("generateContent"));
+    const model = PREFERRED_MODELS.find((name) => available.some((item) => item.name === name)) || available.find((item) => /flash/i.test(item.name))?.name || available[0]?.name;
+    if (!model) return { ok: false as const, message: "این کلید به هیچ مدل Gemini دارای قابلیت تولید محتوا دسترسی ندارد." };
+    return { ok: true as const, model };
   } catch {
     return { ok: false as const, message: "اتصال به Gemini برقرار نشد؛ اتصال اینترنت یا درگاه AI را بررسی کنید." };
   }
