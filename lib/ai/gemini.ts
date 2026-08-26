@@ -8,6 +8,21 @@ function getBaseUrl() {
   return (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
 }
 
+function safeGeminiError(status: number, data: unknown) {
+  const message = typeof data === "object" && data !== null && "error" in data
+    ? (data as { error?: { message?: string; status?: string; code?: number } }).error
+    : undefined;
+  const detail = message?.message || message?.status || "";
+  const error = new Error(`GEMINI_${status}`) as Error & { status?: number; detail?: string };
+  error.status = status;
+  error.detail = detail.slice(0, 300);
+  return error;
+}
+
+async function readGeminiError(response: Response) {
+  try { return await response.json(); } catch { return null; }
+}
+
 function pcm16ToWavBase64(base64: string, sampleRate = 24000) {
   const binary = Buffer.from(base64, "base64");
   const header = Buffer.alloc(44);
@@ -17,18 +32,37 @@ function pcm16ToWavBase64(base64: string, sampleRate = 24000) {
 
 export async function generateWithGemini(profileId: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}): Promise<GeminiResult> {
   const apiKey = await getProfileApiKey(profileId);
-  const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { ...(options.temperature === undefined ? {} : { temperature: options.temperature }), ...(options.maxOutputTokens === undefined ? {} : { maxOutputTokens: options.maxOutputTokens }) } }),
-    cache: "no-store", signal: AbortSignal.timeout(options.timeoutMs || 30000),
-  });
-  if (response.status === 401 || response.status === 403) throw Object.assign(new Error("GEMINI_AUTH"), { status: 401 });
-  if (response.status === 429) throw Object.assign(new Error("GEMINI_RATE_LIMIT"), { status: 429 });
-  if (!response.ok) throw Object.assign(new Error("GEMINI_UPSTREAM"), { status: 502 });
-  const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  const text = data.candidates?.[0]?.content?.parts?.map(part => part.text || "").join("").trim();
-  if (!text) throw Object.assign(new Error("GEMINI_EMPTY"), { status: 502 });
-  return { text, model };
+  const requestedModel = model || "gemini-2.5-flash";
+  const models = Array.from(new Set([requestedModel, "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]));
+  let lastError: (Error & { status?: number; detail?: string }) | null = null;
+
+  for (const candidate of models) {
+    const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { ...(options.temperature === undefined ? {} : { temperature: options.temperature }), ...(options.maxOutputTokens === undefined ? {} : { maxOutputTokens: options.maxOutputTokens }) } }),
+      cache: "no-store", signal: AbortSignal.timeout(options.timeoutMs || 30000),
+    });
+    if (response.ok) {
+      const data = await response.json() as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+      const text = data.candidates?.[0]?.content?.parts?.map(part => part.text || "").join("").trim();
+      if (!text) throw Object.assign(new Error("GEMINI_EMPTY"), { status: 502 });
+      return { text, model: candidate };
+    }
+
+    const data = await readGeminiError(response);
+    lastError = safeGeminiError(response.status, data) as Error & { status?: number; detail?: string };
+
+    if (response.status === 401 || response.status === 403) throw Object.assign(new Error("GEMINI_AUTH"), { status: 401 });
+    if (response.status === 429) throw Object.assign(new Error("GEMINI_RATE_LIMIT"), { status: 429 });
+    if (response.status === 400 && /model|not found|unsupported|invalid/i.test(lastError.detail || "")) continue;
+    if (response.status === 404) continue;
+    break;
+  }
+
+  if (lastError) {
+    console.error("Gemini upstream error", { status: lastError.status, detail: lastError.detail });
+  }
+  throw Object.assign(new Error("GEMINI_UPSTREAM"), { status: 502 });
 }
 
 export async function generateSpeechWithGemini(profileId: string, text: string, voice = "Kore", speed = 1): Promise<GeminiSpeechResult> {
