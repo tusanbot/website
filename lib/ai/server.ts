@@ -4,7 +4,7 @@ import { createSessionToken, decryptApiKey, encryptApiKey, hashApiKey, hashSessi
 
 export const AI_SESSION_COOKIE = "tusan_ai_session";
 const SESSION_DAYS = 30;
-const PREFERRED_MODELS = ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+const PREFERRED_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 
 type GeminiModel = { name?: string; supportedGenerationMethods?: string[] };
 
