@@ -37,8 +37,8 @@ export async function generateWithGemini(profileId: string, prompt: string, mode
   let lastError: (Error & { status?: number; detail?: string }) | null = null;
 
   for (const candidate of models) {
-    const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(candidate)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
+    const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(candidate)}:generateContent`, {
+      method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { ...(options.temperature === undefined ? {} : { temperature: options.temperature }), ...(options.maxOutputTokens === undefined ? {} : { maxOutputTokens: options.maxOutputTokens }) } }),
       cache: "no-store", signal: AbortSignal.timeout(options.timeoutMs || 30000),
     });
@@ -66,8 +66,8 @@ export async function generateWithGemini(profileId: string, prompt: string, mode
 export async function generateSpeechWithGemini(profileId: string, text: string, voice = "Kore", speed = 1): Promise<GeminiSpeechResult> {
   const apiKey = await getProfileApiKey(profileId);
   const model = process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
-  const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
+  const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(model)}:generateContent`, {
+    method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
     body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: `Speak the following text naturally. Preserve the language and pronunciation. Requested playback speed: ${speed}x.\n\n${text}` }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } } }),
     cache: "no-store", signal: AbortSignal.timeout(60000),
   });
