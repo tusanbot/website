@@ -24,7 +24,7 @@ function stripHtml(value: string) { return value.replace(/<[^>]*>/g, " ").replac
 export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
   const post = await getPost((await params).slug);
   if (!post) notFound();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://tusancn.ir";
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
   const canonical = `${siteUrl}/blog/${encodeURIComponent(post.slug)}`;
   const services = (post.blog_post_services ?? []).map((x: any) => x.services).filter(Boolean);
   const categorySlug = post.blog_categories?.slug;
