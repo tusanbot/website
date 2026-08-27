@@ -15,6 +15,19 @@ type NotificationItem = {
   read_at: string | null;
 };
 
+const icons: Record<string, string> = {
+  new_order: "📋",
+  order_created: "📋",
+  order_status: "🔄",
+  order_status_changed: "🔄",
+  payment_status: "💳",
+  payment_success: "💳",
+  new_message: "💬",
+  receipt_uploaded: "🧾",
+  document_requested: "📎",
+  order_completed: "✅",
+};
+
 export default function NotificationsPage() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,25 +44,38 @@ export default function NotificationsPage() {
   }
 
   useEffect(() => {
+    let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { setLoading(false); return; }
+      if (!mounted || !user) { setLoading(false); return; }
       setUserId(user.id);
       load(user.id);
+      channel = supabase
+        .channel(`notifications-page-${user.id}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
+          const next = payload.new as NotificationItem;
+          setItems((current) => [next, ...current.filter((item) => item.id !== next.id)]);
+        })
+        .subscribe();
     });
+    return () => { mounted = false; if (channel) supabase.removeChannel(channel); };
   }, []);
 
   async function markAllRead() {
     if (!userId) return;
     const now = new Date().toISOString();
-    await supabase.from("notifications").update({ read_at: now }).eq("recipient_id", userId).is("read_at", null);
-    setItems((current) => current.map((item) => ({ ...item, read_at: item.read_at || now })));
+    const { error } = await supabase.from("notifications").update({ read_at: now }).eq("recipient_id", userId).is("read_at", null);
+    if (!error) setItems((current) => current.map((item) => ({ ...item, read_at: item.read_at || now })));
   }
 
   async function markRead(id: string) {
+    if (!userId) return;
     const now = new Date().toISOString();
-    await supabase.from("notifications").update({ read_at: now }).eq("id", id);
-    setItems((current) => current.map((item) => item.id === id ? { ...item, read_at: now } : item));
+    const { error } = await supabase.from("notifications").update({ read_at: now }).eq("id", id).eq("recipient_id", userId).is("read_at", null);
+    if (!error) setItems((current) => current.map((item) => item.id === id ? { ...item, read_at: now } : item));
   }
+
+  const unreadCount = items.filter((item) => !item.read_at).length;
 
   return (
     <div dir="rtl" className="min-h-screen page-background p-4 lg:p-6">
@@ -60,19 +86,15 @@ export default function NotificationsPage() {
         </div>
         <GlassPanel className="overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
-            <span className="text-sm text-[var(--text-muted)]">{items.filter((item) => !item.read_at).length.toLocaleString("fa-IR")} اعلان خوانده‌نشده</span>
-            <button type="button" onClick={markAllRead} className="text-sm font-bold text-[var(--primary)]">علامت‌گذاری همه به‌عنوان خوانده‌شده</button>
+            <span className="text-sm text-[var(--text-muted)]">{unreadCount.toLocaleString("fa-IR")} اعلان خوانده‌نشده</span>
+            <button type="button" disabled={unreadCount === 0} onClick={markAllRead} className="text-sm font-bold text-[var(--primary)] disabled:opacity-40">علامت‌گذاری همه به‌عنوان خوانده‌شده</button>
           </div>
-          {loading ? (
-            <div className="p-10 text-center text-[var(--text-muted)]">در حال دریافت اعلان‌ها...</div>
-          ) : items.length === 0 ? (
-            <div className="p-10 text-center text-[var(--text-muted)]">اعلانی برای نمایش وجود ندارد.</div>
-          ) : (
+          {loading ? <div className="p-10 text-center text-[var(--text-muted)]">در حال دریافت اعلان‌ها...</div> : items.length === 0 ? <div className="p-10 text-center text-[var(--text-muted)]">اعلانی برای نمایش وجود ندارد.</div> : (
             <div className="divide-y divide-[var(--border)]">
               {items.map((item) => (
                 <div key={item.id} className={`p-5 ${!item.read_at ? "bg-[var(--primary)]/5" : ""}`}>
                   <div className="flex items-start gap-3">
-                    <span className="text-xl">{item.type === "new_message" ? "💬" : item.type === "payment_status" ? "💳" : item.type === "new_order" ? "📋" : "🔔"}</span>
+                    <span className="text-xl" aria-hidden="true">{icons[item.type] || "🔔"}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <h2 className="font-black">{item.title}</h2>

@@ -1,6 +1,9 @@
 import { supabase } from "@/lib/supabase";
 
 export type NotificationType =
+    | "new_order"
+    | "order_status"
+    | "payment_status"
     | "order_created"
     | "payment_success"
     | "receipt_uploaded"
