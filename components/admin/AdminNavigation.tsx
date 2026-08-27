@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 export type AdminTab = "dashboard" | "orders" | "services" | "social" | "users" | "messages" | "reports" | "settings";
 
@@ -39,6 +40,7 @@ export default function AdminNavigation({ activeTab, unreadMessages, onTabChange
                             })}
                         </nav>
                     </div>
+                    <NotificationBell />
                 </div>
             </div>
         </header>
