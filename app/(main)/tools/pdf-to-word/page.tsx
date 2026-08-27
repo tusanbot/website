@@ -4,8 +4,8 @@ import { ChangeEvent, DragEvent, useRef, useState } from "react";
 import { Download, FileText, Loader2, RotateCcw, Upload } from "lucide-react";
 
 type PdfTextItem = { str?: string; transform?: number[]; width?: number; height?: number; hasEOL?: boolean };
-type PdfPage = { getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<unknown> }; getTextContent?: () => Promise<{ items: PdfTextItem[] }> };
-type PdfDocument = { numPages: number; getPage: (n: number) => Promise<PdfPage> };
+type PdfPage = { getViewport: (o: { scale: number }) => { width: number; height: number }; render: (o: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }) => { promise: Promise<unknown> }; getTextContent?: () => Promise<{ items: PdfTextItem[] }>; cleanup?: () => void };
+type PdfDocument = { numPages: number; getPage: (n: number) => Promise<PdfPage>; cleanup?: () => void; destroy?: () => void };
 type PdfJs = { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<PdfDocument> } };
 type DocxApi = { Document: new (o: any) => any; Packer: { toBlob: (d: any) => Promise<Blob> }; Paragraph: new (o: any) => any; TextRun: new (o: any) => any; Table: new (o: any) => any; TableRow: new (o: any) => any; TableCell: new (o: any) => any; WidthType: { PERCENTAGE: string } };
 type OcrApi = { createWorker: (langs?: string, oem?: number, options?: { logger?: (m: { status?: string; progress?: number }) => void }) => Promise<any> };
@@ -157,7 +157,8 @@ function advancedParagraphs(lines: Line[]) {
 }
 
 async function renderPage(page: PdfPage) {
-  const viewport = page.getViewport({ scale: 2 });
+  // OCR فقط به وضوح لازم برای تشخیص متن نیاز دارد؛ کاهش scale از 2 به 1.25 مصرف RAM/CPU را برای PDFهای حجیم به‌طور محسوسی کم می‌کند.
+  const viewport = page.getViewport({ scale: 1.25 });
   const canvas = globalThis.document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
   canvas.height = Math.ceil(viewport.height);
@@ -191,45 +192,61 @@ export default function PdfToWordPage() {
     if (selected.size > 50 * 1024 * 1024) { setError("حداکثر حجم فایل ۵۰ مگابایت است."); setStatus("error"); return; }
     setFile(selected); setError(""); setText(""); setLayouts([]); setWordBlob(null); setProgress(2); setStatus("loading");
     let worker: any = null;
+    let pdf: PdfDocument | null = null;
     try {
       await loadScript(PDFJS_URL, "tusan-pdfjs");
       const p = libs().pdfjsLib;
       if (!p) throw new Error("کتابخانه PDF بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
       p.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
-      const pdf = await p.getDocument({ data: await selected.arrayBuffer() }).promise;
+      pdf = await p.getDocument({ data: await selected.arrayBuffer() }).promise;
       setPages(pdf.numPages); setStatus("processing");
       const chunks: string[] = []; const allLayouts: Line[][] = [];
       for (let n = 1; n <= pdf.numPages; n++) {
         const page = await pdf.getPage(n);
         let lines: Line[] = []; let direct = "";
-        if (page.getTextContent) {
-          const content = await page.getTextContent();
-          lines = buildLines(content.items || []);
-          direct = plainParagraphs(lines).map(x => x.text).join("\n");
+        try {
+          if (page.getTextContent) {
+            const content = await page.getTextContent();
+            lines = buildLines(content.items || []);
+            direct = plainParagraphs(lines).map(x => x.text).join("\n");
+          }
+          if (useful(direct)) {
+            chunks.push(direct); allLayouts.push(lines); setProgress(Math.round(n / pdf.numPages * 90));
+          } else {
+            if (!worker) {
+              await loadScript(TESSERACT_URL, "tusan-tesseract");
+              const t = libs().Tesseract;
+              if (!t) throw new Error("موتور OCR بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
+              worker = await t.createWorker("fas+eng", 1, { logger: m => {
+                if (m.status === "recognizing text" && typeof m.progress === "number") setProgress(Math.min(95, Math.round(((n - 1 + m.progress) / pdf!.numPages) * 90)));
+              }});
+              if (worker.setParameters) await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: "6" });
+            }
+            const canvas = await renderPage(page);
+            try {
+              const result = await worker.recognize(canvas);
+              const ocr = normalizeFa(result?.data?.text || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+              chunks.push(ocr);
+              allLayouts.push(ocr.split(/\r?\n/).filter(Boolean).map(s => ({ y: 0, font: 10, items: [{ text: s, x: 0, y: 0, width: s.length, font: 10 }] })));
+            } finally {
+              canvas.width = 1;
+              canvas.height = 1;
+            }
+            setProgress(Math.round(n / pdf.numPages * 90));
+          }
+        } finally {
+          page.cleanup?.();
         }
-        if (useful(direct)) {
-          chunks.push(direct); allLayouts.push(lines); setProgress(Math.round(n / pdf.numPages * 90)); continue;
-        }
-        if (!worker) {
-          await loadScript(TESSERACT_URL, "tusan-tesseract");
-          const t = libs().Tesseract;
-          if (!t) throw new Error("موتور OCR بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
-          worker = await t.createWorker("fas+eng", 1, { logger: m => {
-            if (m.status === "recognizing text" && typeof m.progress === "number") setProgress(Math.min(95, Math.round(((n - 1 + m.progress) / pdf.numPages) * 90)));
-          }});
-          if (worker.setParameters) await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: "6" });
-        }
-        const result = await worker.recognize(await renderPage(page));
-        const ocr = normalizeFa(result?.data?.text || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-        chunks.push(ocr);
-        allLayouts.push(ocr.split(/\r?\n/).filter(Boolean).map(s => ({ y: 0, font: 10, items: [{ text: s, x: 0, y: 0, width: s.length, font: 10 }] })));
-        setProgress(Math.round(n / pdf.numPages * 90));
       }
       setText(chunks.map((c, i) => `صفحه ${i + 1}\n${c}`).join("\n\n").trim());
       setLayouts(allLayouts); setProgress(100); setStatus("done");
     } catch (e) {
       console.error(e); setStatus("error"); setError(e instanceof Error ? e.message : "تبدیل فایل انجام نشد.");
-    } finally { if (worker) await worker.terminate(); }
+    } finally {
+      if (worker) await worker.terminate();
+      pdf?.cleanup?.();
+      pdf?.destroy?.();
+    }
   };
 
   const onInput = (e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) void convert(f); };
@@ -256,7 +273,6 @@ export default function PdfToWordPage() {
           const ps = mode === "advanced" ? advancedParagraphs(lines) : plainParagraphs(lines);
           const pageText = ps.map(x => x.text).join("\n").trim();
           if (pageText) {
-            // یک Paragraph به‌جای ساختن Paragraph/TextRun برای تک‌تک خطوط؛ این کار حجم XML و زمان Packer را به‌طور محسوسی کاهش می‌دهد.
             children.push(new Paragraph({ bidirectional: true, alignment: "right", spacing: { after: 80, line: 300 }, children: [new TextRun({ text: `صفحه ${pageIndex + 1}\n${pageText}`, rightToLeft: true })] }));
           }
         }
