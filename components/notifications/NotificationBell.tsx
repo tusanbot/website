@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 
@@ -17,16 +17,25 @@ type NotificationItem = {
 export default function NotificationBell() {
   const [userId, setUserId] = useState<string | null>(null);
   const [items, setItems] = useState<NotificationItem[]>([]);
+  const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
 
   async function load(id: string) {
-    const { data } = await supabase
-      .from("notifications")
-      .select("id,type,title,message,order_id,created_at,read_at")
-      .eq("recipient_id", id)
-      .order("created_at", { ascending: false })
-      .limit(8);
+    const [{ data }, { count }] = await Promise.all([
+      supabase
+        .from("notifications")
+        .select("id,type,title,message,order_id,created_at,read_at")
+        .eq("recipient_id", id)
+        .order("created_at", { ascending: false })
+        .limit(8),
+      supabase
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_id", id)
+        .is("read_at", null),
+    ]);
     setItems((data || []) as NotificationItem[]);
+    setUnread(count ?? 0);
   }
 
   useEffect(() => {
@@ -40,9 +49,15 @@ export default function NotificationBell() {
 
       channel = supabase
         .channel(`central-notifications-${user.id}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
-          const next = payload.new as NotificationItem;
-          setItems((current) => [next, ...current.filter((item) => item.id !== next.id)].slice(0, 8));
+        .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
+          if (payload.eventType === "INSERT") {
+            const next = payload.new as NotificationItem;
+            setItems((current) => [next, ...current.filter((item) => item.id !== next.id)].slice(0, 8));
+          } else if (payload.eventType === "UPDATE") {
+            const next = payload.new as NotificationItem;
+            setItems((current) => current.map((item) => item.id === next.id ? next : item));
+          }
+          load(user.id);
         })
         .subscribe();
     });
@@ -53,8 +68,6 @@ export default function NotificationBell() {
     };
   }, []);
 
-  const unread = useMemo(() => items.filter((item) => !item.read_at).length, [items]);
-
   async function markRead(id: string) {
     if (!userId) return;
     const now = new Date().toISOString();
@@ -64,7 +77,10 @@ export default function NotificationBell() {
       .eq("id", id)
       .eq("recipient_id", userId)
       .is("read_at", null);
-    if (!error) setItems((current) => current.map((item) => item.id === id ? { ...item, read_at: now } : item));
+    if (!error) {
+      setItems((current) => current.map((item) => item.id === id ? { ...item, read_at: now } : item));
+      setUnread((current) => Math.max(0, current - 1));
+    }
   }
 
   async function markAllRead() {
@@ -75,7 +91,10 @@ export default function NotificationBell() {
       .update({ read_at: now })
       .eq("recipient_id", userId)
       .is("read_at", null);
-    if (!error) setItems((current) => current.map((item) => ({ ...item, read_at: item.read_at || now })));
+    if (!error) {
+      setItems((current) => current.map((item) => ({ ...item, read_at: item.read_at || now })));
+      setUnread(0);
+    }
   }
 
   return (
@@ -99,16 +118,22 @@ export default function NotificationBell() {
             {items.length === 0 ? <div className="p-6 text-center text-sm text-[var(--text-muted)]">اعلان جدیدی ندارید.</div> : (
               <div className="max-h-96 overflow-y-auto divide-y divide-[var(--border)]">
                 {items.map((item) => (
-                  <button key={item.id} type="button" onClick={() => markRead(item.id)} className={`w-full text-right px-4 py-3 hover:bg-[var(--background)] ${!item.read_at ? "bg-[var(--primary)]/5" : ""}`}>
+                  <div key={item.id} className={`px-4 py-3 hover:bg-[var(--background)] ${!item.read_at ? "bg-[var(--primary)]/5" : ""}`}>
                     <div className="flex gap-2 items-start">
                       {!item.read_at && <span className="mt-1.5 w-2 h-2 rounded-full bg-[var(--primary)] shrink-0" />}
                       <div className="min-w-0 flex-1">
                         <div className="font-bold text-sm">{item.title}</div>
                         {item.message && <div className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{item.message}</div>}
-                        <div className="text-[10px] text-[var(--text-muted)] mt-2">{new Date(item.created_at).toLocaleString("fa-IR")}</div>
+                        <div className="flex items-center justify-between gap-2 mt-2">
+                          <div className="text-[10px] text-[var(--text-muted)]">{new Date(item.created_at).toLocaleString("fa-IR")}</div>
+                          <div className="flex items-center gap-3">
+                            {item.order_id && <Link href={`/orders/${item.order_id}`} onClick={() => setOpen(false)} className="text-[10px] font-bold text-[var(--primary)]">مشاهده سفارش</Link>}
+                            {!item.read_at && <button type="button" onClick={() => markRead(item.id)} className="text-[10px] font-bold text-[var(--text-muted)]">خوانده شد</button>}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
             )}
