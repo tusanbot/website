@@ -34,7 +34,7 @@ export default function PopularServices() {
         <SectionHeader title="خدمات پرطرفدار توسن" description="خدمات محبوب را سریع ببینید و با یک کلیک وارد صفحه ثبت درخواست شوید." align="center" />
         {loading ? <div className="mt-5 h-16 animate-pulse rounded-2xl border border-[var(--border)] bg-[var(--surface)]" aria-label="در حال بارگذاری خدمات محبوب" /> : railItems.length > 0 ? (
           <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 px-2 py-1 shadow-[var(--shadow-sm)] backdrop-blur">
-            <AnimatedTagRail items={railItems} ariaLabel="خدمات پرطرفدار" speed={20} />
+            <AnimatedTagRail items={railItems} ariaLabel="خدمات پرطرفدار" speed={10} />
           </div>
         ) : <GlassPanel className="mt-5 p-6 text-center text-sm text-[var(--text-muted)]">در حال حاضر خدمت فعالی برای نمایش وجود ندارد.</GlassPanel>}
         <div className="mt-4 flex justify-center"><Link href="/services"><TusanButton variant="secondary" className="px-6 py-2 text-sm">مشاهده همه خدمات</TusanButton></Link></div>
