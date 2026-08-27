@@ -1,102 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import ServiceOrderClient from "./ServiceOrderClient";
-import type { PricingRule } from "@/lib/forms/pricing";
+import {
+  getCachedServicePageData,
+  normalizeServicePath,
+} from "@/lib/services/servicePageCache";
 
-type Service = {
-  id: string;
-  title: string;
-  slug: string;
-  category: string | null;
-  description: string | null;
-  price: number;
-  icon: string | null;
-  form_schema: any[];
-  pricing_rules: PricingRule[];
-  is_active: boolean;
-  parent_service_id: string | null;
-  meta_title?: string | null;
-  meta_description?: string | null;
-  seo_keywords?: string[] | null;
-  created_at?: string | null;
-};
-
-function normalizeSchema(value: any): any[] {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-function normalizeRules(value: any): PricingRule[] {
-  if (typeof value === "string") {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      value = [];
-    }
-  }
-  return Array.isArray(value) ? value : [];
-}
-
-function normalizeKeywords(value: any): string[] {
-  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
-}
+type Service = NonNullable<Awaited<ReturnType<typeof getCachedServicePageData>>["service"]>;
 
 function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-function normalizeSlug(value: string) {
-  return decodeURIComponent(value)
-    .normalize("NFC")
-    .replace(/\u200c/g, "")
-    .replace(/\u200d/g, "")
-    .trim();
-}
-
-const SERVICE_SELECT =
-  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,created_at";
-
-async function getService(path: string): Promise<Service | null> {
-  const supabase = createSupabaseServerClient();
-  const query = supabase.from("services").select(SERVICE_SELECT).eq("is_active", true);
-
-  const normalize = (data: any): Service => ({
-    ...data,
-    price: Number(data.price || 0),
-    form_schema: normalizeSchema(data.form_schema),
-    pricing_rules: normalizeRules(data.pricing_rules),
-    seo_keywords: normalizeKeywords(data.seo_keywords),
-  });
-
-  if (isUuid(path)) {
-    const { data, error } = await query.eq("id", path).maybeSingle();
-    if (error || !data) return null;
-    return normalize(data);
-  }
-
-  const requestedSlug = normalizeSlug(path);
-  const { data, error } = await query.eq("slug", requestedSlug).maybeSingle();
-  if (!error && data) return normalize(data);
-
-  const { data: services, error: fallbackError } = await supabase
-    .from("services")
-    .select(SERVICE_SELECT)
-    .eq("is_active", true)
-    .not("slug", "is", null);
-
-  if (fallbackError) return null;
-  const match = (services || []).find((item: any) => normalizeSlug(item.slug) === requestedSlug);
-  return match ? normalize(match) : null;
+function getFieldLabels(schema: any[]) {
+  return schema
+    .map((field: any) => String(field?.label || field?.title || field?.name || "").trim())
+    .filter(Boolean)
+    .filter((v, i, a) => a.indexOf(v) === i)
+    .slice(0, 8);
 }
 
 export async function generateMetadata({
@@ -105,7 +27,7 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const service = await getService(id);
+  const { service } = await getCachedServicePageData(id);
   if (!service) return { title: "خدمت پیدا نشد", robots: { index: false, follow: false } };
 
   const title = service.meta_title?.trim() || `${service.title} | کافی نت توسن`;
@@ -142,21 +64,13 @@ export async function generateMetadata({
   };
 }
 
-function getFieldLabels(schema: any[]) {
-  return schema
-    .map((field: any) => String(field?.label || field?.title || field?.name || "").trim())
-    .filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i)
-    .slice(0, 8);
-}
-
 export default async function ServicePage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const service = await getService(id);
+  const { service, related, children, parent } = await getCachedServicePageData(id);
 
   if (!service) {
     if (isUuid(id)) permanentRedirect("/services");
@@ -167,32 +81,6 @@ export default async function ServicePage({
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
   const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
-  const supabase = createSupabaseServerClient();
-
-  const [{ data: related }, { data: children }, { data: parent }] = await Promise.all([
-    supabase
-      .from("services")
-      .select("id,title,slug,icon,description")
-      .eq("is_active", true)
-      .eq("category", service.category)
-      .neq("id", service.id)
-      .limit(4),
-    supabase
-      .from("services")
-      .select("id,title,slug,icon,description")
-      .eq("is_active", true)
-      .eq("parent_service_id", service.id)
-      .order("created_at", { ascending: false }),
-    service.parent_service_id
-      ? supabase
-          .from("services")
-          .select("id,title,slug,icon")
-          .eq("is_active", true)
-          .eq("id", service.parent_service_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-
   const fieldLabels = getFieldLabels(service.form_schema);
   const jsonLd = {
     "@context": "https://schema.org",
@@ -239,10 +127,7 @@ export default async function ServicePage({
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-      />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
 
       <div dir="rtl" className="max-w-3xl mx-auto px-6 pt-5">
         <nav aria-label="مسیر صفحه" className="text-sm text-[var(--text-muted)]">
@@ -278,11 +163,7 @@ export default async function ServicePage({
         </section>
       )}
 
-      <section
-        dir="rtl"
-        className="max-w-3xl mx-auto px-6 pt-5 pb-2"
-        aria-labelledby="service-guide-title"
-      >
+      <section dir="rtl" className="max-w-3xl mx-auto px-6 pt-5 pb-2" aria-labelledby="service-guide-title">
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <h1 id="service-guide-title" className="text-2xl font-bold">{service.title}</h1>
           {service.description?.trim() && (
@@ -328,7 +209,7 @@ export default async function ServicePage({
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
             <h2 id="child-services-title" className="text-xl font-bold mb-4">خدمات زیرمجموعه</h2>
             <div className="grid sm:grid-cols-2 gap-3">
-              {children.map((item: any) => (
+              {children.map((item) => (
                 <Link
                   key={item.id}
                   href={`/services/${encodeURIComponent(item.slug)}`}
@@ -336,9 +217,7 @@ export default async function ServicePage({
                 >
                   <div className="font-bold">{item.icon || "📄"} {item.title}</div>
                   {item.description && (
-                    <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">
-                      {item.description}
-                    </p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>
                   )}
                 </Link>
               ))}
@@ -352,7 +231,7 @@ export default async function ServicePage({
           <div className="rounded-2xl border bg-white p-6 shadow-sm">
             <h2 id="related-services-title" className="text-xl font-bold mb-4">خدمات مرتبط</h2>
             <div className="grid sm:grid-cols-2 gap-3">
-              {related.map((item: any) => (
+              {related.map((item) => (
                 <Link
                   key={item.id}
                   href={`/services/${encodeURIComponent(item.slug)}`}
@@ -360,9 +239,7 @@ export default async function ServicePage({
                 >
                   <div className="font-bold">{item.icon || "📄"} {item.title}</div>
                   {item.description && (
-                    <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">
-                      {item.description}
-                    </p>
+                    <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>
                   )}
                 </Link>
               ))}
