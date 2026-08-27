@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Check, ExternalLink, MessageCircle, Search, Trash2, X } from "lucide-react";
 
@@ -42,25 +42,29 @@ export default function CommentsAdmin({ initialPendingCount = 0 }: Props) {
 
   useEffect(() => { void load(); }, [status]);
 
-  const filteredComments = useMemo(() => comments, [comments]);
-
   async function changeStatus(id: string, nextStatus: Comment["status"]) {
+    const current = comments.find(item => item.id === id);
+    if (!current || current.status === nextStatus) return;
     setBusyId(id); setError("");
     const response = await fetch("/api/admin/blog/comments", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status: nextStatus }) });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) setError(json.error || "عملیات انجام نشد");
-    else setComments(current => current.map(item => item.id === id ? { ...item, status: nextStatus } : item).filter(item => status === "all" || item.status === status));
+    else {
+      setComments(items => items.map(item => item.id === id ? { ...item, status: nextStatus } : item).filter(item => status === "all" || item.status === status));
+      if (current.status === "pending" && nextStatus !== "pending") setPendingCount(value => Math.max(0, value - 1));
+      if (current.status !== "pending" && nextStatus === "pending") setPendingCount(value => value + 1);
+    }
     setBusyId(null);
-    if (nextStatus !== "pending") setPendingCount(value => Math.max(0, value - 1));
   }
 
   async function remove(id: string) {
     if (!window.confirm("این نظر برای همیشه حذف شود؟")) return;
+    const current = comments.find(item => item.id === id);
     setBusyId(id); setError("");
     const response = await fetch(`/api/admin/blog/comments?id=${encodeURIComponent(id)}`, { method: "DELETE" });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) setError(json.error || "حذف نظر انجام نشد");
-    else setComments(current => current.filter(item => item.id !== id));
+    else { setComments(items => items.filter(item => item.id !== id)); if (current?.status === "pending") setPendingCount(value => Math.max(0, value - 1)); }
     setBusyId(null);
   }
 
@@ -81,6 +85,6 @@ export default function CommentsAdmin({ initialPendingCount = 0 }: Props) {
       </div>
     </section>
 
-    <section className="space-y-4">{loading ? <div className="rounded-2xl border bg-white p-10 text-center text-sm text-[var(--text-muted)]">در حال بارگذاری نظرات...</div> : filteredComments.length === 0 ? <div className="rounded-2xl border bg-white p-10 text-center"><MessageCircle className="mx-auto text-[var(--text-muted)]" size={34}/><p className="mt-3 font-bold text-[var(--text-secondary)]">نظری در این بخش وجود ندارد.</p></div> : filteredComments.map(item => <article key={item.id} className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] md:p-6"><div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-black text-[var(--text)]">{item.author_name || "کاربر"}</span><span className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${item.status === "pending" ? "bg-amber-50 text-amber-700" : item.status === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{statusLabels[item.status]}</span><time className="text-xs text-[var(--text-muted)]">{new Date(item.created_at).toLocaleString("fa-IR")}</time></div><Link href={`/blog/${encodeURIComponent(item.blog_posts?.slug || "")}`} target="_blank" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-[var(--primary-dark)] hover:underline">{item.blog_posts?.title || "مقاله حذف شده"}<ExternalLink size={14}/></Link><p className="mt-4 whitespace-pre-wrap rounded-xl bg-[var(--surface-muted)] p-4 text-sm leading-8 text-[var(--text-secondary)]">{item.content}</p></div><div className="flex shrink-0 flex-wrap gap-2 md:w-44 md:flex-col">{item.status !== "approved" && <button disabled={busyId === item.id} onClick={() => void changeStatus(item.id, "approved")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"><Check size={17}/> تأیید</button>}{item.status !== "rejected" && <button disabled={busyId === item.id} onClick={() => void changeStatus(item.id, "rejected")} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 disabled:opacity-50"><X size={17}/> رد</button>}<button disabled={busyId === item.id} onClick={() => void remove(item.id)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 disabled:opacity-50"><Trash2 size={17}/> حذف</button></div></div></article>)}</section>
+    <section className="space-y-4">{loading ? <div className="rounded-2xl border bg-white p-10 text-center text-sm text-[var(--text-muted)]">در حال بارگذاری نظرات...</div> : comments.length === 0 ? <div className="rounded-2xl border bg-white p-10 text-center"><MessageCircle className="mx-auto text-[var(--text-muted)]" size={34}/><p className="mt-3 font-bold text-[var(--text-secondary)]">نظری در این بخش وجود ندارد.</p></div> : comments.map(item => <article key={item.id} className="rounded-2xl border border-[var(--border)] bg-white p-5 shadow-[var(--shadow-sm)] md:p-6"><div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className="font-black text-[var(--text)]">{item.author_name || "کاربر"}</span><span className={`rounded-full px-2.5 py-1 text-xs font-extrabold ${item.status === "pending" ? "bg-amber-50 text-amber-700" : item.status === "approved" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{statusLabels[item.status]}</span><time className="text-xs text-[var(--text-muted)]">{new Date(item.created_at).toLocaleString("fa-IR")}</time></div><Link href={`/blog/${encodeURIComponent(item.blog_posts?.slug || "")}`} target="_blank" className="mt-2 inline-flex items-center gap-1 text-sm font-bold text-[var(--primary-dark)] hover:underline">{item.blog_posts?.title || "مقاله حذف شده"}<ExternalLink size={14}/></Link><p className="mt-4 whitespace-pre-wrap rounded-xl bg-[var(--surface-muted)] p-4 text-sm leading-8 text-[var(--text-secondary)]">{item.content}</p></div><div className="flex shrink-0 flex-wrap gap-2 md:w-44 md:flex-col">{item.status !== "approved" && <button disabled={busyId === item.id} onClick={() => void changeStatus(item.id, "approved")} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50"><Check size={17}/> تأیید</button>}{item.status !== "rejected" && <button disabled={busyId === item.id} onClick={() => void changeStatus(item.id, "rejected")} className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-700 disabled:opacity-50"><X size={17}/> رد</button>}<button disabled={busyId === item.id} onClick={() => void remove(item.id)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 disabled:opacity-50"><Trash2 size={17}/> حذف</button></div></div></article>)}</section>
   </main>;
 }
