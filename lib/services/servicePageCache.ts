@@ -17,6 +17,7 @@ export type ServicePageService = {
   meta_title?: string | null;
   meta_description?: string | null;
   seo_keywords?: string[] | null;
+  seo_content?: unknown;
   created_at?: string | null;
 };
 
@@ -36,7 +37,7 @@ export type ServicePageData = {
 };
 
 const SERVICE_SELECT =
-  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,created_at";
+  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at";
 
 function normalizeSchema(value: any): any[] {
   if (Array.isArray(value)) return value;
@@ -53,11 +54,7 @@ function normalizeSchema(value: any): any[] {
 
 function normalizeRules(value: any): PricingRule[] {
   if (typeof value === "string") {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      value = [];
-    }
+    try { value = JSON.parse(value); } catch { value = []; }
   }
   return Array.isArray(value) ? value : [];
 }
@@ -94,34 +91,16 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
   let service: ServicePageService | null = null;
 
   if (isUuid(requested)) {
-    const { data, error } = await supabase
-      .from("services")
-      .select(SERVICE_SELECT)
-      .eq("is_active", true)
-      .eq("id", requested)
-      .maybeSingle();
+    const { data, error } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("id", requested).maybeSingle();
     if (!error && data) service = normalizeService(data);
   } else {
-    const { data, error } = await supabase
-      .from("services")
-      .select(SERVICE_SELECT)
-      .eq("is_active", true)
-      .eq("slug", requested)
-      .maybeSingle();
+    const { data, error } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("slug", requested).maybeSingle();
     if (!error && data) service = normalizeService(data);
   }
 
-  // Legacy ZWNJ/normalization compatibility without loading the whole table.
   if (!service && !isUuid(requested)) {
-    const { data: candidates } = await supabase
-      .from("services")
-      .select(SERVICE_SELECT)
-      .eq("is_active", true)
-      .ilike("slug", requested)
-      .limit(5);
-    const match = (candidates || []).find(
-      (item: any) => normalizeServicePath(String(item.slug || "")) === requested,
-    );
+    const { data: candidates } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).ilike("slug", requested).limit(5);
+    const match = (candidates || []).find((item: any) => normalizeServicePath(String(item.slug || "")) === requested);
     if (match) service = normalizeService(match);
   }
 
@@ -129,27 +108,11 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
 
   const [{ data: related }, { data: children }, { data: parent }] = await Promise.all([
     service.category
-      ? supabase
-          .from("services")
-          .select("id,title,slug,icon,description")
-          .eq("is_active", true)
-          .eq("category", service.category)
-          .neq("id", service.id)
-          .limit(4)
+      ? supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("category", service.category).neq("id", service.id).limit(4)
       : Promise.resolve({ data: [] }),
-    supabase
-      .from("services")
-      .select("id,title,slug,icon,description")
-      .eq("is_active", true)
-      .eq("parent_service_id", service.id)
-      .order("created_at", { ascending: false }),
+    supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("parent_service_id", service.id).order("created_at", { ascending: false }),
     service.parent_service_id
-      ? supabase
-          .from("services")
-          .select("id,title,slug,icon")
-          .eq("is_active", true)
-          .eq("id", service.parent_service_id)
-          .maybeSingle()
+      ? supabase.from("services").select("id,title,slug,icon").eq("is_active", true).eq("id", service.parent_service_id).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
@@ -163,13 +126,9 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
 
 export async function getCachedServicePageData(path: string): Promise<ServicePageData> {
   const normalized = normalizeServicePath(path);
-  const cached = unstable_cache(
-    () => loadServicePageData(normalized),
-    ["service-page-data", normalized],
-    {
-      revalidate: 60,
-      tags: ["services", `service:${normalized}`],
-    },
-  );
+  const cached = unstable_cache(() => loadServicePageData(normalized), ["service-page-data", normalized], {
+    revalidate: 60,
+    tags: ["services", `service:${normalized}`],
+  });
   return cached();
 }
