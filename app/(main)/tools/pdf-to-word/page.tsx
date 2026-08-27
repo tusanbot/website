@@ -31,8 +31,8 @@ function loadScript(src: string, id: string) {
     if (old?.dataset.loaded === "true" && libraryReady(id)) return resolve();
 
     let settled = false;
-    let poll: number | undefined;
-    let timeout: number | undefined;
+    let poll: ReturnType<typeof globalThis.setInterval> | undefined;
+    let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
     const finish = (error?: Error) => {
       if (settled) return;
       settled = true;
@@ -51,7 +51,6 @@ function loadScript(src: string, id: string) {
     if (old) {
       old.addEventListener("load", onLoad, { once: true });
       old.addEventListener("error", onError, { once: true });
-      // اگر script قبلاً load شده ولی dataset آن ثبت نشده باشد، Event دیگر fire نمی‌شود؛ وضعیت global را poll می‌کنیم.
       poll = globalThis.setInterval(() => { if (libraryReady(id)) finish(); }, 100);
     } else {
       const s = globalThis.document.createElement("script");
@@ -251,121 +250,65 @@ export default function PdfToWordPage() {
               await loadScript(TESSERACT_URL, "tusan-tesseract");
               const t = libs().Tesseract;
               if (!t) throw new Error("موتور OCR بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
-              worker = await t.createWorker("fas+eng", 1, { logger: m => {
-                if (m.status === "recognizing text" && typeof m.progress === "number") setProgress(Math.min(95, Math.round(((n - 1 + m.progress) / pdf!.numPages) * 90)));
-              }});
-              if (worker.setParameters) await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: "6" });
+              worker = await t.createWorker("fas+eng", 1, { logger: m => { if (m.progress) setProgress(Math.min(90, Math.round(((n - 1) + m.progress) / pdf.numPages * 90))); } });
             }
             const canvas = await renderPage(page);
-            try {
-              const result = await worker.recognize(canvas);
-              const ocr = normalizeFa(result?.data?.text || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
-              chunks.push(ocr);
-              allLayouts.push(ocr.split(/\r?\n/).filter(Boolean).map(s => ({ y: 0, font: 10, items: [{ text: s, x: 0, y: 0, width: s.length, font: 10 }] })));
-            } finally {
-              canvas.width = 1;
-              canvas.height = 1;
-            }
+            const result = await worker.recognize(canvas);
+            const ocrText = normalizeFa(result?.data?.text || "").trim();
+            if (ocrText) chunks.push(ocrText);
+            allLayouts.push(lines);
             setProgress(Math.round(n / pdf.numPages * 90));
           }
-        } finally {
-          page.cleanup?.();
-        }
+        } finally { page.cleanup?.(); }
       }
-      setText(chunks.map((c, i) => `صفحه ${i + 1}\n${c}`).join("\n\n").trim());
-      setLayouts(allLayouts); setProgress(100); setStatus("done");
+      setText(chunks.join("\n\n")); setLayouts(allLayouts); setProgress(100); setStatus("done");
     } catch (e) {
-      console.error(e); setStatus("error"); setError(e instanceof Error ? e.message : "تبدیل فایل انجام نشد.");
+      setError(e instanceof Error ? e.message : "تبدیل PDF انجام نشد."); setStatus("error");
     } finally {
-      if (worker) await worker.terminate();
-      pdf?.cleanup?.();
-      pdf?.destroy?.();
+      pdf?.cleanup?.(); pdf?.destroy?.();
+      if (worker?.terminate) await worker.terminate().catch(() => undefined);
     }
   };
 
-  const onInput = (e: ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if (f) void convert(f); };
-  const onDrop = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); setDragging(false); const f = e.dataTransfer.files?.[0]; if (f) void convert(f); };
-
-  const buildWordBlob = async () => {
-    if (!text || wordState === "building") return null;
-    if (wordBlob) return wordBlob;
+  const makeWord = async () => {
+    if (!text.trim()) return;
     setWordState("building"); setError("");
     try {
       await loadScript(DOCX_URL, "tusan-docx");
-      const d = libs().docx;
-      if (!d) throw new Error("کتابخانه ساخت Word بارگذاری نشد.");
-      const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } = d;
-      const children: any[] = [];
-
-      layouts.forEach((lines, pageIndex) => {
-        const table = mode === "advanced" ? advancedTable(lines) : null;
-        if (table) {
-          children.push(new Paragraph({ bidirectional: true, alignment: "right", spacing: { after: 120 }, children: [new TextRun({ text: `صفحه ${pageIndex + 1}`, bold: true, rightToLeft: true })] }));
-          const rows = table.rows.map(row => new TableRow({ children: row.map(cell => new TableCell({ children: [new Paragraph({ bidirectional: true, alignment: "right", spacing: { before: 30, after: 30 }, children: [new TextRun({ text: cell, rightToLeft: true })] })] })) }));
-          children.push(new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows }));
-        } else {
-          const ps = mode === "advanced" ? advancedParagraphs(lines) : plainParagraphs(lines);
-          const pageText = ps.map(x => x.text).join("\n").trim();
-          if (pageText) {
-            children.push(new Paragraph({ bidirectional: true, alignment: "right", spacing: { after: 80, line: 300 }, children: [new TextRun({ text: `صفحه ${pageIndex + 1}\n${pageText}`, rightToLeft: true })] }));
-          }
-        }
-        if (pageIndex < layouts.length - 1) children.push(new Paragraph({ pageBreakBefore: true, children: [new TextRun({ text: "" })] }));
-      });
-
-      const doc = new Document({ sections: [{ properties: { page: { margin: { top: 720, right: 720, bottom: 720, left: 720 } } }, children }] });
-      const blob = await Packer.toBlob(doc);
-      setWordBlob(blob);
-      return blob;
+      const api = libs().docx;
+      if (!api) throw new Error("کتابخانه Word بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
+      const children = mode === "advanced" ? layouts.flatMap(lines => {
+        const table = advancedTable(lines);
+        if (table) return [new api.Table({ rows: table.rows.map(row => new api.TableRow({ children: row.map(cell => new api.TableCell({ children: [new api.Paragraph({ children: [new api.TextRun({ text: cell, rightToLeft: true })] })] }) ) })) , width: { size: 100, type: api.WidthType.PERCENTAGE } })];
+        return advancedParagraphs(lines).map(p => new api.Paragraph({ text: p.text, bidirectional: true, spacing: { before: p.before, after: p.after, line: p.line } }));
+      }) : text.split(/\n+/).filter(Boolean).map(value => new api.Paragraph({ text: value, bidirectional: true, spacing: { after: 120 } }));
+      const doc = new api.Document({ sections: [{ properties: {}, children }] });
+      setWordBlob(await api.Packer.toBlob(doc));
     } catch (e) {
       setError(e instanceof Error ? e.message : "ساخت فایل Word انجام نشد.");
-      return null;
     } finally { setWordState("idle"); }
   };
 
-  const downloadWord = async () => {
-    if (!text || wordState === "building") return;
-    const blob = await buildWordBlob();
-    if (!blob) return;
-    const url = globalThis.URL.createObjectURL(blob);
-    const a = globalThis.document.createElement("a");
-    a.href = url;
-    a.download = `${file?.name.replace(/\.pdf$/i, "") || "converted"}.docx`;
-    a.style.display = "none";
-    globalThis.document.body.appendChild(a);
-    a.click();
-    a.remove();
-    globalThis.setTimeout(() => globalThis.URL.revokeObjectURL(url), 1500);
+  const downloadWord = () => {
+    if (!wordBlob) return;
+    const url = URL.createObjectURL(wordBlob); const a = globalThis.document.createElement("a"); a.href = url; a.download = `${file?.name.replace(/\.pdf$/i, "") || "converted"}.docx`; a.click(); URL.revokeObjectURL(url);
   };
 
-  const changeMode = (next: "plain" | "advanced") => { if (next !== mode) { setMode(next); setWordBlob(null); } };
-  const changeText = (value: string) => { setText(value); setWordBlob(null); };
+  const onInput = (event: ChangeEvent<HTMLInputElement>) => { const selected = event.target.files?.[0]; if (selected) void convert(selected); };
+  const onDrop = (event: DragEvent<HTMLDivElement>) => { event.preventDefault(); setDragging(false); const selected = event.dataTransfer.files?.[0]; if (selected) void convert(selected); };
 
-  return <main dir="rtl" className="min-h-screen page-background py-12 md:py-20">
-    <div className="mx-auto max-w-6xl px-5 lg:px-8">
-      <div className="mx-auto max-w-3xl text-center">
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-[var(--primary)]/10 text-[var(--primary)]"><FileText size={32}/></div>
-        <h1 className="mt-5 text-3xl font-black text-[var(--text)] md:text-4xl">تبدیل PDF به Word</h1>
-        <p className="mt-3 text-[var(--text-muted)]">دو روش خروجی: متن پایدار یا بازسازی پیشرفته ساختار PDF.</p>
+  return (
+    <main className="mx-auto max-w-4xl px-4 py-8" dir="rtl">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <div><h1 className="text-2xl font-black">تبدیل PDF به Word</h1><p className="mt-1 text-sm text-[var(--text-muted)]">تبدیل داخل مرورگر؛ فایل شما به سرور ارسال نمی‌شود.</p></div>
+        {file && <button onClick={reset} className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"><RotateCcw size={16} /> شروع مجدد</button>}
       </div>
-      <div className="mt-10 grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
-        <section className="h-fit rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-          <div onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop} onClick={() => inputRef.current?.click()} className={`flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed p-6 text-center ${dragging ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)] hover:border-[var(--primary)]/50"}`}>
-            <Upload size={40} className="text-[var(--primary)]"/><strong className="mt-4">PDF را اینجا رها کنید</strong><span className="mt-2 text-sm text-[var(--text-muted)]">یا برای انتخاب فایل کلیک کنید</span><span className="mt-4 text-xs text-[var(--text-muted)]">PDF · حداکثر ۵۰ مگابایت</span><input ref={inputRef} type="file" accept="application/pdf,.pdf" className="hidden" onChange={onInput}/>
-          </div>
-          {file && <div className="mt-4 rounded-2xl bg-[var(--surface-secondary)] p-4"><div className="break-all text-sm font-black">{file.name}</div><div className="mt-2 text-xs text-[var(--text-muted)]">{(file.size / 1024 / 1024).toFixed(2)} MB · {pages || "در حال بررسی"} صفحه</div></div>}
-          {(status === "loading" || status === "processing") && <div className="mt-5"><div className="mb-2 flex justify-between text-xs font-bold"><span>در حال تبدیل</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[var(--surface-secondary)]"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${progress}%` }}/></div><div className="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]"><Loader2 size={14} className="animate-spin"/> استخراج متن در حال انجام است.</div></div>}
-          {wordState === "building" && <div className="mt-4 flex items-center gap-2 rounded-xl bg-[var(--surface-secondary)] p-3 text-xs text-[var(--text-muted)]"><Loader2 size={14} className="animate-spin"/> فایل Word در حال آماده‌سازی است؛ لطفاً دوباره روی دکمه کلیک نکنید.</div>}
-          {wordBlob && wordState === "idle" && <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700">فایل Word آماده است و کلیک‌های بعدی بدون بازسازی فایل انجام می‌شوند.</div>}
-          {error && <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm leading-6 text-red-700">{error}</div>}
-          <div className="mt-5 flex gap-2"><button type="button" onClick={e => { e.stopPropagation(); reset(); }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-sm font-bold"><RotateCcw size={16}/> شروع مجدد</button>{text && <button type="button" disabled={wordState === "building"} onClick={e => { e.stopPropagation(); void downloadWord(); }} className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2 text-sm font-bold disabled:cursor-not-allowed disabled:opacity-60"><Download size={16}/> {wordState === "building" ? "در حال ساخت..." : wordBlob ? "دریافت Word" : "ساخت و دریافت Word"}</button>}</div>
-        </section>
-        <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-black">پیش‌نمایش متن</h2><p className="mt-1 text-xs text-[var(--text-muted)]">متن استخراج‌شده قابل ویرایش است.</p></div><label className="flex items-center gap-2 text-sm font-bold"><span>نوع خروجی Word</span><select value={mode} onChange={e => changeMode(e.target.value as "plain" | "advanced")} className="rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2"><option value="plain">فقط متن — پایدار</option><option value="advanced">پیشرفته — بازسازی ساختار و جدول</option></select></label></div>
-          <div className="mb-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3 text-xs leading-6 text-[var(--text-muted)]">{mode === "plain" ? "حالت فقط متن برای فایل‌های بزرگ سریع‌تر و کم‌حجم‌تر است و فاصله کلمات و خطوط را حفظ می‌کند." : "حالت پیشرفته مختصات X/Y، ستون‌ها و هم‌ترازی خطوط را تحلیل می‌کند و فقط با اطمینان کافی جدول واقعی Word می‌سازد."}</div>
-          <textarea value={text} onChange={e => changeText(e.target.value)} placeholder="بعد از انتخاب PDF، متن اینجا نمایش داده می‌شود..." className="min-h-[520px] w-full resize-y rounded-2xl border border-[var(--border)] bg-transparent p-4 text-sm leading-8 outline-none focus:border-[var(--primary)]"/>
-        </section>
+      <input ref={inputRef} type="file" accept="application/pdf" className="hidden" onChange={onInput} />
+      <div onDragOver={e => { e.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={onDrop} className={`rounded-3xl border-2 border-dashed p-8 text-center transition ${dragging ? "border-[var(--primary)] bg-[var(--primary)]/5" : "border-[var(--border)]"}`}>
+        <FileText className="mx-auto mb-3" size={42} /><h2 className="font-bold">فایل PDF را انتخاب یا اینجا رها کنید</h2><p className="mt-1 text-xs text-[var(--text-muted)]">حداکثر ۵۰ مگابایت</p><button onClick={() => inputRef.current?.click()} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-5 py-2.5 font-bold text-white"><Upload size={17} /> انتخاب PDF</button>
       </div>
-    </div>
-  </main>;
+      {status !== "idle" && <div className="mt-5 rounded-2xl border border-[var(--border)] p-4">{status === "error" ? <p className="text-sm text-red-600">{error}</p> : <><div className="flex items-center justify-between text-sm font-bold"><span>{status === "done" ? "تبدیل انجام شد" : "در حال پردازش..."}</span><span>{progress}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-[var(--border)]"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${progress}%` }} /></div>{pages > 0 && <p className="mt-2 text-xs text-[var(--text-muted)]">تعداد صفحات: {pages}</p>}</>}</div>}
+      {status === "done" && <div className="mt-5 space-y-4 rounded-2xl border border-[var(--border)] p-4"><div className="flex flex-wrap gap-2"><button onClick={() => setMode("plain")} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode === "plain" ? "bg-[var(--primary)] text-white" : "border"}`}>متن ساده</button><button onClick={() => setMode("advanced")} className={`rounded-xl px-4 py-2 text-sm font-bold ${mode === "advanced" ? "bg-[var(--primary)] text-white" : "border"}`}>حفظ ساختار</button></div><textarea value={text} onChange={e => setText(e.target.value)} className="min-h-64 w-full rounded-xl border bg-transparent p-3 text-sm" /><div className="flex flex-wrap gap-2"><button onClick={() => void makeWord()} disabled={wordState === "building"} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-2 font-bold text-white disabled:opacity-60">{wordState === "building" ? <Loader2 className="animate-spin" size={16} /> : <Download size={16} />} ساخت Word</button>{wordBlob && <button onClick={downloadWord} className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 font-bold"><Download size={16} /> دانلود Word</button>}</div>{error && <p className="text-sm text-red-600">{error}</p>}</div>}
+    </main>
+  );
 }
