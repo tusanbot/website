@@ -14,7 +14,37 @@ function evaluateCondition(condition: FieldCondition, data: Record<string, any>)
 function isVisible(field: FormField, data: Record<string, any>) { if (!field.conditions?.length) return true; const results = field.conditions.map((condition) => evaluateCondition(condition, data)); return field.conditionLogic === "OR" ? results.some(Boolean) : results.every(Boolean); }
 function isEmpty(value: any) { return value == null || value === "" || (Array.isArray(value) && value.length === 0); }
 function validateField(field: FormField, value: any): string | null { if (field.required && isEmpty(value)) return "تکمیل این فیلد الزامی است."; if (isEmpty(value)) return null; if (field.type === "repeatable") { if (!Array.isArray(value)) return "مقدار گروه نامعتبر است."; if (field.minItems !== undefined && value.length < field.minItems) return `حداقل ${field.minItems} مورد وارد کنید.`; if (field.maxItems !== undefined && value.length > field.maxItems) return `حداکثر ${field.maxItems} مورد مجاز است.`; for (const item of value) for (const child of field.fields || []) { if (!isVisible(child, item)) continue; const error = validateField(child, item[child.name]); if (error) return `${child.label}: ${error}`; } } if (field.type === "number" && !Number.isFinite(Number(value))) return "مقدار باید عددی باشد."; if (field.type === "email" && typeof value === "string" && !/^\S+@\S+\.\S+$/.test(value)) return "ایمیل معتبر نیست."; if (field.type === "phone" && typeof value === "string" && !/^(?:\+98|0098|0)?9\d{9}$/.test(value.replace(/[\s-]/g, ""))) return "شماره موبایل معتبر نیست."; if (field.type === "national_code" && typeof value === "string" && !/^\d{10}$/.test(value)) return "کد ملی باید ۱۰ رقم باشد."; const rules = field.validation; if (rules) { if (rules.minLength !== undefined && String(value).length < rules.minLength) return `حداقل ${rules.minLength} کاراکتر وارد کنید.`; if (rules.maxLength !== undefined && String(value).length > rules.maxLength) return `حداکثر ${rules.maxLength} کاراکتر مجاز است.`; if (field.type === "number" || typeof value === "number") { const number = Number(value); if (rules.min !== undefined && number < rules.min) return `مقدار باید حداقل ${rules.min} باشد.`; if (rules.max !== undefined && number > rules.max) return `مقدار باید حداکثر ${rules.max} باشد.`; } if (rules.pattern !== undefined) { try { if (!new RegExp(rules.pattern).test(String(value))) return "فرمت واردشده صحیح نیست."; } catch { return "قانون اعتبارسنجی فرم نامعتبر است."; } } } return null; }
-function clearHiddenValues(fields: FormField[], data: Record<string, any>) { const next = { ...data }; let changed = false; for (const field of fields) if (!isVisible(field, next)) { const empty = emptyValue(field); if (JSON.stringify(next[field.name]) !== JSON.stringify(empty)) { next[field.name] = empty; changed = true; } } return changed ? next : data; }
+
+function clearHiddenValues(fields: FormField[], data: Record<string, any>) {
+  const next: Record<string, any> = { ...data };
+  let changed = false;
+  for (const field of fields) {
+    if (!isVisible(field, next)) {
+      const empty = emptyValue(field);
+      if (JSON.stringify(next[field.name]) !== JSON.stringify(empty)) { next[field.name] = empty; changed = true; }
+      continue;
+    }
+    if (field.type === "repeatable" && Array.isArray(next[field.name]) && field.fields?.length) {
+      const rows = next[field.name].map((row: any) => clearHiddenValues(field.fields || [], row || {}));
+      if (JSON.stringify(rows) !== JSON.stringify(next[field.name])) { next[field.name] = rows; changed = true; }
+    }
+  }
+  return changed ? next : data;
+}
+
+function buildVisibleOutput(fields: FormField[], data: Record<string, any>) {
+  const output: Record<string, any> = {};
+  for (const field of fields) {
+    if (!isVisible(field, data)) continue;
+    const value = data[field.name];
+    if (field.type === "repeatable" && Array.isArray(value)) {
+      output[field.name] = value.map((row: any) => buildVisibleOutput(field.fields || [], row || {}));
+    } else {
+      output[field.name] = field.type === "number" && value !== "" ? Number(value) : value;
+    }
+  }
+  return output;
+}
 
 export default function DynamicServiceForm({ fields, onSubmit, onChange, submitting = false }: Props) {
   const [data, setData] = useState<Record<string, any>>({});
@@ -23,7 +53,7 @@ export default function DynamicServiceForm({ fields, onSubmit, onChange, submitt
   const visibleFields = useMemo(() => fields.filter((field) => isVisible(field, data)), [fields, data]);
   const updateData = (updater: (previous: Record<string, any>) => Record<string, any>) => { setData((previous) => { const cleaned = clearHiddenValues(fields, updater(previous)); onChange?.(cleaned); return cleaned; }); };
   const setValue = (name: string, value: any) => { updateData((previous) => ({ ...previous, [name]: value })); const field = fields.find((item) => item.name === name); setErrors((previous) => ({ ...previous, [name]: field ? validateField(field, value) || "" : "" })); };
-  const submit = (event: React.FormEvent) => { event.preventDefault(); const cleaned = clearHiddenValues(fields, data); if (cleaned !== data) setData(cleaned); const nextErrors: Record<string, string> = {}; fields.filter((field) => isVisible(field, cleaned)).forEach((field) => { const error = validateField(field, cleaned[field.name]); if (error) nextErrors[field.name] = error; }); setErrors(nextErrors); if (Object.keys(nextErrors).length) return; const output: Record<string, any> = {}; fields.filter((field) => isVisible(field, cleaned)).forEach((field) => { output[field.name] = field.type === "number" && cleaned[field.name] !== "" ? Number(cleaned[field.name]) : cleaned[field.name]; }); onSubmit(output); };
+  const submit = (event: React.FormEvent) => { event.preventDefault(); const cleaned = clearHiddenValues(fields, data); if (cleaned !== data) setData(cleaned); const nextErrors: Record<string, string> = {}; fields.filter((field) => isVisible(field, cleaned)).forEach((field) => { const error = validateField(field, cleaned[field.name]); if (error) nextErrors[field.name] = error; }); setErrors(nextErrors); if (Object.keys(nextErrors).length) return; onSubmit(buildVisibleOutput(fields, cleaned)); };
   const baseClass = "w-full border rounded-xl px-4 py-3 bg-white outline-none focus:ring-2 focus:ring-[#09967C]";
   const renderField = (field: FormField, value: any, set: (next: any) => void, error?: string): React.ReactNode => {
     const controlId = `service-field-${field.id}`;
