@@ -7,8 +7,6 @@ import BlogPreview from "@/components/home/BlogPreview";
 import SocialServicesPreview from "@/components/home/SocialServicesPreview";
 import ToolsPreview from "@/components/home/ToolsPreview";
 import ProcessTimeline from "@/components/home/ProcessTimeline";
-import StatsSection from "@/components/home/StatsSection";
-import FeaturesSection from "@/components/home/FeaturesSection";
 import FaqSection from "@/components/home/FaqSection";
 import RulesSection from "@/components/home/RulesSection";
 import FinalCTA from "@/components/home/FinalCTA";
@@ -21,17 +19,20 @@ export default function HomePage() {
       <FloatingHeader />
       <HeroSection />
       <ActiveAnnouncements />
+
+      {/* Compact discovery rails */}
       <PopularServices />
       <ServiceCategoriesRail />
-      <BlogPreview />
       <SocialServicesPreview />
+      <BlogPreview />
+
+      {/* Secondary content kept for trust, guidance and SEO */}
       <ToolsPreview />
       <ProcessTimeline />
-      <StatsSection />
-      <FeaturesSection />
       <FaqSection />
       <RulesSection />
       <FinalCTA />
+
       <HomeFooter />
       <SupportChatWidget />
     </>
