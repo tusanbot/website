@@ -12,6 +12,7 @@ type Service = {
     category: string | null;
     description: string | null;
     icon: string | null;
+    is_popular?: boolean;
 };
 
 export default function PopularServices() {
@@ -19,16 +20,16 @@ export default function PopularServices() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        loadServices();
+        void loadServices();
     }, []);
 
     async function loadServices() {
         setLoading(true);
-
         const { data } = await supabase
             .from("services")
-            .select("id, title, category, description, icon")
+            .select("id, title, category, description, icon, is_popular")
             .eq("is_active", true)
+            .order("is_popular", { ascending: false })
             .order("created_at", { ascending: false })
             .limit(8);
 
@@ -37,24 +38,21 @@ export default function PopularServices() {
     }
 
     return (
-        <section className="relative py-24">
+        <section id="popular-services" className="relative scroll-mt-28 py-20 sm:py-24" dir="rtl">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
                 <SectionHeader
-                    title="خدمات محبوب توسن"
-                    description="پرکاربردترین خدماتی که کاربران هر روز از طریق توسن به‌صورت آنلاین ثبت و پیگیری می‌کنند."
+                    title="خدمات پرطرفدار توسن"
+                    description="خدماتی که بیشتر مورد توجه کاربران قرار گرفته‌اند؛ انتخاب کنید و سفارش خود را آنلاین ثبت کنید."
                     align="center"
                 />
 
                 {loading ? (
                     <div className="mt-10 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
                         {Array.from({ length: 8 }).map((_, index) => (
-                            <div
-                                key={index}
-                                className="h-72 rounded-3xl border border-[var(--border)] bg-[var(--surface)] animate-pulse"
-                            />
+                            <div key={index} className="h-72 rounded-3xl border border-[var(--border)] bg-[var(--surface)] animate-pulse" />
                         ))}
                     </div>
-                ) : (
+                ) : services.length > 0 ? (
                     <>
                         <div className="mt-10 grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
                             {services.map((service, index) => (
@@ -63,51 +61,44 @@ export default function PopularServices() {
                                     initial={{ opacity: 0, y: 26 }}
                                     whileInView={{ opacity: 1, y: 0 }}
                                     viewport={{ once: true, amount: 0.2 }}
-                                    transition={{
-                                        duration: 0.45,
-                                        delay: index * 0.06,
-                                    }}
+                                    transition={{ duration: 0.45, delay: index * 0.06 }}
                                 >
-                                    <Link href={`/services/${service.id}`}>
-                                        <GlassPanel className="group relative h-full overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/90 p-6 transition duration-300 hover:-translate-y-2 hover:shadow-[0_22px_70px_rgba(9,150,124,0.18)]">
-                                            {/* Glow */}
+                                    <Link href={`/services/${service.id}`} className="block h-full">
+                                        <GlassPanel className="group relative h-full min-h-72 overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/90 p-6 transition duration-300 hover:-translate-y-2 hover:border-[var(--primary)]/25 hover:shadow-[0_22px_70px_rgba(9,150,124,0.18)]">
                                             <div className="absolute inset-0 opacity-0 transition duration-500 group-hover:opacity-100">
                                                 <div className="absolute -top-20 left-1/2 h-52 w-52 -translate-x-1/2 rounded-full bg-[var(--primary)]/12 blur-3xl" />
                                             </div>
 
                                             <div className="relative z-10 flex h-full flex-col">
-                                                <motion.div
-                                                    whileHover={{ rotate: -6, scale: 1.08 }}
-                                                    transition={{ duration: 0.2 }}
-                                                    className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-3xl"
-                                                >
-                                                    {service.icon || "📋"}
-                                                </motion.div>
+                                                <div className="flex items-center justify-between gap-3">
+                                                    <motion.div
+                                                        whileHover={{ rotate: -6, scale: 1.08 }}
+                                                        transition={{ duration: 0.2 }}
+                                                        className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-3xl"
+                                                    >
+                                                        {service.icon || "📋"}
+                                                    </motion.div>
+                                                    {service.is_popular && (
+                                                        <span className="rounded-full border border-amber-300/60 bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
+                                                            ⭐ محبوب
+                                                        </span>
+                                                    )}
+                                                </div>
 
                                                 <div className="mt-6">
                                                     <div className="inline-flex items-center rounded-full border border-[var(--primary)]/15 bg-[var(--primary)]/10 px-3 py-1 text-xs font-bold text-[var(--primary)]">
                                                         {service.category || "خدمات آنلاین"}
                                                     </div>
-
-                                                    <h3 className="mt-3 text-xl font-black text-[var(--text)]">
-                                                        {service.title}
-                                                    </h3>
-
+                                                    <h3 className="mt-3 text-xl font-black text-[var(--text)]">{service.title}</h3>
                                                     <p className="mt-3 line-clamp-3 leading-7 text-[var(--text-muted)]">
-                                                        {service.description ||
-                                                            "ثبت سفارش، بارگذاری مدارک و پیگیری آنلاین این خدمت از طریق پنل توسن."}
+                                                        {service.description || "ثبت سفارش، بارگذاری مدارک و پیگیری آنلاین این خدمت از طریق توسن."}
                                                     </p>
                                                 </div>
 
                                                 <div className="mt-auto pt-6">
                                                     <div className="flex items-center justify-between rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-3">
-                                                        <span className="text-sm font-bold text-[var(--text)]">
-                                                            ثبت سفارش
-                                                        </span>
-
-                                                        <span className="text-[var(--primary)] transition-transform duration-300 group-hover:translate-x-1">
-                                                            ←
-                                                        </span>
+                                                        <span className="text-sm font-bold text-[var(--text)]">ثبت سفارش</span>
+                                                        <span className="text-[var(--primary)] transition-transform duration-300 group-hover:-translate-x-1">←</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -119,12 +110,14 @@ export default function PopularServices() {
 
                         <div className="mt-10 flex justify-center">
                             <Link href="/services">
-                                <TusanButton variant="secondary" className="px-8 py-3">
-                                    مشاهده همه خدمات
-                                </TusanButton>
+                                <TusanButton variant="secondary" className="px-8 py-3">مشاهده همه خدمات</TusanButton>
                             </Link>
                         </div>
                     </>
+                ) : (
+                    <GlassPanel className="mt-10 p-10 text-center text-[var(--text-muted)]">
+                        در حال حاضر خدمت فعالی برای نمایش وجود ندارد.
+                    </GlassPanel>
                 )}
             </div>
         </section>
