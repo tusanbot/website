@@ -8,9 +8,29 @@ function normalize(value: FormValue) {
   return value == null ? '' : String(value).trim();
 }
 
-function evaluateCondition(condition: FieldCondition, values: Record<string, FormValue>) {
+function findField(fields: FormField[], key: string): FormField | undefined {
+  for (const field of fields) {
+    if (field.id === key || field.name === key) return field;
+    if (field.type === 'repeatable') {
+      const nested = findField(field.fields ?? [], key);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+}
+
+function readFieldValue(field: FormField | undefined, key: string, values: Record<string, FormValue>) {
+  if (field) return values[field.name] ?? values[field.id];
+  return values[key];
+}
+
+function evaluateCondition(
+  condition: FieldCondition,
+  values: Record<string, FormValue>,
+  fields: FormField[] = [],
+) {
   const key = condition.fieldId ?? condition.field;
-  const actual = values[key];
+  const actual = readFieldValue(findField(fields, key), key, values);
   const expected = condition.value;
   const left = normalize(actual);
   const right = normalize(expected);
@@ -45,10 +65,10 @@ function evaluateCondition(condition: FieldCondition, values: Record<string, For
   }
 }
 
-function isVisible(field: FormField, values: Record<string, FormValue>) {
+function isVisible(field: FormField, values: Record<string, FormValue>, fields: FormField[]) {
   const conditions: FieldCondition[] = field.conditions ?? [];
   if (!conditions.length) return true;
-  const results = conditions.map(condition => evaluateCondition(condition, values));
+  const results = conditions.map(condition => evaluateCondition(condition, values, fields));
   return field.conditionLogic === 'OR' ? results.some(Boolean) : results.every(Boolean);
 }
 
@@ -56,7 +76,7 @@ function empty(value: FormValue) {
   return value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0);
 }
 
-function validateField(field: FormField, value: FormValue): string | null {
+function validateField(field: FormField, value: FormValue, fields: FormField[] = []): string | null {
   if (field.required && empty(value)) return 'این فیلد الزامی است.';
   if (empty(value)) return null;
 
@@ -64,13 +84,14 @@ function validateField(field: FormField, value: FormValue): string | null {
     if (!Array.isArray(value)) return 'مقدار گروه تکرارشونده نامعتبر است.';
     if (field.minItems !== undefined && value.length < field.minItems) return `حداقل ${field.minItems} مورد لازم است.`;
     if (field.maxItems !== undefined && value.length > field.maxItems) return `حداکثر ${field.maxItems} مورد مجاز است.`;
+    const childFields = field.fields ?? [];
     for (const item of value) {
       if (!item || typeof item !== 'object') return 'یکی از موارد گروه نامعتبر است.';
-      for (const child of field.fields ?? []) {
-        const row = item as Record<string, FormValue>;
-        const childValue = row[child.id] ?? row[child.name];
-        if (!isVisible(child, row)) continue;
-        const error = validateField(child, childValue);
+      const row = item as Record<string, FormValue>;
+      for (const child of childFields) {
+        const childValue = row[child.name] ?? row[child.id];
+        if (!isVisible(child, row, childFields)) continue;
+        const error = validateField(child, childValue, childFields);
         if (error) return `${child.label}: ${error}`;
       }
     }
@@ -108,9 +129,9 @@ export function validateFormData(schema: FormSchema, input: Record<string, FormV
   const errors: FormValidationError[] = [];
 
   for (const field of schema.fields ?? []) {
-    if (!isVisible(field, input)) continue;
-    const value = input[field.id] ?? input[field.name];
-    const error = validateField(field, value);
+    if (!isVisible(field, input, schema.fields ?? [])) continue;
+    const value = input[field.name] ?? input[field.id];
+    const error = validateField(field, value, schema.fields ?? []);
     if (error) errors.push({ fieldId: field.id, message: error });
     if (!empty(value)) data[field.id] = value;
   }
