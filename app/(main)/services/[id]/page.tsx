@@ -182,8 +182,7 @@ export default async function ServicePage({
       .select("id,title,slug,icon,description")
       .eq("is_active", true)
       .eq("parent_service_id", service.id)
-      .order("created_at", { ascending: false })
-      .limit(12),
+      .order("created_at", { ascending: false }),
     service.parent_service_id
       ? supabase
           .from("services")
