@@ -13,6 +13,18 @@ import { GlassPanel, TusanCard, TusanButton, TusanInput, SectionHeader } from "@
 type ParentForm = { id: string; title: string; service_id: string | null };
 type ParentService = { id: string; title: string; parent_form_id: string | null };
 
+async function invalidateServiceCache(slugs: string[]) {
+  try {
+    await fetch("/api/admin/services/revalidate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slugs }),
+    });
+  } catch (error) {
+    console.error("service cache invalidation failed", error);
+  }
+}
+
 export default function EditServicePage() {
   const params = useParams(); const router = useRouter(); const serviceId = params.id as string;
   const [title, setTitle] = useState(""); const [category, setCategory] = useState(""); const [description, setDescription] = useState("");
@@ -47,8 +59,11 @@ export default function EditServicePage() {
       const { data: { user } } = await supabase.auth.getUser(); if (!user) throw new Error("ابتدا وارد حساب مدیریت شوید.");
       const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single(); if (profile?.role !== "admin") throw new Error("دسترسی مدیریت مجاز نیست.");
       const parsedPrice = price.trim() === "" ? 0 : Number(price); if (!Number.isFinite(parsedPrice) || parsedPrice < 0) throw new Error("قیمت خدمت معتبر نیست.");
+      const previousSlug = slug.trim();
       const { error: updateError } = await supabase.from("services").update({ title: title.trim(), slug: slug.trim() || null, category: category.trim() || null, description: description.trim() || null, price: parsedPrice, icon: icon.trim() || null, is_active: isActive, is_popular: isPopular, meta_title: metaTitle.trim() || null, meta_description: metaDescription.trim() || null, seo_keywords: seoKeywords, form_schema: formSchema, parent_service_id: serviceType === "normal" ? (parentServiceId || null) : null, parent_form_id: parentFormId || null }).eq("id", serviceId);
-      if (updateError) throw new Error(updateError.message); router.push("/admin/services"); router.refresh();
+      if (updateError) throw new Error(updateError.message);
+      await invalidateServiceCache([previousSlug, slug.trim()].filter(Boolean));
+      router.push("/admin/services"); router.refresh();
     } catch (err: any) { setError(err?.message || "خطایی هنگام بروزرسانی خدمت رخ داد."); } finally { setSaving(false); }
   }
   if (loading) return <div dir="rtl" className="min-h-screen page-background flex items-center justify-center"><GlassPanel className="p-10">در حال دریافت اطلاعات خدمت...</GlassPanel></div>;
