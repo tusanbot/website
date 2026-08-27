@@ -6,19 +6,17 @@ import { createServerClient } from '@/lib/supabase/server'
 import ServiceRequestForm from '@/components/services/ServiceRequestForm'
 import { buildCanonicalUrl } from '@/lib/seo/canonical'
 
-const getService = unstable_cache(
-  async (slug: string) => {
-    const supabase = await createServerClient()
-    const { data } = await supabase.from('services').select('id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at').eq('slug', slug).eq('is_active', true).maybeSingle()
-    return data
-  }, ['service-page'], { revalidate: 300 }
-)
+const getService = unstable_cache(async (slug: string) => {
+  const supabase = await createServerClient()
+  const { data } = await supabase.from('services').select('id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at').eq('slug', slug).eq('is_active', true).maybeSingle()
+  return data
+}, ['service-page'], { revalidate: 300 })
 
 function asSeoContent(value: unknown) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const v = value as Record<string, unknown>
   const text = (key: string) => typeof v[key] === 'string' ? v[key].trim() : ''
-  const list = (key: string) => Array.isArray(v[key]) ? v[key].filter((x): x is string => typeof x === 'string' && x.trim().length > 0).map(x => x.trim()) : []
+  const list = (key: string) => Array.isArray(v[key]) ? v[key].filter((x): x is string => typeof x === 'string' && x.trim()).map(x => x.trim()) : []
   const faq = Array.isArray(v.faq) ? v.faq.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x)).map(x => ({ question: typeof x.question === 'string' ? x.question.trim() : '', answer: typeof x.answer === 'string' ? x.answer.trim() : '' })).filter(x => x.question && x.answer) : []
   return { intro: text('intro'), body: text('body'), steps: list('steps'), requirements: list('requirements'), notes: list('notes'), faq }
 }
