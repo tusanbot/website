@@ -4,44 +4,52 @@ import { motion } from "framer-motion";
 import { SectionHeader } from "@/components/ui";
 
 const steps = [
-  { icon: "📝", title: "انتخاب خدمت", description: "خدمت موردنظر را انتخاب و وارد فرم سفارش شوید." },
-  { icon: "📤", title: "ثبت اطلاعات", description: "اطلاعات و مدارک موردنیاز را آنلاین ارسال کنید." },
-  { icon: "🔍", title: "بررسی توسن", description: "کارشناسان اطلاعات را بررسی می‌کنند." },
-  { icon: "⚙️", title: "انجام خدمت", description: "خدمت با دقت انجام و وضعیت آن قابل پیگیری است." },
-  { icon: "✅", title: "تحویل نهایی", description: "نتیجه نهایی از طریق پنل یا روش توافق‌شده تحویل می‌شود." },
+  { icon: "🛍️", title: "انتخاب خدمت", description: "کاربر خدمت موردنظر را انتخاب می‌کند.", scene: "انتخاب خدمت" },
+  { icon: "📝", title: "تکمیل فرم", description: "فرم را تکمیل و مدارک لازم را ارسال می‌کند.", scene: "تکمیل فرم" },
+  { icon: "💳", title: "پرداخت", description: "هزینه خدمت به‌صورت آنلاین پرداخت می‌شود.", scene: "پرداخت" },
+  { icon: "🔍", title: "بررسی و تأیید", description: "سفارش توسط کارشناسان توسن بررسی و تأیید می‌شود.", scene: "بررسی مدیر" },
+  { icon: "✅", title: "تکمیل و تحویل", description: "خدمت انجام شده و نتیجه نهایی تحویل می‌شود.", scene: "تکمیل سفارش" },
 ];
 
 export default function ProcessTimeline() {
   return (
     <section id="order-process" className="relative scroll-mt-28 overflow-hidden py-10 md:py-12" dir="rtl">
-      <div className="relative mx-auto max-w-6xl px-6 lg:px-8">
-        <SectionHeader title="روند انجام سفارش" description="از انتخاب خدمت تا تحویل نهایی، مراحل به‌صورت آنلاین و قابل پیگیری انجام می‌شود." align="center" />
-        <div className="relative mt-8">
-          <div className="absolute right-5 top-5 h-[calc(100%-2.5rem)] w-px bg-[var(--border)] md:left-1/2 md:right-auto md:-translate-x-1/2" />
-          <motion.div initial={{ height: 0 }} whileInView={{ height: "100%" }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 1.1, ease: "easeOut" }} className="absolute right-5 top-5 w-px bg-[var(--primary)] md:left-1/2 md:right-auto md:-translate-x-1/2" />
-          <div className="space-y-4">
-            {steps.map((step, index) => {
-              const left = index % 2 === 0;
-              return (
-                <motion.div key={step.title} initial={{ opacity: 0, y: 14 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.2 }} transition={{ duration: 0.35, delay: index * 0.05 }} className="relative grid md:grid-cols-2 md:gap-10">
-                  <div className="absolute right-[9px] top-5 md:left-1/2 md:right-auto md:-translate-x-1/2"><div className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--surface)] ring-4 ring-[var(--background)]"><div className="h-2.5 w-2.5 rounded-full bg-[var(--primary)]" /></div></div>
-                  <div className={`pr-12 md:pr-0 ${left ? "md:col-start-1" : "md:col-start-1 md:opacity-0"}`}>{left && <TimelineCard step={step} index={index} />}</div>
-                  <div className={`pr-12 md:pr-0 ${left ? "md:col-start-2 md:opacity-0" : "md:col-start-2"}`}>{!left && <TimelineCard step={step} index={index} />}</div>
+      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <SectionHeader title="روند انجام سفارش" description="یک مسیر واقعی و ساده از انتخاب خدمت تا تکمیل سفارش." align="center" />
+        <div className="mt-8 hidden md:block">
+          <div className="relative rounded-[2rem] border border-[var(--border)] bg-[var(--surface)]/70 p-6 shadow-sm">
+            <div className="absolute right-[10%] left-[10%] top-[78px] h-1 rounded-full bg-[var(--border)]" />
+            <motion.div initial={{ width: 0 }} whileInView={{ width: "80%" }} viewport={{ once: true, amount: 0.35 }} transition={{ duration: 2, ease: "easeInOut" }} className="absolute right-[10%] top-[78px] h-1 origin-right rounded-full bg-[var(--primary)]" />
+            <div className="grid grid-cols-5 gap-3">
+              {steps.map((step, index) => (
+                <motion.div key={step.title} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.3 }} transition={{ delay: index * 0.16, duration: 0.45 }} className="relative text-center">
+                  <motion.div initial={{ scale: 0.7 }} whileInView={{ scale: 1 }} viewport={{ once: true }} transition={{ delay: index * 0.16 + 0.1, type: "spring" }} className="relative z-10 mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-2xl shadow-md">{step.icon}</motion.div>
+                  <div className="mt-4 text-xs font-bold text-[var(--primary)]">مرحله {(index + 1).toLocaleString("fa-IR")}</div>
+                  <h3 className="mt-1 font-black text-[var(--text)]">{step.title}</h3>
+                  <p className="mx-auto mt-2 max-w-[190px] text-xs leading-6 text-[var(--text-muted)]">{step.description}</p>
+                  <motion.div initial={{ opacity: 0, scale: 0 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: index * 0.16 + 0.25 }} className="mx-auto mt-3 inline-flex rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-2.5 py-1 text-[10px] text-[var(--primary)]">{step.scene}</motion.div>
                 </motion.div>
-              );
-            })}
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-6 md:hidden">
+          <div className="relative overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/70 p-4">
+            <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory">
+              {steps.map((step, index) => (
+                <motion.div key={step.title} initial={{ opacity: 0, x: 16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ duration: 0.35 }} className="min-w-[78%] snap-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-center">
+                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-2xl">{step.icon}</div>
+                  <div className="mt-3 text-xs font-bold text-[var(--primary)]">مرحله {(index + 1).toLocaleString("fa-IR")}</div>
+                  <h3 className="mt-1 font-black">{step.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">{step.description}</p>
+                </motion.div>
+              ))}
+            </div>
+            <div className="mt-2 text-center text-[10px] text-[var(--text-muted)]">برای دیدن مرحله بعد، افقی بکشید ←</div>
           </div>
         </div>
       </div>
     </section>
-  );
-}
-
-function TimelineCard({ step, index }: { step: (typeof steps)[number]; index: number }) {
-  return (
-    <motion.div whileHover={{ y: -2 }} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)]/80 p-4">
-      <div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)]/10 text-xl">{step.icon}</div><div className="min-w-0"><div className="text-[11px] font-bold text-[var(--primary)]">مرحله {(index + 1).toLocaleString("fa-IR")}</div><h3 className="font-black text-[var(--text)]">{step.title}</h3></div></div>
-      <p className="mt-2 text-sm leading-6 text-[var(--text-muted)]">{step.description}</p>
-    </motion.div>
   );
 }
