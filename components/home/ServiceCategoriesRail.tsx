@@ -48,27 +48,17 @@ export default function ServiceCategoriesRail() {
         <SectionHeader title="دسته‌بندی خدمات" description="روی هر دسته بروید تا خدمات زیرمجموعه را سریع ببینید." align="center" />
         {loading ? <div className="mt-5 h-16 animate-pulse rounded-2xl border border-[var(--border)] bg-[var(--surface)]" /> : categories.length ? (
           <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 px-2 py-1 shadow-[var(--shadow-sm)] backdrop-blur">
-            <AnimatedTagRail
-              items={items}
-              ariaLabel="دسته‌بندی خدمات"
-              speed={10}
-              renderPanel={(item) => {
-                const category = categories.find(value => value.id === item.id);
-                if (!category) return null;
-                return (
-                  <div>
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div><div className="flex items-center gap-2 text-base font-black"><Layers3 size={18} className="text-[var(--primary)]" />{category.title}</div><p className="mt-1 text-xs leading-6 text-[var(--text-muted)]">{category.description}</p></div>
-                      <span className="shrink-0 rounded-full bg-[var(--primary)]/10 px-2 py-1 text-xs font-bold text-[var(--primary)]">{category.count.toLocaleString("fa-IR")} خدمت</span>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {category.services.map(service => <Link key={service.id} href={`/services/${encodeURIComponent(service.id)}`} className="group flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold transition hover:border-[var(--primary)]/40 hover:bg-[var(--primary)]/5"><span>{service.icon || "📋"}</span><span className="min-w-0 flex-1 truncate">{service.title}</span><ArrowLeft size={13} className="shrink-0 text-[var(--primary)] transition group-hover:-translate-x-0.5" /></Link>)}
-                    </div>
-                    <Link href={category.href} className="mt-3 flex items-center justify-center gap-1 rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-black text-white">مشاهده همه خدمات این دسته <ChevronDown size={14} className="rotate-90" /></Link>
-                  </div>
-                );
-              }}
-            />
+            <AnimatedTagRail items={items} ariaLabel="دسته‌بندی خدمات" speed={5} renderPanel={(item) => {
+              const category = categories.find(value => value.id === item.id);
+              if (!category) return null;
+              return (
+                <div>
+                  <div className="mb-3 flex items-start justify-between gap-3"><div><div className="flex items-center gap-2 text-base font-black"><Layers3 size={18} className="text-[var(--primary)]" />{category.title}</div><p className="mt-1 text-xs leading-6 text-[var(--text-muted)]">{category.description}</p></div><span className="shrink-0 rounded-full bg-[var(--primary)]/10 px-2 py-1 text-xs font-bold text-[var(--primary)]">{category.count.toLocaleString("fa-IR")} خدمت</span></div>
+                  <div className="grid gap-2 sm:grid-cols-2">{category.services.map(service => <Link key={service.id} href={`/services/${encodeURIComponent(service.id)}`} className="group flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold transition hover:border-[var(--primary)]/40 hover:bg-[var(--primary)]/5"><span>{service.icon || "📋"}</span><span className="min-w-0 flex-1 truncate">{service.title}</span><ArrowLeft size={13} className="shrink-0 text-[var(--primary)] transition group-hover:-translate-x-0.5" /></Link>)}</div>
+                  <Link href={category.href} className="mt-3 flex items-center justify-center gap-1 rounded-xl bg-[var(--primary)] px-3 py-2 text-xs font-black text-white">مشاهده همه خدمات این دسته <ChevronDown size={14} className="rotate-90" /></Link>
+                </div>
+              );
+            }} />
           </div>
         ) : null}
       </div>
