@@ -13,7 +13,7 @@ export async function validateGeminiKey(apiKey: string) {
   if (!key) return { ok: false as const, message: "کلید API را وارد کنید." };
   try {
     const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-    const response = await fetch(`${base}/models?key=${encodeURIComponent(key)}`, { method: "GET", cache: "no-store", signal: AbortSignal.timeout(10000) });
+    const response = await fetch(`${base}/models`, { method: "GET", headers: { "x-goog-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(10000) });
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) return { ok: false as const, message: "کلید Gemini معتبر نیست یا دسترسی لازم را ندارد." };
       if (response.status === 429) return { ok: false as const, message: "محدودیت درخواست Gemini فعال است؛ کمی بعد دوباره تلاش کنید." };
