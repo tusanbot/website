@@ -1,13 +1,18 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAiSession, destroyAiSession, getAiProfile } from "@/lib/ai/server";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export async function GET() {
   const session = await getAiProfile();
   return NextResponse.json({ authenticated: Boolean(session), profile: session?.profile ?? null });
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const bodySizeError = rejectOversizedJsonBody(request, 4 * 1024);
+    if (bodySizeError) return bodySizeError;
+    const rateLimitResponse = await checkRateLimit({ scope: "ai:session", request, limit: 5, windowSeconds: 600 });
+    if (rateLimitResponse) return rateLimitResponse;
     const body = await request.json() as { apiKey?: unknown };
     if (typeof body.apiKey !== "string" || body.apiKey.trim().length < 20) return NextResponse.json({ error: "کلید API معتبر وارد کنید." }, { status: 400 });
     const result = await createAiSession(body.apiKey);
