@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateWithGemini } from '@/lib/ai/gemini';
 import { requireAiProfile } from '@/lib/ai/server';
+import { checkRateLimit, rejectOversizedJsonBody } from '@/lib/security/rateLimit';
 
 const prompts: Record<string, string> = {
   grammar: 'غلط‌های املایی و دستوری فارسی را اصلاح کن؛ معنی و لحن متن را حفظ کن.',
@@ -15,6 +16,10 @@ const prompts: Record<string, string> = {
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAiProfile();
+    const bodySizeError = rejectOversizedJsonBody(req, 16 * 1024);
+    if (bodySizeError) return bodySizeError;
+    const rateLimitResponse = await checkRateLimit({ scope: 'ai:text-corrector', request: req, userId: session.profile.id, limit: 10, windowSeconds: 60 });
+    if (rateLimitResponse) return rateLimitResponse;
     const body = await req.json();
     const text = typeof body.text === 'string' ? body.text.trim() : '';
     const mode = typeof body.mode === 'string' ? body.mode : 'grammar';
