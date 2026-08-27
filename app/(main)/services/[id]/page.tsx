@@ -40,11 +40,7 @@ function normalizeSchema(value: any): any[] {
 
 function normalizeRules(value: any): PricingRule[] {
   if (typeof value === "string") {
-    try {
-      value = JSON.parse(value);
-    } catch {
-      value = [];
-    }
+    try { value = JSON.parse(value); } catch { value = []; }
   }
   return Array.isArray(value) ? value : [];
 }
@@ -58,20 +54,14 @@ function isUuid(value: string) {
 }
 
 function normalizeSlug(value: string) {
-  return decodeURIComponent(value)
-    .normalize("NFC")
-    .replace(/\u200c/g, "")
-    .replace(/\u200d/g, "")
-    .trim();
+  return decodeURIComponent(value).normalize("NFC").replace(/\u200c/g, "").replace(/\u200d/g, "").trim();
 }
 
-const SERVICE_SELECT =
-  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at";
+const SERVICE_SELECT = "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at";
 
 async function getService(path: string): Promise<Service | null> {
   const supabase = createSupabaseServerClient();
   const query = supabase.from("services").select(SERVICE_SELECT).eq("is_active", true);
-
   const normalize = (data: any): Service => ({
     ...data,
     price: Number(data.price || 0),
@@ -92,365 +82,118 @@ async function getService(path: string): Promise<Service | null> {
   if (!error && data) return normalize(data);
 
   const { data: services, error: fallbackError } = await supabase
-    .from("services")
-    .select(SERVICE_SELECT)
-    .eq("is_active", true)
-    .not("slug", "is", null);
-
+    .from("services").select(SERVICE_SELECT).eq("is_active", true).not("slug", "is", null);
   if (fallbackError) return null;
   const match = (services || []).find((item: any) => normalizeSlug(item.slug) === requestedSlug);
   return match ? normalize(match) : null;
 }
 
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const service = await getService(id);
   if (!service) return { title: "خدمت پیدا نشد", robots: { index: false, follow: false } };
 
   const title = service.meta_title?.trim() || `${service.title} | کافی نت توسن`;
-  const description =
-    service.meta_description?.trim() ||
-    service.description?.trim() ||
-    `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`;
+  const description = service.meta_description?.trim() || service.description?.trim() || `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`;
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
   const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
-  const keywords = [
-    ...(service.seo_keywords || []),
-    service.title,
-    service.category,
-    "کافی نت توسن",
-    "خدمات آنلاین",
-    "ثبت درخواست آنلاین",
-  ].filter(Boolean) as string[];
+  const keywords = [...(service.seo_keywords || []), service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[];
 
   return {
-    title: { absolute: title },
-    description,
-    keywords: [...new Set(keywords)],
-    alternates: { canonical: canonicalUrl },
-    openGraph: {
-      type: "website",
-      locale: "fa_IR",
-      url: canonicalUrl,
-      siteName: "کافی نت توسن",
-      title,
-      description,
-    },
-    twitter: { card: "summary", title, description },
-    robots: { index: true, follow: true },
+    title: { absolute: title }, description, keywords: [...new Set(keywords)], alternates: { canonical: canonicalUrl },
+    openGraph: { type: "website", locale: "fa_IR", url: canonicalUrl, siteName: "کافی نت توسن", title, description },
+    twitter: { card: "summary", title, description }, robots: { index: true, follow: true },
   };
 }
 
 function getFieldLabels(schema: any[]) {
-  return schema
-    .map((field: any) => String(field?.label || field?.title || field?.name || "").trim())
-    .filter(Boolean)
-    .filter((v, i, a) => a.indexOf(v) === i)
-    .slice(0, 8);
+  return schema.map((field: any) => String(field?.label || field?.title || field?.name || "").trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 8);
 }
 
-export default async function ServicePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const service = await getService(id);
-
   if (!service) {
     if (isUuid(id)) permanentRedirect("/services");
     notFound();
   }
-
   if (isUuid(id)) permanentRedirect(`/services/${encodeURIComponent(service.slug)}`);
 
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
   const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
   const supabase = createSupabaseServerClient();
-
   const [{ data: related }, { data: children }, { data: parent }] = await Promise.all([
-    supabase
-      .from("services")
-      .select("id,title,slug,icon,description")
-      .eq("is_active", true)
-      .eq("category", service.category)
-      .neq("id", service.id)
-      .limit(4),
-    supabase
-      .from("services")
-      .select("id,title,slug,icon,description")
-      .eq("is_active", true)
-      .eq("parent_service_id", service.id)
-      .order("created_at", { ascending: false }),
-    service.parent_service_id
-      ? supabase
-          .from("services")
-          .select("id,title,slug,icon")
-          .eq("is_active", true)
-          .eq("id", service.parent_service_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
+    supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("category", service.category).neq("id", service.id).limit(4),
+    supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("parent_service_id", service.id).order("created_at", { ascending: false }),
+    service.parent_service_id ? supabase.from("services").select("id,title,slug,icon").eq("is_active", true).eq("id", service.parent_service_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
 
   const fieldLabels = getFieldLabels(service.form_schema);
   const seoContent = normalizeServiceSeoContent(service.seo_content);
-  const hasSeoContent = Boolean(
-    seoContent.introduction ||
-      seoContent.audience ||
-      (seoContent.steps?.length ?? 0) > 0 ||
-      (seoContent.tips?.length ?? 0) > 0 ||
-      (seoContent.faq?.length ?? 0) > 0,
-  );
   const faqItems = (seoContent.faq || []).filter((item) => item.question && item.answer);
+  const hasSeoContent = Boolean(seoContent.introduction || seoContent.audience || seoContent.steps?.length || seoContent.tips?.length || faqItems.length);
 
   const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Service",
-    name: service.title,
-    description: service.description || seoContent.introduction || undefined,
-    url: canonicalUrl,
-    provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl },
-    areaServed: { "@type": "Country", name: "ایران" },
-    ...(service.price > 0
-      ? {
-          offers: {
-            "@type": "Offer",
-            price: service.price,
-            priceCurrency: "IRR",
-            url: canonicalUrl,
-          },
-        }
-      : {}),
+    "@context": "https://schema.org", "@type": "Service", name: service.title,
+    description: seoContent.introduction || service.description || undefined, url: canonicalUrl,
+    provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl }, areaServed: { "@type": "Country", name: "ایران" },
+    ...(service.price > 0 ? { offers: { "@type": "Offer", price: service.price, priceCurrency: "IRR", url: canonicalUrl } } : {}),
   };
-
-  const categoryUrl = service.category
-    ? `${siteUrl}/services?category=${encodeURIComponent(service.category)}`
-    : null;
+  const categoryUrl = service.category ? `${siteUrl}/services?category=${encodeURIComponent(service.category)}` : null;
   const breadcrumbItems = [
     { "@type": "ListItem", position: 1, name: "خانه", item: siteUrl },
     { "@type": "ListItem", position: 2, name: "خدمات", item: `${siteUrl}/services` },
-    ...(service.category && categoryUrl
-      ? [{ "@type": "ListItem", position: 3, name: service.category, item: categoryUrl }]
-      : []),
-    {
-      "@type": "ListItem",
-      position: service.category ? 4 : 3,
-      name: service.title,
-      item: canonicalUrl,
-    },
+    ...(service.category && categoryUrl ? [{ "@type": "ListItem", position: 3, name: service.category, item: categoryUrl }] : []),
+    { "@type": "ListItem", position: service.category ? 4 : 3, name: service.title, item: canonicalUrl },
   ];
-  const breadcrumbJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    itemListElement: breadcrumbItems,
-  };
-  const faqJsonLd = faqItems.length > 0
-    ? {
-        "@context": "https://schema.org",
-        "@type": "FAQPage",
-        mainEntity: faqItems.map((item) => ({
-          "@type": "Question",
-          name: item.question,
-          acceptedAnswer: { "@type": "Answer", text: item.answer },
-        })),
-      }
-    : null;
+  const breadcrumbJsonLd = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: breadcrumbItems };
+  const faqJsonLd = faqItems.length > 0 ? {
+    "@context": "https://schema.org", "@type": "FAQPage",
+    mainEntity: faqItems.map((item) => ({ "@type": "Question", name: item.question, acceptedAnswer: { "@type": "Answer", text: item.answer } })),
+  } : null;
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
-      />
-      {faqJsonLd && (
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
-      )}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      {faqJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />}
 
       <div dir="rtl" className="max-w-3xl mx-auto px-6 pt-5">
         <nav aria-label="مسیر صفحه" className="text-sm text-[var(--text-muted)]">
-          <Link href="/" className="hover:underline">خانه</Link>
-          <span className="mx-2">/</span>
-          <Link href="/services" className="hover:underline">خدمات</Link>
-          <span className="mx-2">/</span>
-          {service.category && (
-            <>
-              <Link href={`/services?category=${encodeURIComponent(service.category)}`} className="hover:underline">
-                {service.category}
-              </Link>
-              <span className="mx-2">/</span>
-            </>
-          )}
-          <span className="font-medium text-[var(--text)]" aria-current="page">
-            {service.title}
-          </span>
+          <Link href="/" className="hover:underline">خانه</Link><span className="mx-2">/</span><Link href="/services" className="hover:underline">خدمات</Link><span className="mx-2">/</span>
+          {service.category && <><Link href={`/services?category=${encodeURIComponent(service.category)}`} className="hover:underline">{service.category}</Link><span className="mx-2">/</span></>}
+          <span className="font-medium text-[var(--text)]" aria-current="page">{service.title}</span>
         </nav>
       </div>
 
-      {parent && (
-        <section dir="rtl" className="max-w-3xl mx-auto px-6 pt-4" aria-label="خدمت مادر">
-          <div className="rounded-xl border bg-white px-4 py-3 text-sm">
-            این خدمت زیرمجموعه{" "}
-            <Link
-              href={`/services/${encodeURIComponent(parent.slug)}`}
-              className="font-bold text-[#09967C] hover:underline"
-            >
-              {parent.icon || "📄"} {parent.title}
-            </Link>{" "}است.
-          </div>
-        </section>
-      )}
+      {parent && <section dir="rtl" className="max-w-3xl mx-auto px-6 pt-4" aria-label="خدمت مادر"><div className="rounded-xl border bg-white px-4 py-3 text-sm">این خدمت زیرمجموعه{" "}<Link href={`/services/${encodeURIComponent(parent.slug)}`} className="font-bold text-[#09967C] hover:underline">{parent.icon || "📄"} {parent.title}</Link>{" "}است.</div></section>}
 
-      <section
-        dir="rtl"
-        className="max-w-3xl mx-auto px-6 pt-5 pb-2"
-        aria-labelledby="service-guide-title"
-      >
+      <section dir="rtl" className="max-w-3xl mx-auto px-6 pt-5 pb-2" aria-labelledby="service-guide-title">
         <div className="rounded-2xl border bg-white p-6 shadow-sm">
           <h1 id="service-guide-title" className="text-2xl font-bold">{service.title}</h1>
-          {service.description?.trim() && (
-            <div className="mt-4 text-[var(--text-muted)] leading-8">
-              <p>{service.description.trim()}</p>
-            </div>
+          {(seoContent.introduction || service.description?.trim()) && <div className="mt-4 text-[var(--text-muted)] leading-8"><p>{seoContent.introduction || service.description?.trim()}</p></div>}
+
+          {seoContent.audience && <div className="mt-6"><h2 className="font-bold text-lg">این خدمت برای چه کسانی است؟</h2><p className="mt-2 text-sm leading-7 text-[var(--text-muted)] whitespace-pre-line">{seoContent.audience}</p></div>}
+
+          {(seoContent.steps?.length ?? 0) > 0 ? (
+            <div className="mt-6"><h2 className="font-bold text-lg">مراحل انجام</h2><ol className="mt-2 list-decimal pr-5 space-y-2 text-sm leading-7 text-[var(--text-muted)]">{seoContent.steps!.map((step, index) => <li key={`${index}-${step.title}`}><span className="font-bold text-[var(--text)]">{step.title}</span>{step.description && <span className="block mt-1">{step.description}</span>}</li>)}</ol></div>
+          ) : (
+            <div className="mt-6"><h2 className="font-bold text-lg">نحوه ثبت درخواست</h2><ol className="mt-2 list-decimal pr-5 space-y-1 text-sm leading-7 text-[var(--text-muted)]"><li>اطلاعات موردنیاز این خدمت را در فرم مربوط وارد کنید.</li><li>اطلاعات واردشده را پیش از ارسال بررسی و تأیید کنید.</li><li>پس از ثبت، وضعیت سفارش را از مسیر پیگیری سفارش بررسی کنید.</li></ol></div>
           )}
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <div>
-              <h2 className="font-bold text-lg">نحوه ثبت درخواست</h2>
-              <ol className="mt-2 list-decimal pr-5 space-y-1 text-sm leading-7 text-[var(--text-muted)]">
-                <li>اطلاعات موردنیاز این خدمت را در فرم مربوط وارد کنید.</li>
-                <li>اطلاعات واردشده را پیش از ارسال بررسی و تأیید کنید.</li>
-                <li>پس از ثبت، وضعیت سفارش را از مسیر پیگیری سفارش بررسی کنید.</li>
-              </ol>
-            </div>
-            <div>
-              <h2 className="font-bold text-lg">اطلاعات موردنیاز</h2>
-              {fieldLabels.length > 0 ? (
-                <ul className="mt-2 list-disc pr-5 space-y-1 text-sm leading-7 text-[var(--text-muted)]">
-                  {fieldLabels.map((label) => <li key={label}>{label}</li>)}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
-                  اطلاعات موردنیاز این خدمت هنگام تکمیل فرم نمایش داده می‌شود.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="mt-6 rounded-xl bg-[var(--surface-muted)] p-4">
-            <h2 className="font-bold">نکته مهم</h2>
-            <p className="mt-1 text-sm leading-7 text-[var(--text-muted)]">
-              قبل از ثبت نهایی، اطلاعات و فایل‌های واردشده را با دقت بررسی کنید. در صورت وجود شرایط اختصاصی برای این خدمت، موارد لازم در فرم ثبت درخواست نمایش داده می‌شود.
-            </p>
-          </div>
+
+          <div className="mt-6"><h2 className="font-bold text-lg">اطلاعات موردنیاز</h2>{fieldLabels.length > 0 ? <ul className="mt-2 list-disc pr-5 space-y-1 text-sm leading-7 text-[var(--text-muted)]">{fieldLabels.map((label) => <li key={label}>{label}</li>)}</ul> : <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">اطلاعات موردنیاز این خدمت هنگام تکمیل فرم نمایش داده می‌شود.</p>}</div>
+
+          {seoContent.tips?.length ? <div className="mt-6 rounded-xl bg-[var(--surface-muted)] p-4"><h2 className="font-bold">نکات مهم</h2><ul className="mt-2 list-disc pr-5 space-y-1 text-sm leading-7 text-[var(--text-muted)]">{seoContent.tips.map((tip, index) => <li key={`${index}-${tip}`}>{tip}</li>)}</ul></div> : <div className="mt-6 rounded-xl bg-[var(--surface-muted)] p-4"><h2 className="font-bold">نکته مهم</h2><p className="mt-1 text-sm leading-7 text-[var(--text-muted)]">قبل از ثبت نهایی، اطلاعات و فایل‌های واردشده را با دقت بررسی کنید. در صورت وجود شرایط اختصاصی برای این خدمت، موارد لازم در فرم ثبت درخواست نمایش داده می‌شود.</p></div>}
         </div>
       </section>
 
-      {hasSeoContent && (
-        <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-6" aria-labelledby="service-content-title">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-7">
-            <h2 id="service-content-title" className="text-xl font-black">راهنمای {service.title}</h2>
-            {seoContent.introduction && (
-              <div>
-                <h3 className="font-bold text-lg mb-2">معرفی خدمت</h3>
-                <p className="text-[var(--text-muted)] leading-8 whitespace-pre-line">{seoContent.introduction}</p>
-              </div>
-            )}
-            {seoContent.audience && (
-              <div>
-                <h3 className="font-bold text-lg mb-2">این خدمت برای چه کسانی است؟</h3>
-                <p className="text-[var(--text-muted)] leading-8 whitespace-pre-line">{seoContent.audience}</p>
-              </div>
-            )}
-            {(seoContent.steps?.length ?? 0) > 0 && (
-              <div>
-                <h3 className="font-bold text-lg mb-3">مراحل انجام</h3>
-                <ol className="list-decimal pr-5 space-y-3">
-                  {seoContent.steps!.map((step, index) => (
-                    <li key={`${index}-${step.title}`} className="pr-2 text-[var(--text-muted)] leading-7">
-                      <span className="font-bold text-[var(--text)]">{step.title}</span>
-                      {step.description && <span className="block mt-1">{step.description}</span>}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-            {(seoContent.tips?.length ?? 0) > 0 && (
-              <div>
-                <h3 className="font-bold text-lg mb-3">نکات مهم</h3>
-                <ul className="list-disc pr-5 space-y-2 text-[var(--text-muted)] leading-7">
-                  {seoContent.tips!.map((tip, index) => <li key={`${index}-${tip}`}>{tip}</li>)}
-                </ul>
-              </div>
-            )}
-            {faqItems.length > 0 && (
-              <div>
-                <h3 className="font-bold text-lg mb-3">سؤالات متداول</h3>
-                <div className="space-y-3">
-                  {faqItems.map((item, index) => (
-                    <details key={`${index}-${item.question}`} className="rounded-xl border p-4">
-                      <summary className="cursor-pointer font-bold">{item.question}</summary>
-                      <p className="mt-3 text-[var(--text-muted)] leading-7 whitespace-pre-line">{item.answer}</p>
-                    </details>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+      {faqItems.length > 0 && <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-6" aria-labelledby="service-faq-title"><div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 id="service-faq-title" className="text-xl font-bold mb-4">سؤالات متداول</h2><div className="space-y-3">{faqItems.map((item, index) => <details key={`${index}-${item.question}`} className="rounded-xl border p-4"><summary className="cursor-pointer font-bold">{item.question}</summary><p className="mt-3 text-[var(--text-muted)] leading-7 whitespace-pre-line">{item.answer}</p></details>)}</div></div></section>}
 
       <ServiceOrderClient initialService={service} />
 
-      {children && children.length > 0 && (
-        <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-6" aria-labelledby="child-services-title">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 id="child-services-title" className="text-xl font-bold mb-4">خدمات زیرمجموعه</h2>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {children.map((item: any) => (
-                <Link
-                  key={item.id}
-                  href={`/services/${encodeURIComponent(item.slug)}`}
-                  className="rounded-xl border p-4 hover:border-[#09967C] transition"
-                >
-                  <div className="font-bold">{item.icon || "📄"} {item.title}</div>
-                  {item.description && (
-                    <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">
-                      {item.description}
-                    </p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {children && children.length > 0 && <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-6" aria-labelledby="child-services-title"><div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 id="child-services-title" className="text-xl font-bold mb-4">خدمات زیرمجموعه</h2><div className="grid sm:grid-cols-2 gap-3">{children.map((item: any) => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-4 hover:border-[#09967C] transition"><div className="font-bold">{item.icon || "📄"} {item.title}</div>{item.description && <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div></section>}
 
-      {related && related.length > 0 && (
-        <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-10" aria-labelledby="related-services-title">
-          <div className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 id="related-services-title" className="text-xl font-bold mb-4">خدمات مرتبط</h2>
-            <div className="grid sm:grid-cols-2 gap-3">
-              {related.map((item: any) => (
-                <Link
-                  key={item.id}
-                  href={`/services/${encodeURIComponent(item.slug)}`}
-                  className="rounded-xl border p-4 hover:border-[#09967C] transition"
-                >
-                  <div className="font-bold">{item.icon || "📄"} {item.title}</div>
-                  {item.description && (
-                    <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">
-                      {item.description}
-                    </p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {related && related.length > 0 && <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-10" aria-labelledby="related-services-title"><div className="rounded-2xl border bg-white p-6 shadow-sm"><h2 id="related-services-title" className="text-xl font-bold mb-4">خدمات مرتبط</h2><div className="grid sm:grid-cols-2 gap-3">{related.map((item: any) => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-4 hover:border-[#09967C] transition"><div className="font-bold">{item.icon || "📄"} {item.title}</div>{item.description && <p className="text-sm text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div></section>}
     </>
   );
 }
