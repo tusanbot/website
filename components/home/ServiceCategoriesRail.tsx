@@ -34,7 +34,7 @@ export default function ServiceCategoriesRail() {
     }).filter(category => category.count > 0) as CategoryItem[];
   }, [services]);
 
-  const items = categories.map((category, index) => ({
+  const items = categories.map((category) => ({
     id: category.id,
     title: category.title,
     href: category.href,
@@ -51,7 +51,7 @@ export default function ServiceCategoriesRail() {
             <AnimatedTagRail
               items={items}
               ariaLabel="دسته‌بندی خدمات"
-              speed={20}
+              speed={10}
               renderPanel={(item) => {
                 const category = categories.find(value => value.id === item.id);
                 if (!category) return null;
