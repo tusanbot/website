@@ -116,7 +116,12 @@ export default function OfficialLetterPage() {
         </section>
       </div>
 
-      <style jsx global>{`@media print { @page { size: A4; margin: 18mm; } body { background: white !important; } body > * { display: none !important; } body #__next, body #__next > * { display: block !important; } }`}</style>
+      <style jsx global>{`@media print {
+  @page { size: A4; margin: 18mm; }
+  html, body { background: white !important; }
+  main { max-width: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+  textarea { overflow: visible !important; white-space: pre-wrap !important; }
+}`}</style>
     </main>
   );
 }
