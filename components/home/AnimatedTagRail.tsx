@@ -55,10 +55,14 @@ export default function AnimatedTagRail({ items, ariaLabel, speed = 42, directio
             {repeated.map((item, index) => {
               const key = `${item.id}-${index}`;
               const active = expandedId === item.id;
+              const hasPrice = Object.prototype.hasOwnProperty.call(item, "price");
+              const priceAmount = typeof item.price === "string" ? Number(item.price) : item.price;
+              const priceMissing = item.price == null || item.price === "" || priceAmount === 0;
+              const priceLabel = priceMissing ? "تماس بگیرید" : typeof item.price === "number" ? `${item.price.toLocaleString("fa-IR")} تومان` : item.price;
               const content = (
                 <span className={`group relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/95 px-4 py-2 text-sm font-black text-[var(--text)] shadow-sm backdrop-blur transition duration-300 hover:scale-[1.08] hover:border-[var(--primary)]/50 hover:shadow-[0_12px_32px_rgba(9,150,124,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? "scale-[1.08] border-[var(--primary)] shadow-[0_12px_32px_rgba(9,150,124,0.16)]" : ""} ${itemClassName}`} onMouseEnter={() => pauseForInteraction(item.panel ? item.id : undefined)} onMouseLeave={resumeAfterInteraction} onFocus={() => pauseForInteraction(item.panel ? item.id : undefined)} onBlur={resumeAfterInteraction}>
                   {item.icon}<span className="max-w-[220px] truncate">{item.title}</span>
-                  {item.price !== null && item.price !== undefined && item.price !== "" && <span className="rounded-full bg-[var(--primary)]/10 px-2 py-1 text-xs text-[var(--primary)]">{typeof item.price === "number" ? `${item.price.toLocaleString("fa-IR")} تومان` : item.price}</span>}
+                  {hasPrice && <span className={`rounded-full px-2 py-1 text-xs ${priceMissing ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-[var(--primary)]/10 text-[var(--primary)]"}`}>{priceLabel}</span>}
                   {item.href && !item.panel && <ArrowLeft size={15} className="shrink-0 text-[var(--primary)]" />}
                 </span>
               );
