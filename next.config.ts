@@ -7,12 +7,11 @@ const securityHeaders = [
     { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
     { key: "X-DNS-Prefetch-Control", value: "on" },
     { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
-    { key: "X-Robots-Tag", value: "index, follow" },
 ];
 
 const contentSecurityPolicy = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+    "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' data: blob: https:",
@@ -41,7 +40,24 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
     async headers() {
-        return [{ source: "/(.*)", headers: [...securityHeaders, { key: "Content-Security-Policy", value: contentSecurityPolicy }] }];
+        return [
+            {
+                source: "/api/:path*",
+                headers: [
+                    ...securityHeaders,
+                    { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+                    { key: "Content-Security-Policy", value: contentSecurityPolicy },
+                ],
+            },
+            {
+                source: "/(.*)",
+                headers: [
+                    ...securityHeaders,
+                    { key: "X-Robots-Tag", value: "index, follow" },
+                    { key: "Content-Security-Policy", value: contentSecurityPolicy },
+                ],
+            },
+        ];
     },
 };
 
