@@ -9,16 +9,9 @@ import { buildCanonicalUrl } from '@/lib/seo/canonical'
 const getService = unstable_cache(
   async (slug: string) => {
     const supabase = await createServerClient()
-    const { data } = await supabase
-      .from('services')
-      .select('id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at')
-      .eq('slug', slug)
-      .eq('is_active', true)
-      .maybeSingle()
+    const { data } = await supabase.from('services').select('id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at').eq('slug', slug).eq('is_active', true).maybeSingle()
     return data
-  },
-  ['service-page'],
-  { revalidate: 300 }
+  }, ['service-page'], { revalidate: 300 }
 )
 
 function asSeoContent(value: unknown) {
@@ -35,15 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const service = await getService(slug)
   if (!service) return {}
   const canonical = buildCanonicalUrl(`/services/${service.slug}`)
-  return {
-    title: service.meta_title || service.title,
-    description: service.meta_description || service.description || undefined,
-    keywords: service.seo_keywords || undefined,
-    alternates: { canonical },
-    robots: { index: true, follow: true },
-    openGraph: { title: service.meta_title || service.title, description: service.meta_description || service.description || undefined, url: canonical, type: 'website' },
-    twitter: { card: 'summary_large_image', title: service.meta_title || service.title, description: service.meta_description || service.description || undefined },
-  }
+  return { title: service.meta_title || service.title, description: service.meta_description || service.description || undefined, keywords: service.seo_keywords || undefined, alternates: { canonical }, robots: { index: true, follow: true }, openGraph: { title: service.meta_title || service.title, description: service.meta_description || service.description || undefined, url: canonical, type: 'website' }, twitter: { card: 'summary_large_image', title: service.meta_title || service.title, description: service.meta_description || service.description || undefined } }
 }
 
 export default async function ServicePage({ params }: { params: Promise<{ slug: string }> }) {
@@ -51,12 +36,10 @@ export default async function ServicePage({ params }: { params: Promise<{ slug: 
   const service = await getService(slug)
   if (!service) notFound()
   if (service.slug !== slug) permanentRedirect(`/services/${service.slug}`)
-
   const seo = asSeoContent(service.seo_content)
   const canonical = buildCanonicalUrl(`/services/${service.slug}`)
   const faqSchema = seo?.faq?.length ? { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: seo.faq.map(item => ({ '@type': 'Question', name: item.question, acceptedAnswer: { '@type': 'Answer', text: item.answer } })) } : null
   const serviceSchema = { '@context': 'https://schema.org', '@type': 'Service', name: service.title, description: service.description || seo?.intro || '', url: canonical, provider: { '@type': 'LocalBusiness', name: 'کافی نت توسن', url: buildCanonicalUrl('/') }, ...(service.price ? { offers: { '@type': 'Offer', price: service.price, priceCurrency: 'IRR', url: canonical } } : {}) }
-
   return (
     <main className="container mx-auto px-4 py-8">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(serviceSchema) }} />
