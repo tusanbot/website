@@ -222,7 +222,7 @@ export default function PdfToWordPage() {
     if (selected.size > 50 * 1024 * 1024) { setError("حداکثر حجم فایل ۵۰ مگابایت است."); setStatus("error"); return; }
     setFile(selected); setError(""); setText(""); setLayouts([]); setWordBlob(null); setProgress(2); setStatus("loading");
     let worker: any = null;
-    let pdf: PdfDocument | null = null;
+    let pdf!: PdfDocument;
     try {
       setProgress(4);
       await loadScript(PDFJS_URL, "tusan-pdfjs");
@@ -232,8 +232,9 @@ export default function PdfToWordPage() {
       setProgress(8);
       pdf = await p.getDocument({ data: await selected.arrayBuffer() }).promise;
       setPages(pdf.numPages); setStatus("processing");
+      const totalPages = pdf.numPages;
       const chunks: string[] = []; const allLayouts: Line[][] = [];
-      for (let n = 1; n <= pdf.numPages; n++) {
+      for (let n = 1; n <= totalPages; n++) {
         const page = await pdf.getPage(n);
         let lines: Line[] = []; let direct = "";
         try {
@@ -243,21 +244,21 @@ export default function PdfToWordPage() {
             direct = plainParagraphs(lines).map(x => x.text).join("\n");
           }
           if (useful(direct)) {
-            chunks.push(direct); allLayouts.push(lines); setProgress(Math.round(n / pdf.numPages * 90));
+            chunks.push(direct); allLayouts.push(lines); setProgress(Math.round(n / totalPages * 90));
           } else {
             if (!worker) {
-              setProgress(Math.max(8, Math.round(((n - 1) / pdf.numPages) * 90)));
+              setProgress(Math.max(8, Math.round(((n - 1) / totalPages) * 90)));
               await loadScript(TESSERACT_URL, "tusan-tesseract");
               const t = libs().Tesseract;
               if (!t) throw new Error("موتور OCR بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
-              worker = await t.createWorker("fas+eng", 1, { logger: m => { if (m.progress) setProgress(Math.min(90, Math.round(((n - 1) + m.progress) / pdf.numPages * 90))); } });
+              worker = await t.createWorker("fas+eng", 1, { logger: m => { if (m.progress) setProgress(Math.min(90, Math.round(((n - 1) + m.progress) / totalPages * 90))); } });
             }
             const canvas = await renderPage(page);
             const result = await worker.recognize(canvas);
             const ocrText = normalizeFa(result?.data?.text || "").trim();
             if (ocrText) chunks.push(ocrText);
             allLayouts.push(lines);
-            setProgress(Math.round(n / pdf.numPages * 90));
+            setProgress(Math.round(n / totalPages * 90));
           }
         } finally { page.cleanup?.(); }
       }
