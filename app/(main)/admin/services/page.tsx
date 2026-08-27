@@ -5,6 +5,18 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, TusanButton, SectionHeader, TusanTable, TusanBadge, TusanStatCard } from "@/components/ui";
 
+async function invalidateServiceCache(slugs: string[]) {
+  try {
+    await fetch("/api/admin/services/revalidate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slugs }),
+    });
+  } catch (error) {
+    console.error("service cache invalidation failed", error);
+  }
+}
+
 export default function AdminServicesPage() {
   const [services, setServices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,17 +27,26 @@ export default function AdminServicesPage() {
     setServices(data || []); setLoading(false);
   }
   async function toggleActive(id: string, current: boolean) {
+    const service = services.find(item => item.id === id);
     const { error } = await supabase.from("services").update({ is_active: !current }).eq("id", id);
-    if (error) { alert("خطا در بروزرسانی"); return; } loadServices();
+    if (error) { alert("خطا در بروزرسانی"); return; }
+    await invalidateServiceCache([service?.slug].filter(Boolean) as string[]);
+    loadServices();
   }
   async function togglePopular(id: string, current: boolean) {
+    const service = services.find(item => item.id === id);
     const { error } = await supabase.from("services").update({ is_popular: !current }).eq("id", id);
-    if (error) { alert("خطا در بروزرسانی محبوبیت خدمت"); return; } loadServices();
+    if (error) { alert("خطا در بروزرسانی محبوبیت خدمت"); return; }
+    await invalidateServiceCache([service?.slug].filter(Boolean) as string[]);
+    loadServices();
   }
   async function deleteService(id: string) {
     if (!confirm("آیا از حذف این خدمت مطمئن هستید؟")) return;
+    const service = services.find(item => item.id === id);
     const { error } = await supabase.from("services").delete().eq("id", id);
-    if (error) { alert("خطا در حذف خدمت"); return; } loadServices();
+    if (error) { alert("خطا در حذف خدمت"); return; }
+    await invalidateServiceCache([service?.slug].filter(Boolean) as string[]);
+    loadServices();
   }
   const visibleServices = services.filter(service => !service.parent_service_id);
   const childCount = services.filter(service => service.parent_service_id).length;
