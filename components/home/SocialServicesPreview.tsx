@@ -46,7 +46,7 @@ export default function SocialServicesPreview() {
   }, []);
 
   return (
-    <section className="relative py-20 sm:py-24">
+    <section id="social-services" className="relative scroll-mt-28 py-20 sm:py-24">
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <SectionHeader title="خدمات شبکه‌های اجتماعی" description="خدمات افزایش تعامل و رشد شبکه‌های اجتماعی را از توسن، آنلاین و با امکان پیگیری سفارش دریافت کنید." align="center" />
         {loading ? (
