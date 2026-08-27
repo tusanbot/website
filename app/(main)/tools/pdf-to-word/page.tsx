@@ -16,22 +16,54 @@ const PDFJS_WORKER = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf
 const DOCX_URL = "https://cdn.jsdelivr.net/npm/docx@9.5.1/dist/index.iife.js";
 const TESSERACT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
 
+function libraryReady(id: string) {
+  const w = libs();
+  if (id === "tusan-pdfjs") return Boolean(w.pdfjsLib);
+  if (id === "tusan-docx") return Boolean(w.docx);
+  if (id === "tusan-tesseract") return Boolean(w.Tesseract);
+  return false;
+}
+
 function loadScript(src: string, id: string) {
   return new Promise<void>((resolve, reject) => {
+    if (libraryReady(id)) return resolve();
     const old = globalThis.document.getElementById(id) as HTMLScriptElement | null;
-    if (old?.dataset.loaded === "true") return resolve();
+    if (old?.dataset.loaded === "true" && libraryReady(id)) return resolve();
+
+    let settled = false;
+    let poll: number | undefined;
+    let timeout: number | undefined;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (poll !== undefined) globalThis.clearInterval(poll);
+      if (timeout !== undefined) globalThis.clearTimeout(timeout);
+      old?.removeEventListener("load", onLoad);
+      old?.removeEventListener("error", onError);
+      error ? reject(error) : resolve();
+    };
+    const onLoad = () => {
+      if (libraryReady(id)) finish();
+      else finish(new Error(`کتابخانه بارگذاری شد اما آماده استفاده نیست: ${src}`));
+    };
+    const onError = () => finish(new Error(`بارگذاری کتابخانه انجام نشد: ${src}`));
+
     if (old) {
-      old.addEventListener("load", () => resolve(), { once: true });
-      old.addEventListener("error", () => reject(new Error(`بارگذاری کتابخانه انجام نشد: ${src}`)), { once: true });
-      return;
+      old.addEventListener("load", onLoad, { once: true });
+      old.addEventListener("error", onError, { once: true });
+      // اگر script قبلاً load شده ولی dataset آن ثبت نشده باشد، Event دیگر fire نمی‌شود؛ وضعیت global را poll می‌کنیم.
+      poll = globalThis.setInterval(() => { if (libraryReady(id)) finish(); }, 100);
+    } else {
+      const s = globalThis.document.createElement("script");
+      s.id = id;
+      s.src = src;
+      s.async = true;
+      s.onload = () => { s.dataset.loaded = "true"; onLoad(); };
+      s.onerror = onError;
+      globalThis.document.head.appendChild(s);
+      poll = globalThis.setInterval(() => { if (libraryReady(id)) finish(); }, 100);
     }
-    const s = globalThis.document.createElement("script");
-    s.id = id;
-    s.src = src;
-    s.async = true;
-    s.onload = () => { s.dataset.loaded = "true"; resolve(); };
-    s.onerror = () => reject(new Error(`بارگذاری کتابخانه انجام نشد: ${src}`));
-    globalThis.document.head.appendChild(s);
+    timeout = globalThis.setTimeout(() => finish(new Error(`بارگذاری کتابخانه بیش از حد طول کشید. اتصال اینترنت یا مسدود بودن CDN را بررسی کنید و دوباره تلاش کنید.`)), 30000);
   });
 }
 
@@ -157,7 +189,6 @@ function advancedParagraphs(lines: Line[]) {
 }
 
 async function renderPage(page: PdfPage) {
-  // OCR فقط به وضوح لازم برای تشخیص متن نیاز دارد؛ کاهش scale از 2 به 1.25 مصرف RAM/CPU را برای PDFهای حجیم به‌طور محسوسی کم می‌کند.
   const viewport = page.getViewport({ scale: 1.25 });
   const canvas = globalThis.document.createElement("canvas");
   canvas.width = Math.ceil(viewport.width);
@@ -194,10 +225,12 @@ export default function PdfToWordPage() {
     let worker: any = null;
     let pdf: PdfDocument | null = null;
     try {
+      setProgress(4);
       await loadScript(PDFJS_URL, "tusan-pdfjs");
       const p = libs().pdfjsLib;
       if (!p) throw new Error("کتابخانه PDF بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
       p.GlobalWorkerOptions.workerSrc = PDFJS_WORKER;
+      setProgress(8);
       pdf = await p.getDocument({ data: await selected.arrayBuffer() }).promise;
       setPages(pdf.numPages); setStatus("processing");
       const chunks: string[] = []; const allLayouts: Line[][] = [];
@@ -214,6 +247,7 @@ export default function PdfToWordPage() {
             chunks.push(direct); allLayouts.push(lines); setProgress(Math.round(n / pdf.numPages * 90));
           } else {
             if (!worker) {
+              setProgress(Math.max(8, Math.round(((n - 1) / pdf.numPages) * 90)));
               await loadScript(TESSERACT_URL, "tusan-tesseract");
               const t = libs().Tesseract;
               if (!t) throw new Error("موتور OCR بارگذاری نشد. صفحه را تازه‌سازی کنید و دوباره تلاش کنید.");
