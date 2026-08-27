@@ -34,16 +34,13 @@ export default function PaymentPage() {
             const user = session.user;
 
             if (method === "card_to_card") {
-                const { data: existing } = await supabase.from("payments").select("id,status")
-                    .eq("order_id", orderId).eq("method", "card_to_card")
-                    .in("status", ["pending", "awaiting_manual_verification"]).maybeSingle();
-                if (!existing) {
-                    const { error: insertError } = await supabase.from("payments").insert({
-                        order_id: orderId, user_id: user.id, amount: Number(order.price || 0), method: "card_to_card",
-                        gateway: "manual", status: "awaiting_manual_verification",
-                    });
-                    if (insertError) throw new Error(insertError.message);
-                }
+                const response = await fetch("/api/payments/card-to-card/create", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+                    body: JSON.stringify({ orderId }),
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok || !result?.paymentId) throw new Error(result?.error || "ثبت پرداخت کارت به کارت ناموفق بود.");
                 router.push(`/orders/${orderId}`); return;
             }
 
