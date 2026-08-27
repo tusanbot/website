@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAiProfile } from "@/lib/ai/server";
 import { generateSpeechWithGemini } from "@/lib/ai/gemini";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 const MAX_CHARS = 8000;
 
@@ -8,6 +9,10 @@ export async function POST(req: NextRequest) {
   try {
     const session = await requireAiProfile();
     const profile = session.profile;
+    const bodySizeError = rejectOversizedJsonBody(req, 12 * 1024);
+    if (bodySizeError) return bodySizeError;
+    const rateLimitResponse = await checkRateLimit({ scope: "ai:text-to-speech", request: req, userId: profile.id, limit: 5, windowSeconds: 60 });
+    if (rateLimitResponse) return rateLimitResponse;
     const body = await req.json();
     const text = typeof body.text === "string" ? body.text.trim() : "";
     const voice = typeof body.voice === "string" ? body.voice : "Kore";
