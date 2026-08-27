@@ -1,88 +1,20 @@
 "use client";
-
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, MessageCircle, Play, Send, Sparkles } from "lucide-react";
 import AnimatedTagRail from "@/components/home/AnimatedTagRail";
 import { GlassPanel, SectionHeader, TusanButton } from "@/components/ui";
-
 type Platform = { id: string; name: string; slug: string; icon: string | null; description?: string | null };
 type SocialService = { id: string; name: string; platform_id: string; customer_unit_price?: number | string | null; description?: string | null };
 type Category = { id: string; name: string; platform_id: string; description?: string | null };
-
 const platformIcons: Record<string, typeof MessageCircle> = { instagram: MessageCircle, telegram: Send, youtube: Play, tiktok: Play, eitaa: MessageCircle, rubika: MessageCircle, aparat: Play };
-
-function formatPrice(value: number | string | null | undefined) {
-  if (value == null || value === "") return null;
-  const amount = Number(value);
-  return Number.isFinite(amount) ? `${amount.toLocaleString("fa-IR")} تومان` : String(value);
-}
-
+function formatPrice(value: number | string | null | undefined) { if (value == null || value === "") return null; const amount = Number(value); return Number.isFinite(amount) ? `${amount.toLocaleString("fa-IR")} تومان` : String(value); }
 export default function SocialServicesPreview() {
-  const [platforms, setPlatforms] = useState<Platform[]>([]);
-  const [services, setServices] = useState<SocialService[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let mounted = true;
-    async function load() {
-      try {
-        const response = await fetch("/api/social/catalog", { cache: "no-store" });
-        const payload = await response.json();
-        if (!response.ok || !payload?.ok) throw new Error("catalog_failed");
-        if (!mounted) return;
-        setPlatforms(Array.isArray(payload.platforms) ? payload.platforms : []);
-        setServices(Array.isArray(payload.services) ? payload.services : []);
-        setCategories(Array.isArray(payload.categories) ? payload.categories : []);
-      } catch (error) {
-        console.error("[SocialServicesPreview] catalog load failed", error);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    }
-    void load();
-    return () => { mounted = false; };
-  }, []);
-
+  const [platforms, setPlatforms] = useState<Platform[]>([]), [services, setServices] = useState<SocialService[]>([]), [categories, setCategories] = useState<Category[]>([]), [loading, setLoading] = useState(true);
+  useEffect(() => { let mounted = true; async function load() { try { const response = await fetch("/api/social/catalog", { cache: "no-store" }); const payload = await response.json(); if (!response.ok || !payload?.ok) throw new Error("catalog_failed"); if (!mounted) return; setPlatforms(Array.isArray(payload.platforms) ? payload.platforms : []); setServices(Array.isArray(payload.services) ? payload.services : []); setCategories(Array.isArray(payload.categories) ? payload.categories : []); } catch (error) { console.error("[SocialServicesPreview] catalog load failed", error); } finally { if (mounted) setLoading(false); } } void load(); return () => { mounted = false; }; }, []);
   const popularServices = useMemo(() => services.slice(0, 10), [services]);
   const activePlatforms = useMemo(() => platforms.filter(platform => services.some(service => service.platform_id === platform.id)), [platforms, services]);
-
-  const serviceItems = popularServices.map(service => ({
-    id: service.id,
-    title: service.name,
-    href: `/social/order?service=${encodeURIComponent(service.id)}`,
-    price: formatPrice(service.customer_unit_price),
-    icon: <span aria-hidden="true" className="text-base">📱</span>,
-  }));
-
-  const platformItems = activePlatforms.map(platform => {
-    const Icon = platformIcons[platform.slug.toLowerCase()] || MessageCircle;
-    const platformServices = services.filter(service => service.platform_id === platform.id).slice(0, 6);
-    const platformCategories = categories.filter(category => category.platform_id === platform.id);
-    return {
-      id: platform.id,
-      title: platform.name,
-      icon: <Icon size={17} aria-hidden="true" />,
-      panel: <div className="space-y-3">
-        <div className="flex items-start justify-between gap-3"><div><div className="text-base font-black">خدمات {platform.name}</div><p className="mt-1 text-xs leading-6 text-[var(--text-muted)]">{platform.description || `${platformServices.length.toLocaleString("fa-IR")} سرویس فعال`}</p></div><Sparkles size={17} className="shrink-0 text-[var(--primary)]" /></div>
-        {platformCategories.length > 0 && <div className="flex flex-wrap gap-1.5">{platformCategories.slice(0, 5).map(category => <span key={category.id} className="rounded-full bg-[var(--primary)]/8 px-2.5 py-1 text-[11px] font-bold text-[var(--primary)]">{category.name}</span>)}</div>}
-        <div className="space-y-1.5">{platformServices.map(service => <Link key={service.id} href={`/social/order?service=${encodeURIComponent(service.id)}`} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs font-bold transition hover:border-[var(--primary)]/50"><span className="truncate">{service.name}</span><span className="shrink-0 text-[var(--primary)]">{formatPrice(service.customer_unit_price) || "استعلام"}</span></Link>)}</div>
-        <Link href={`/social?platform=${encodeURIComponent(platform.slug)}`} className="flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2.5 text-xs font-black text-white transition hover:opacity-90">مشاهده همه خدمات {platform.name}<ArrowLeft size={14} /></Link>
-      </div>,
-    };
-  });
-
-  return (
-    <section id="social-services" className="relative scroll-mt-28 py-10 sm:py-12" dir="rtl">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <SectionHeader title="خدمات شبکه‌های اجتماعی" description="خدمات اجتماعی محبوب و پلتفرم‌های فعال را سریع ببینید و انتخاب کنید." align="center" />
-        {loading ? <div className="mt-5 h-16 animate-pulse rounded-2xl border border-[var(--border)] bg-[var(--surface)]" aria-label="در حال بارگذاری خدمات شبکه‌های اجتماعی" /> : activePlatforms.length > 0 ? <>
-          <div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 px-2 py-1 shadow-[var(--shadow-sm)] backdrop-blur"><div className="mb-1 px-2 pt-1 text-[11px] font-black text-[var(--text-muted)]">خدمات اجتماعی محبوب</div>{serviceItems.length > 0 ? <AnimatedTagRail items={serviceItems} ariaLabel="خدمات اجتماعی محبوب" speed={10} /> : <p className="p-4 text-center text-sm text-[var(--text-muted)]">سرویس فعالی برای نمایش وجود ندارد.</p>}</div>
-          <div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 px-2 py-1 shadow-[var(--shadow-sm)] backdrop-blur"><div className="mb-1 px-2 pt-1 text-[11px] font-black text-[var(--text-muted)]">پلتفرم‌های فعال</div><AnimatedTagRail items={platformItems} ariaLabel="پلتفرم‌های فعال شبکه‌های اجتماعی" speed={11} renderPanel={(item) => item.panel} /></div>
-        </> : <GlassPanel className="mt-5 p-6 text-center text-sm text-[var(--text-muted)]">خدمات شبکه‌های اجتماعی به‌زودی در این بخش نمایش داده می‌شود.</GlassPanel>}
-        <div className="mt-4 flex justify-center"><Link href="/social"><TusanButton variant="secondary" className="px-6 py-2 text-sm">مشاهده همه خدمات شبکه‌های اجتماعی</TusanButton></Link></div>
-      </div>
-    </section>
-  );
+  const serviceItems = popularServices.map(service => ({ id: service.id, title: service.name, href: `/social/order?service=${encodeURIComponent(service.id)}`, price: formatPrice(service.customer_unit_price), icon: <span aria-hidden="true" className="text-base">📱</span> }));
+  const platformItems = activePlatforms.map(platform => { const Icon = platformIcons[platform.slug.toLowerCase()] || MessageCircle; const platformServices = services.filter(service => service.platform_id === platform.id).slice(0, 6); const platformCategories = categories.filter(category => category.platform_id === platform.id); return { id: platform.id, title: platform.name, icon: <Icon size={17} aria-hidden="true" />, panel: <div className="space-y-3"><div className="flex items-start justify-between gap-3"><div><div className="text-base font-black">خدمات {platform.name}</div><p className="mt-1 text-xs leading-6 text-[var(--text-muted)]">{platform.description || `${platformServices.length.toLocaleString("fa-IR")} سرویس فعال`}</p></div><Sparkles size={17} className="shrink-0 text-[var(--primary)]" /></div>{platformCategories.length > 0 && <div className="flex flex-wrap gap-1.5">{platformCategories.slice(0, 5).map(category => <span key={category.id} className="rounded-full bg-[var(--primary)]/8 px-2.5 py-1 text-[11px] font-bold text-[var(--primary)]">{category.name}</span>)}</div>}<div className="space-y-1.5">{platformServices.map(service => <Link key={service.id} href={`/social/order?service=${encodeURIComponent(service.id)}`} className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs font-bold transition hover:border-[var(--primary)]/50"><span className="truncate">{service.name}</span><span className="shrink-0 text-[var(--primary)]">{formatPrice(service.customer_unit_price) || "استعلام"}</span></Link>)}</div><Link href={`/social?platform=${encodeURIComponent(platform.slug)}`} className="flex items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-3 py-2.5 text-xs font-black text-white transition hover:opacity-90">مشاهده همه خدمات {platform.name}<ArrowLeft size={14} /></Link></div> }; });
+  return <section id="social-services" className="relative scroll-mt-28 py-10 sm:py-12" dir="rtl"><div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8"><SectionHeader title="خدمات شبکه‌های اجتماعی" description="خدمات اجتماعی محبوب و پلتفرم‌های فعال را سریع ببینید و انتخاب کنید." align="center" />{loading ? <div className="mt-5 h-16 animate-pulse rounded-2xl border border-[var(--border)] bg-[var(--surface)]" aria-label="در حال بارگذاری خدمات شبکه‌های اجتماعی" /> : activePlatforms.length > 0 ? <><div className="mt-5 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 px-2 py-1 shadow-[var(--shadow-sm)] backdrop-blur"><div className="mb-1 px-2 pt-1 text-[11px] font-black text-[var(--text-muted)]">خدمات اجتماعی محبوب</div>{serviceItems.length > 0 ? <AnimatedTagRail items={serviceItems} ariaLabel="خدمات اجتماعی محبوب" speed={5} /> : <p className="p-4 text-center text-sm text-[var(--text-muted)]">سرویس فعالی برای نمایش وجود ندارد.</p>}</div><div className="mt-6 rounded-2xl border border-[var(--border)] bg-[var(--surface)]/70 px-2 py-1 shadow-[var(--shadow-sm)] backdrop-blur"><div className="mb-1 px-2 pt-1 text-[11px] font-black text-[var(--text-muted)]">پلتفرم‌های فعال</div><AnimatedTagRail items={platformItems} ariaLabel="پلتفرم‌های فعال شبکه‌های اجتماعی" speed={5} renderPanel={(item) => item.panel} /></div></> : <GlassPanel className="mt-5 p-6 text-center text-sm text-[var(--text-muted)]">خدمات شبکه‌های اجتماعی به‌زودی در این بخش نمایش داده می‌شود.</GlassPanel>}<div className="mt-4 flex justify-center"><Link href="/social"><TusanButton variant="secondary" className="px-6 py-2 text-sm">مشاهده همه خدمات شبکه‌های اجتماعی</TusanButton></Link></div></div></section>;
 }
