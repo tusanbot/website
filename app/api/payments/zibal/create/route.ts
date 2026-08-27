@@ -62,6 +62,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "مبلغ سفارش معتبر نیست." }, { status: 400 });
     }
 
+    if (["cancelled", "completed"].includes(order.status)) {
+      return NextResponse.json({ error: "این سفارش دیگر قابل پرداخت نیست." }, { status: 409 });
+    }
+
     const { data: existingPaid } = await supabase
       .from("payments")
       .select("id,transaction_id")
