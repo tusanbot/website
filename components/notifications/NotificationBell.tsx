@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
 type NotificationItem = {
@@ -15,24 +16,19 @@ type NotificationItem = {
 };
 
 export default function NotificationBell() {
+  const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(null);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
 
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const orderBasePath = isAdminRoute ? "/admin/orders" : "/orders";
+
   async function load(id: string) {
     const [{ data }, { count }] = await Promise.all([
-      supabase
-        .from("notifications")
-        .select("id,type,title,message,order_id,created_at,read_at")
-        .eq("recipient_id", id)
-        .order("created_at", { ascending: false })
-        .limit(8),
-      supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("recipient_id", id)
-        .is("read_at", null),
+      supabase.from("notifications").select("id,type,title,message,order_id,created_at,read_at").eq("recipient_id", id).order("created_at", { ascending: false }).limit(8),
+      supabase.from("notifications").select("id", { count: "exact", head: true }).eq("recipient_id", id).is("read_at", null),
     ]);
     setItems((data || []) as NotificationItem[]);
     setUnread(count ?? 0);
@@ -41,42 +37,28 @@ export default function NotificationBell() {
   useEffect(() => {
     let mounted = true;
     let channel: ReturnType<typeof supabase.channel> | null = null;
-
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!mounted || !user) return;
       setUserId(user.id);
       load(user.id);
-
-      channel = supabase
-        .channel(`central-notifications-${user.id}`)
-        .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
-          if (payload.eventType === "INSERT") {
-            const next = payload.new as NotificationItem;
-            setItems((current) => [next, ...current.filter((item) => item.id !== next.id)].slice(0, 8));
-          } else if (payload.eventType === "UPDATE") {
-            const next = payload.new as NotificationItem;
-            setItems((current) => current.map((item) => item.id === next.id ? next : item));
-          }
-          load(user.id);
-        })
-        .subscribe();
+      channel = supabase.channel(`central-notifications-${user.id}`).on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
+        if (payload.eventType === "INSERT") {
+          const next = payload.new as NotificationItem;
+          setItems((current) => [next, ...current.filter((item) => item.id !== next.id)].slice(0, 8));
+        } else if (payload.eventType === "UPDATE") {
+          const next = payload.new as NotificationItem;
+          setItems((current) => current.map((item) => item.id === next.id ? next : item));
+        }
+        load(user.id);
+      }).subscribe();
     });
-
-    return () => {
-      mounted = false;
-      if (channel) supabase.removeChannel(channel);
-    };
+    return () => { mounted = false; if (channel) supabase.removeChannel(channel); };
   }, []);
 
   async function markRead(id: string) {
     if (!userId) return;
     const now = new Date().toISOString();
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: now })
-      .eq("id", id)
-      .eq("recipient_id", userId)
-      .is("read_at", null);
+    const { error } = await supabase.from("notifications").update({ read_at: now }).eq("id", id).eq("recipient_id", userId).is("read_at", null);
     if (!error) {
       setItems((current) => current.map((item) => item.id === id ? { ...item, read_at: now } : item));
       setUnread((current) => Math.max(0, current - 1));
@@ -86,11 +68,7 @@ export default function NotificationBell() {
   async function markAllRead() {
     if (!userId || unread === 0) return;
     const now = new Date().toISOString();
-    const { error } = await supabase
-      .from("notifications")
-      .update({ read_at: now })
-      .eq("recipient_id", userId)
-      .is("read_at", null);
+    const { error } = await supabase.from("notifications").update({ read_at: now }).eq("recipient_id", userId).is("read_at", null);
     if (!error) {
       setItems((current) => current.map((item) => ({ ...item, read_at: item.read_at || now })));
       setUnread(0);
@@ -103,7 +81,6 @@ export default function NotificationBell() {
         🔔
         {unread > 0 && <span className="absolute -right-1 -top-1 min-w-5 h-5 rounded-full bg-red-500 text-white text-[11px] font-black flex items-center justify-center px-1">{unread > 9 ? "۹+" : unread.toLocaleString("fa-IR")}</span>}
       </button>
-
       {open && (
         <>
           <button aria-label="بستن اعلان‌ها" className="fixed inset-0 z-30 cursor-default" onClick={() => setOpen(false)} />
@@ -127,7 +104,7 @@ export default function NotificationBell() {
                         <div className="flex items-center justify-between gap-2 mt-2">
                           <div className="text-[10px] text-[var(--text-muted)]">{new Date(item.created_at).toLocaleString("fa-IR")}</div>
                           <div className="flex items-center gap-3">
-                            {item.order_id && <Link href={`/orders/${item.order_id}`} onClick={() => setOpen(false)} className="text-[10px] font-bold text-[var(--primary)]">مشاهده سفارش</Link>}
+                            {item.order_id && <Link href={`${orderBasePath}/${item.order_id}`} onClick={() => setOpen(false)} className="text-[10px] font-bold text-[var(--primary)]">مشاهده سفارش</Link>}
                             {!item.read_at && <button type="button" onClick={() => markRead(item.id)} className="text-[10px] font-bold text-[var(--text-muted)]">خوانده شد</button>}
                           </div>
                         </div>
