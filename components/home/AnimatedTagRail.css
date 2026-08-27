@@ -1,0 +1,20 @@
+.tusan-tag-rail-track {
+  animation: tusan-tag-rail 34s linear infinite;
+  will-change: transform;
+}
+
+.tusan-tag-rail-track[data-paused="true"] {
+  animation-play-state: paused;
+}
+
+@keyframes tusan-tag-rail {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(50%, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tusan-tag-rail-track {
+    animation: none;
+    transform: none;
+  }
+}
