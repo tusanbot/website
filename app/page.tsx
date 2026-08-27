@@ -2,6 +2,7 @@ import FloatingHeader from "@/components/home/FloatingHeader";
 import HeroSection from "@/components/home/HeroSection";
 import ActiveAnnouncements from "@/components/home/ActiveAnnouncements";
 import PopularServices from "@/components/home/PopularServices";
+import ServiceCategoriesRail from "@/components/home/ServiceCategoriesRail";
 import BlogPreview from "@/components/home/BlogPreview";
 import SocialServicesPreview from "@/components/home/SocialServicesPreview";
 import ToolsPreview from "@/components/home/ToolsPreview";
@@ -21,6 +22,7 @@ export default function HomePage() {
       <HeroSection />
       <ActiveAnnouncements />
       <PopularServices />
+      <ServiceCategoriesRail />
       <BlogPreview />
       <SocialServicesPreview />
       <ToolsPreview />
