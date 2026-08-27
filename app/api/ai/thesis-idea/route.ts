@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAiProfile } from "@/lib/ai/server";
 import { generateWithGemini, parseGeminiJson } from "@/lib/ai/gemini";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 const MAX = 1200;
 
@@ -9,6 +10,10 @@ type Idea = { title: string; problem: string; novelty: string; questions: string
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAiProfile();
+    const bodySizeError = rejectOversizedJsonBody(req, 8 * 1024);
+    if (bodySizeError) return bodySizeError;
+    const rateLimitResponse = await checkRateLimit({ scope: "ai:thesis-idea", request: req, userId: session.profile.id, limit: 5, windowSeconds: 60 });
+    if (rateLimitResponse) return rateLimitResponse;
     const body = await req.json();
     const input = {
       degree: String(body.degree || "").trim(), field: String(body.field || "").trim(), major: String(body.major || "").trim(),
