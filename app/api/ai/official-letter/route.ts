@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getAiProfile } from "@/lib/ai/server";
 import { generateWithGemini } from "@/lib/ai/gemini";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 const TYPES: Record<string, string> = { request: "درخواست اداری", general: "نامه اداری عمومی", introduction: "معرفی‌نامه", complaint: "شکایت و اعتراض", thanks: "تقدیر و تشکر", leave: "درخواست مرخصی", custom: "نامه سفارشی" };
 const TONES: Record<string, string> = { formal: "رسمی و محترمانه", veryFormal: "بسیار رسمی و سازمانی", respectful: "محترمانه و روان", concise: "رسمی، کوتاه و مستقیم" };
@@ -12,10 +13,14 @@ function buildPrompt(input: { action: string; type: string; recipient: string; s
   return `تو یک کارشناس حرفه‌ای نگارش مکاتبات اداری فارسی هستی. ${actions[input.action] ?? actions.generate}\n\nنوع نامه: ${type}\nگیرنده: ${input.recipient || "ذکر نشده"}\nفرستنده: ${input.sender || "ذکر نشده"}\nموضوع: ${input.subject || "ذکر نشده"}\nلحن: ${tone}\n\nتوضیحات کاربر:\n${input.details || "ندارد"}\n\nمتن موجود:\n${input.text || "ندارد"}\n\nقواعد:\n- متن را به فارسی معیار و با نیم‌فاصله مناسب بنویس.\n- از اطلاعاتی که کاربر نداده جعل نکن؛ در صورت نیاز از عبارت مناسب و قابل تکمیل استفاده کن.\n- ساختار نامه شامل عنوان/موضوع، خطاب مناسب، بدنه، درخواست یا نتیجه‌گیری و امضا باشد.\n- از زیاده‌گویی و عبارت‌های مصنوعی پرهیز کن.\n- فقط متن نهایی نامه را برگردان و درباره فرایند تولید توضیح نده.`;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const session = await getAiProfile();
     if (!session) return NextResponse.json({ error: "AI_PROFILE_REQUIRED" }, { status: 401 });
+    const bodySizeError = rejectOversizedJsonBody(request, 16 * 1024);
+    if (bodySizeError) return bodySizeError;
+    const rateLimitResponse = await checkRateLimit({ scope: "ai:official-letter", request, userId: session.profile.id, limit: 10, windowSeconds: 60 });
+    if (rateLimitResponse) return rateLimitResponse;
     const body = await request.json() as Record<string, unknown>;
     const input = {
       action: typeof body.action === "string" ? body.action : "generate",
