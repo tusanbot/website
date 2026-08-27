@@ -4,6 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import ServiceOrderClient from "./ServiceOrderClient";
 import type { PricingRule } from "@/lib/forms/pricing";
+import { normalizeServiceSeoContent, type ServiceSeoContent } from "@/lib/service-seo-content";
 
 type Service = {
   id: string;
@@ -20,6 +21,7 @@ type Service = {
   meta_title?: string | null;
   meta_description?: string | null;
   seo_keywords?: string[] | null;
+  seo_content?: ServiceSeoContent | null;
   created_at?: string | null;
 };
 
@@ -64,7 +66,7 @@ function normalizeSlug(value: string) {
 }
 
 const SERVICE_SELECT =
-  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,created_at";
+  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at";
 
 async function getService(path: string): Promise<Service | null> {
   const supabase = createSupabaseServerClient();
@@ -76,6 +78,7 @@ async function getService(path: string): Promise<Service | null> {
     form_schema: normalizeSchema(data.form_schema),
     pricing_rules: normalizeRules(data.pricing_rules),
     seo_keywords: normalizeKeywords(data.seo_keywords),
+    seo_content: normalizeServiceSeoContent(data.seo_content),
   });
 
   if (isUuid(path)) {
@@ -194,11 +197,21 @@ export default async function ServicePage({
   ]);
 
   const fieldLabels = getFieldLabels(service.form_schema);
+  const seoContent = normalizeServiceSeoContent(service.seo_content);
+  const hasSeoContent = Boolean(
+    seoContent.introduction ||
+      seoContent.audience ||
+      (seoContent.steps?.length ?? 0) > 0 ||
+      (seoContent.tips?.length ?? 0) > 0 ||
+      (seoContent.faq?.length ?? 0) > 0,
+  );
+  const faqItems = (seoContent.faq || []).filter((item) => item.question && item.answer);
+
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Service",
     name: service.title,
-    description: service.description || undefined,
+    description: service.description || seoContent.introduction || undefined,
     url: canonicalUrl,
     provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl },
     areaServed: { "@type": "Country", name: "ایران" },
@@ -235,6 +248,17 @@ export default async function ServicePage({
     "@type": "BreadcrumbList",
     itemListElement: breadcrumbItems,
   };
+  const faqJsonLd = faqItems.length > 0
+    ? {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: faqItems.map((item) => ({
+          "@type": "Question",
+          name: item.question,
+          acceptedAnswer: { "@type": "Answer", text: item.answer },
+        })),
+      }
+    : null;
 
   return (
     <>
@@ -243,6 +267,9 @@ export default async function ServicePage({
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
+      {faqJsonLd && (
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      )}
 
       <div dir="rtl" className="max-w-3xl mx-auto px-6 pt-5">
         <nav aria-label="مسیر صفحه" className="text-sm text-[var(--text-muted)]">
@@ -320,6 +347,60 @@ export default async function ServicePage({
           </div>
         </div>
       </section>
+
+      {hasSeoContent && (
+        <section dir="rtl" className="max-w-3xl mx-auto px-6 pb-6" aria-labelledby="service-content-title">
+          <div className="rounded-2xl border bg-white p-6 shadow-sm space-y-7">
+            <h2 id="service-content-title" className="text-xl font-black">راهنمای {service.title}</h2>
+            {seoContent.introduction && (
+              <div>
+                <h3 className="font-bold text-lg mb-2">معرفی خدمت</h3>
+                <p className="text-[var(--text-muted)] leading-8 whitespace-pre-line">{seoContent.introduction}</p>
+              </div>
+            )}
+            {seoContent.audience && (
+              <div>
+                <h3 className="font-bold text-lg mb-2">این خدمت برای چه کسانی است؟</h3>
+                <p className="text-[var(--text-muted)] leading-8 whitespace-pre-line">{seoContent.audience}</p>
+              </div>
+            )}
+            {(seoContent.steps?.length ?? 0) > 0 && (
+              <div>
+                <h3 className="font-bold text-lg mb-3">مراحل انجام</h3>
+                <ol className="list-decimal pr-5 space-y-3">
+                  {seoContent.steps!.map((step, index) => (
+                    <li key={`${index}-${step.title}`} className="pr-2 text-[var(--text-muted)] leading-7">
+                      <span className="font-bold text-[var(--text)]">{step.title}</span>
+                      {step.description && <span className="block mt-1">{step.description}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {(seoContent.tips?.length ?? 0) > 0 && (
+              <div>
+                <h3 className="font-bold text-lg mb-3">نکات مهم</h3>
+                <ul className="list-disc pr-5 space-y-2 text-[var(--text-muted)] leading-7">
+                  {seoContent.tips!.map((tip, index) => <li key={`${index}-${tip}`}>{tip}</li>)}
+                </ul>
+              </div>
+            )}
+            {faqItems.length > 0 && (
+              <div>
+                <h3 className="font-bold text-lg mb-3">سؤالات متداول</h3>
+                <div className="space-y-3">
+                  {faqItems.map((item, index) => (
+                    <details key={`${index}-${item.question}`} className="rounded-xl border p-4">
+                      <summary className="cursor-pointer font-bold">{item.question}</summary>
+                      <p className="mt-3 text-[var(--text-muted)] leading-7 whitespace-pre-line">{item.answer}</p>
+                    </details>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       <ServiceOrderClient initialService={service} />
 
