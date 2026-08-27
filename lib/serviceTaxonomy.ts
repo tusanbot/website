@@ -19,6 +19,10 @@ export const SERVICE_TAXONOMY: ServiceTaxonomy[] = [
   { slug: 'insurance', title: 'خدمات بیمه', description: 'خدمات مربوط به بیمه و استعلام‌های بیمه‌ای.', aliases: ['خدمات بیمه', 'بیمه'] },
   { slug: 'welfare', title: 'خدمات یارانه و رفاهی', description: 'خدمات مرتبط با یارانه و امور رفاهی.', aliases: ['یارانه'] },
   { slug: 'ai', title: 'خدمات هوش مصنوعی', description: 'خدمات کاربردی هوش مصنوعی برای کاربران.', aliases: ['خدمات هوش مصنوعی'] },
+  { slug: 'security-accounts', title: 'امنیت و حساب‌های کاربری', description: 'خدمات بازیابی، امنیت و مدیریت حساب‌های کاربری.', aliases: ['امنیت و حساب‌های کاربری'] },
+  { slug: 'career', title: 'رزومه و استخدام', description: 'خدمات رزومه، استخدام و آماده‌سازی مدارک شغلی.', aliases: ['رزومه و استخدام'] },
+  { slug: 'presentation', title: 'طراحی پاورپوینت', description: 'خدمات طراحی و آماده‌سازی ارائه‌های پاورپوینت.', aliases: ['طراحی پاورپوینت'] },
+  { slug: 'health', title: 'خدمات درمانی و نوبت‌دهی', description: 'خدمات نوبت‌دهی و امور سامانه‌های درمانی.', aliases: ['خدمات درمانی و نوبت‌دهی'] },
 ];
 
 const byAlias = new Map(SERVICE_TAXONOMY.flatMap((item) => item.aliases.map((alias) => [alias, item.slug] as const)));
