@@ -6,44 +6,45 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Pause, Play } from "lucide-react";
 
 type RailItem = { id: string; title: string; href?: string; price?: string | number | null; icon?: ReactNode; panel?: ReactNode };
-type AnimatedTagRailProps = { items: RailItem[]; ariaLabel: string; speed?: number; direction?: "rtl" | "ltr"; className?: string; itemClassName?: string; renderPanel?: (item: RailItem) => ReactNode };
+type Props = { items: RailItem[]; ariaLabel: string; speed?: number; direction?: "rtl" | "ltr"; className?: string; itemClassName?: string; renderPanel?: (item: RailItem) => ReactNode };
 
-export default function AnimatedTagRail({ items, ariaLabel, speed = 42, direction = "rtl", className = "", itemClassName = "", renderPanel }: AnimatedTagRailProps) {
+// Speed is measured in rendered pixels/second. This removes the old
+// title-length based calculation, which made short rails look much faster.
+const RAIL_PX_PER_SECOND = 20;
+
+export default function AnimatedTagRail({ items, ariaLabel, direction = "rtl", className = "", itemClassName = "", renderPanel }: Props) {
   const [paused, setPaused] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [duration, setDuration] = useState(60);
+  const trackRef = useRef<HTMLDivElement>(null);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReducedMotion(media.matches);
-    update();
-    media.addEventListener?.("change", update);
+    update(); media.addEventListener?.("change", update);
     return () => media.removeEventListener?.("change", update);
   }, []);
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const update = () => setDuration(Math.max(30, (track.scrollWidth / 2) / RAIL_PX_PER_SECOND));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(track);
+    return () => observer.disconnect();
+  }, [items]);
 
   useEffect(() => () => { if (resumeTimer.current) clearTimeout(resumeTimer.current); }, []);
   if (!items.length) return null;
 
   const repeated = [...items, ...items];
   const actualPaused = paused || !!expandedId || reducedMotion;
-
-  const pauseForInteraction = (id?: string) => {
-    setPaused(true);
-    if (id) setExpandedId(id);
-    if (resumeTimer.current) clearTimeout(resumeTimer.current);
-  };
-
-  const resumeAfterInteraction = () => {
-    if (expandedId) return;
-    if (resumeTimer.current) clearTimeout(resumeTimer.current);
-    resumeTimer.current = setTimeout(() => setPaused(false), 180);
-  };
-
-  const handlePointerDown = (item: RailItem) => {
-    setPaused(true);
-    if (renderPanel && item.panel) setExpandedId(current => current === item.id ? null : item.id);
-  };
+  const pauseForInteraction = (id?: string) => { setPaused(true); if (id) setExpandedId(id); if (resumeTimer.current) clearTimeout(resumeTimer.current); };
+  const resumeAfterInteraction = () => { if (expandedId) return; if (resumeTimer.current) clearTimeout(resumeTimer.current); resumeTimer.current = setTimeout(() => setPaused(false), 180); };
+  const handlePointerDown = (item: RailItem) => { setPaused(true); if (renderPanel && item.panel) setExpandedId(v => v === item.id ? null : item.id); };
 
   return (
     <div dir={direction} className={`w-full ${className}`}>
@@ -51,32 +52,22 @@ export default function AnimatedTagRail({ items, ariaLabel, speed = 42, directio
         <div className="pointer-events-none absolute inset-y-0 right-0 z-20 w-16 bg-gradient-to-l from-[var(--background)] to-transparent" />
         <div className="pointer-events-none absolute inset-y-0 left-0 z-20 w-16 bg-gradient-to-r from-[var(--background)] to-transparent" />
         <div className="overflow-x-hidden overflow-y-visible py-3">
-          <div className="flex w-max items-center gap-3 motion-safe:animate-[tusan-rail_linear_infinite]" style={{ animationDuration: `${Math.max(18, (items.reduce((sum, item) => sum + item.title.length + 8, 0) * 0.85) / Math.max(speed, 1))}s`, animationPlayState: actualPaused ? "paused" : "running", animationDirection: direction === "rtl" ? "normal" : "reverse" }}>
+          <div ref={trackRef} className="flex w-max items-center gap-3 motion-safe:animate-[tusan-rail_linear_infinite]" style={{ animationDuration: `${duration}s`, animationPlayState: actualPaused ? "paused" : "running", animationDirection: direction === "rtl" ? "normal" : "reverse" }}>
             {repeated.map((item, index) => {
-              const key = `${item.id}-${index}`;
-              const active = expandedId === item.id;
+              const key = `${item.id}-${index}`; const active = expandedId === item.id;
               const hasPrice = Object.prototype.hasOwnProperty.call(item, "price");
-              const priceAmount = typeof item.price === "string" ? Number(item.price) : item.price;
-              const priceMissing = item.price == null || item.price === "" || priceAmount === 0;
-              const priceLabel = priceMissing ? "تماس بگیرید" : typeof item.price === "number" ? `${item.price.toLocaleString("fa-IR")} تومان` : item.price;
-              const content = (
-                <span className={`group relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/95 px-4 py-2 text-sm font-black text-[var(--text)] shadow-sm backdrop-blur transition duration-300 hover:scale-[1.08] hover:border-[var(--primary)]/50 hover:shadow-[0_12px_32px_rgba(9,150,124,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? "scale-[1.08] border-[var(--primary)] shadow-[0_12px_32px_rgba(9,150,124,0.16)]" : ""} ${itemClassName}`} onMouseEnter={() => pauseForInteraction(item.panel ? item.id : undefined)} onMouseLeave={resumeAfterInteraction} onFocus={() => pauseForInteraction(item.panel ? item.id : undefined)} onBlur={resumeAfterInteraction}>
-                  {item.icon}<span className="max-w-[220px] truncate">{item.title}</span>
-                  {hasPrice && <span className={`rounded-full px-2 py-1 text-xs ${priceMissing ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-[var(--primary)]/10 text-[var(--primary)]"}`}>{priceLabel}</span>}
-                  {item.href && !item.panel && <ArrowLeft size={15} className="shrink-0 text-[var(--primary)]" />}
-                </span>
-              );
-              return (
-                <div key={key} className="relative shrink-0">
-                  {item.href && !item.panel ? <Link href={item.href} aria-label={item.title}>{content}</Link> : <button type="button" className="cursor-pointer" aria-expanded={active} aria-label={item.title} onClick={() => handlePointerDown(item)}>{content}</button>}
-                  {active && renderPanel && item.panel && <div className="absolute right-1/2 top-[calc(100%+12px)] z-50 w-[min(92vw,430px)] translate-x-1/2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-right shadow-[0_22px_60px_rgba(0,0,0,0.14)]" onMouseEnter={() => setPaused(true)} onMouseLeave={() => { setExpandedId(null); setPaused(false); }}>{renderPanel(item)}</div>}
-                </div>
-              );
+              const amount = typeof item.price === "string" ? Number(item.price) : item.price;
+              const missing = item.price == null || item.price === "" || amount === 0;
+              const label = missing ? "تماس بگیرید" : typeof item.price === "number" ? `${item.price.toLocaleString("fa-IR")} تومان` : item.price;
+              const content = <span className={`group relative inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--surface)]/95 px-4 py-2 text-sm font-black text-[var(--text)] shadow-sm backdrop-blur transition duration-300 hover:scale-[1.08] hover:border-[var(--primary)]/50 hover:shadow-[0_12px_32px_rgba(9,150,124,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${active ? "scale-[1.08] border-[var(--primary)] shadow-[0_12px_32px_rgba(9,150,124,0.16)]" : ""} ${itemClassName}`} onMouseEnter={() => pauseForInteraction(item.panel ? item.id : undefined)} onMouseLeave={resumeAfterInteraction} onFocus={() => pauseForInteraction(item.panel ? item.id : undefined)} onBlur={resumeAfterInteraction}>
+                {item.icon}<span className="max-w-[220px] truncate">{item.title}</span>{hasPrice && <span className={`rounded-full px-2 py-1 text-xs ${missing ? "bg-amber-500/10 text-amber-600 dark:text-amber-400" : "bg-[var(--primary)]/10 text-[var(--primary)]"}`}>{label}</span>}{item.href && !item.panel && <ArrowLeft size={15} className="shrink-0 text-[var(--primary)]" />}
+              </span>;
+              return <div key={key} className="relative shrink-0">{item.href && !item.panel ? <Link href={item.href} aria-label={item.title}>{content}</Link> : <button type="button" className="cursor-pointer" aria-expanded={active} aria-label={item.title} onClick={() => handlePointerDown(item)}>{content}</button>}{active && renderPanel && item.panel && <div className="absolute right-1/2 top-[calc(100%+12px)] z-50 w-[min(92vw,430px)] translate-x-1/2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-right shadow-[0_22px_60px_rgba(0,0,0,0.14)]" onMouseEnter={() => setPaused(true)} onMouseLeave={() => { setExpandedId(null); setPaused(false); }}>{renderPanel(item)}</div>}</div>;
             })}
           </div>
         </div>
       </div>
-      <div className="mt-1 flex justify-center"><button type="button" onClick={() => { setExpandedId(null); setPaused(value => !value); }} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-bold text-[var(--text-muted)] transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]" aria-label={actualPaused ? "ادامه حرکت" : "توقف حرکت"}>{actualPaused ? <Play size={12} /> : <Pause size={12} />}{actualPaused ? "ادامه" : "توقف"}</button></div>
+      <div className="mt-1 flex justify-center"><button type="button" onClick={() => { setExpandedId(null); setPaused(v => !v); }} className="inline-flex items-center gap-1 rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-1.5 text-[11px] font-bold text-[var(--text-muted)] transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]" aria-label={actualPaused ? "ادامه حرکت" : "توقف حرکت"}>{actualPaused ? <Play size={12} /> : <Pause size={12} />}{actualPaused ? "ادامه" : "توقف"}</button></div>
       <style jsx>{`@keyframes tusan-rail { from { transform: translateX(0); } to { transform: translateX(50%); } }`}</style>
     </div>
   );
