@@ -17,6 +17,8 @@ export default function SupportChatWidget() {
     const [sending, setSending] = useState(false);
     const [error, setError] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
+    const loadInFlightRef = useRef(false);
+    const loadRequestRef = useRef(0);
 
     useEffect(() => {
         let mounted = true;
@@ -37,7 +39,7 @@ export default function SupportChatWidget() {
     }, [open, userId]);
 
     useEffect(() => {
-        if (!conversationId) return;
+        if (!open || !conversationId) return;
         const channel = supabase
             .channel(`support-chat-${conversationId}`)
             .on("postgres_changes", { event: "INSERT", schema: "public", table: "support_messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
@@ -46,39 +48,57 @@ export default function SupportChatWidget() {
             })
             .subscribe();
         return () => { void supabase.removeChannel(channel); };
-    }, [conversationId]);
+    }, [open, conversationId]);
 
     useEffect(() => {
         scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
     }, [messages, open]);
 
+    async function findOpenConversation(id: string) {
+        const { data, error: queryError } = await supabase
+            .from("support_conversations")
+            .select("id")
+            .eq("user_id", id)
+            .eq("status", "open")
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (queryError) throw queryError;
+        return data?.id || null;
+    }
+
     async function loadConversation(id: string) {
+        if (loadInFlightRef.current) return;
+        loadInFlightRef.current = true;
+        const requestId = ++loadRequestRef.current;
         setLoading(true);
         setError("");
         setMessages([]);
         try {
-            const { data: existing, error: existingError } = await supabase
-                .from("support_conversations")
-                .select("id")
-                .eq("user_id", id)
-                .eq("status", "open")
-                .order("updated_at", { ascending: false })
-                .limit(1)
-                .maybeSingle();
-            if (existingError) throw existingError;
+            let currentId = await findOpenConversation(id);
 
-            let currentId = existing?.id || null;
             if (!currentId) {
                 const { data: created, error: createError } = await supabase
                     .from("support_conversations")
                     .insert({ user_id: id })
                     .select("id")
                     .single();
-                if (createError) throw createError;
-                currentId = created?.id || null;
+
+                if (createError) {
+                    // Two auth/open events can race during the first load. The unique
+                    // open-conversation index makes one insert fail; in that case,
+                    // simply reuse the conversation created by the other request.
+                    if (createError.code === "23505") {
+                        currentId = await findOpenConversation(id);
+                    } else {
+                        throw createError;
+                    }
+                } else {
+                    currentId = created?.id || null;
+                }
             }
 
-            setConversationId(currentId);
+            if (requestId !== loadRequestRef.current) return;
             if (!currentId) throw new Error("شناسه گفتگوی پشتیبانی دریافت نشد.");
 
             const { data, error: messagesError } = await supabase
@@ -87,14 +107,19 @@ export default function SupportChatWidget() {
                 .eq("conversation_id", currentId)
                 .order("created_at", { ascending: true });
             if (messagesError) throw messagesError;
+
+            setConversationId(currentId);
             setMessages((data || []) as SupportMessage[]);
         } catch (err: any) {
             console.error("[SupportChatWidget] load failed", err);
-            setConversationId(null);
-            setMessages([]);
-            setError("ارتباط با بخش پشتیبانی برقرار نشد. لطفاً دوباره تلاش کنید.");
+            if (requestId === loadRequestRef.current) {
+                setConversationId(null);
+                setMessages([]);
+                setError("ارتباط با بخش پشتیبانی برقرار نشد. لطفاً دوباره تلاش کنید.");
+            }
         } finally {
-            setLoading(false);
+            loadInFlightRef.current = false;
+            if (requestId === loadRequestRef.current) setLoading(false);
         }
     }
 
@@ -107,14 +132,17 @@ export default function SupportChatWidget() {
         const optimistic: SupportMessage = { id: `temp-${Date.now()}`, conversation_id: conversationId, sender_id: userId, sender_role: "user", message: text, is_read: false, created_at: new Date().toISOString() };
         setMessages((current) => [...current, optimistic]);
         setDraft("");
-        const { error: insertError } = await supabase.from("support_messages").insert({ conversation_id: conversationId, sender_id: userId, sender_role: "user", message: text });
-        if (insertError) {
+        try {
+            const { error: insertError } = await supabase.from("support_messages").insert({ conversation_id: conversationId, sender_id: userId, sender_role: "user", message: text });
+            if (insertError) throw insertError;
+            setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+        } catch (err) {
+            console.error("[SupportChatWidget] send failed", err);
             setMessages((current) => current.filter((item) => item.id !== optimistic.id));
             setError("ارسال پیام انجام نشد. لطفاً دوباره تلاش کنید.");
-        } else {
-            setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+        } finally {
+            setSending(false);
         }
-        setSending(false);
     }
 
     return (
