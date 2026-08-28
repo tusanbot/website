@@ -11,7 +11,6 @@ export const metadata: Metadata = {
 };
 
 type Service = { id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null; is_active: boolean; parent_service_id: string | null };
-
 type SearchParams = { q?: string; category?: string };
 
 export default async function ServicesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -21,11 +20,14 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
   const services: Service[] = (data || []).map((item: any) => ({ ...item, price: Number(item.price || 0) }));
 
   return <main dir="rtl" className="min-h-screen page-background text-[var(--text)]">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-      <section className="rounded-[32px] p-7 sm:p-10 text-white shadow-lg" style={{ background: "radial-gradient(circle at top right, var(--hero-start) 0%, var(--hero-mid) 38%, var(--hero-end) 100%)" }}>
-        <div className="max-w-3xl"><div className="inline-flex rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-sm">🛠️ خدمات آنلاین توسن</div><h1 className="mt-5 text-3xl sm:text-4xl font-black">خدمت موردنیاز خود را انتخاب کنید</h1><p className="mt-4 text-white/80 leading-8">خدمات بر اساس حوزه دسته‌بندی شده‌اند و خدمات زیرمجموعه پس از ورود به خدمت مادر قابل انتخاب هستند.</p></div>
+    <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-5">
+      <section className="rounded-[28px] px-5 py-5 text-white shadow-lg sm:px-7 sm:py-6" style={{ background: "radial-gradient(circle at top right, var(--hero-start) 0%, var(--hero-mid) 38%, var(--hero-end) 100%)" }}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div><div className="text-xs font-bold text-white/75">🛠️ خدمات آنلاین توسن</div><h1 className="mt-1 text-2xl font-black sm:text-3xl">خدمت موردنیاز خود را پیدا کنید</h1></div>
+          <p className="max-w-xl text-sm leading-6 text-white/75">خدمات را جستجو کنید یا از دسته‌بندی‌ها انتخاب کنید.</p>
+        </div>
       </section>
-      <ServicesCatalog services={services} initialCategory={params.category || "all"} initialSearch={params.q || ""} />
+      <div className="mt-4"><ServicesCatalog services={services} initialCategory={params.category || "all"} initialSearch={params.q || ""} /></div>
     </div>
   </main>;
 }
