@@ -1,55 +1,28 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { SectionHeader } from "@/components/ui";
 
 const steps = [
-  { icon: "🛍️", title: "انتخاب خدمت", description: "کاربر خدمت موردنظر را انتخاب می‌کند.", scene: "انتخاب خدمت" },
-  { icon: "📝", title: "تکمیل فرم", description: "فرم را تکمیل و مدارک لازم را ارسال می‌کند.", scene: "تکمیل فرم" },
-  { icon: "💳", title: "پرداخت", description: "هزینه خدمت به‌صورت آنلاین پرداخت می‌شود.", scene: "پرداخت" },
-  { icon: "🔍", title: "بررسی و تأیید", description: "سفارش توسط کارشناسان توسن بررسی و تأیید می‌شود.", scene: "بررسی مدیر" },
-  { icon: "✅", title: "تکمیل و تحویل", description: "خدمت انجام شده و نتیجه نهایی تحویل می‌شود.", scene: "تکمیل سفارش" },
+  { icon: "🛍️", title: "انتخاب خدمت", description: "کاربر خدمت موردنظر را انتخاب می‌کند.", visual: "service" },
+  { icon: "📝", title: "تکمیل اطلاعات", description: "اطلاعات لازم را وارد و فرم سفارش را تکمیل می‌کند.", visual: "form" },
+  { icon: "💳", title: "پرداخت آنلاین", description: "در صورت نیاز، هزینه خدمت را به‌صورت آنلاین پرداخت می‌کند.", visual: "payment" },
+  { icon: "✅", title: "ثبت نهایی سفارش", description: "سفارش با موفقیت ثبت می‌شود و برای انجام در اختیار توسن قرار می‌گیرد.", visual: "success" },
+  { icon: "📦", title: "تکمیل و تحویل", description: "خدمت انجام می‌شود و نتیجه نهایی به کاربر تحویل داده می‌شود.", visual: "delivery" },
 ];
 
-export default function ProcessTimeline() {
-  return (
-    <section id="order-process" className="relative scroll-mt-28 overflow-hidden py-10 md:py-12" dir="rtl">
-      <div className="mx-auto max-w-7xl px-6 lg:px-8">
-        <SectionHeader title="روند انجام سفارش" description="یک مسیر واقعی و ساده از انتخاب خدمت تا تکمیل سفارش." align="center" />
-        <div className="mt-8 hidden md:block">
-          <div className="relative rounded-[2rem] border border-[var(--border)] bg-[var(--surface)]/70 p-6 shadow-sm">
-            <div className="absolute right-[10%] left-[10%] top-[78px] h-1 rounded-full bg-[var(--border)]" />
-            <motion.div initial={{ width: 0 }} whileInView={{ width: "80%" }} viewport={{ once: true, amount: 0.35 }} transition={{ duration: 2, ease: "easeInOut" }} className="absolute right-[10%] top-[78px] h-1 origin-right rounded-full bg-[var(--primary)]" />
-            <div className="grid grid-cols-5 gap-3">
-              {steps.map((step, index) => (
-                <motion.div key={step.title} initial={{ opacity: 0, y: 18 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.3 }} transition={{ delay: index * 0.16, duration: 0.45 }} className="relative text-center">
-                  <motion.div initial={{ scale: 0.7 }} whileInView={{ scale: 1 }} viewport={{ once: true }} transition={{ delay: index * 0.16 + 0.1, type: "spring" }} className="relative z-10 mx-auto flex h-16 w-16 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-2xl shadow-md">{step.icon}</motion.div>
-                  <div className="mt-4 text-xs font-bold text-[var(--primary)]">مرحله {(index + 1).toLocaleString("fa-IR")}</div>
-                  <h3 className="mt-1 font-black text-[var(--text)]">{step.title}</h3>
-                  <p className="mx-auto mt-2 max-w-[190px] text-xs leading-6 text-[var(--text-muted)]">{step.description}</p>
-                  <motion.div initial={{ opacity: 0, scale: 0 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: index * 0.16 + 0.25 }} className="mx-auto mt-3 inline-flex rounded-full border border-[var(--primary)]/20 bg-[var(--primary)]/5 px-2.5 py-1 text-[10px] text-[var(--primary)]">{step.scene}</motion.div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </div>
+function DemoScene({ type }: { type: string }) {
+  if (type === "service") return <div className="grid grid-cols-2 gap-3">{["خدمات مالیاتی", "خدمات اینترنتی", "خدمات اداری", "خدمات ثبتی"].map((item, i) => <motion.div key={item} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * .08 }} className={`rounded-xl border p-3 text-right ${i === 0 ? "border-[var(--primary)] bg-[var(--primary)]/10" : "border-[var(--border)] bg-[var(--surface)]"}`}><div className="text-lg">{["🧾", "🌐", "📄", "🏢"][i]}</div><div className="mt-1 text-xs font-bold">{item}</div><div className="mt-2 h-1.5 w-1/2 rounded-full bg-[var(--border)]" /></motion.div>)}</div>;
+  if (type === "form") return <div className="space-y-3 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4 text-right"><div><div className="mb-1 text-[10px] font-bold text-[var(--text-muted)]">نام و نام خانوادگی</div><div className="h-9 rounded-lg border border-[var(--primary)]/40 bg-[var(--background)] px-3 py-2 text-xs text-[var(--text)]">مهدی احمدی</div></div><div><div className="mb-1 text-[10px] font-bold text-[var(--text-muted)]">شماره موبایل</div><div className="h-9 rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-xs text-[var(--text)]">۰۹۱۲ *** ۱۲۳۴</div></div><div className="flex items-center justify-between"><span className="text-[10px] text-[var(--text-muted)]">اطلاعات تکمیل شد</span><span className="rounded-full bg-[var(--primary)]/10 px-2 py-1 text-[10px] font-bold text-[var(--primary)]">✓ آماده ارسال</span></div></div>;
+  if (type === "payment") return <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-4"><div className="rounded-xl bg-[var(--primary)] p-4 text-white shadow-lg"><div className="flex items-center justify-between text-[10px]"><span>درگاه پرداخت</span><span>TOUSAN</span></div><div className="mt-5 text-center text-lg font-black tracking-widest">•••• •••• •••• ۱۲۳۴</div><div className="mt-4 flex justify-between text-[9px]"><span>مبلغ: ۷۸۰٬۰۰۰ تومان</span><span>CVV2: ***</span></div></div><div className="mt-3 flex gap-2"><div className="h-9 flex-1 rounded-lg border border-[var(--border)] bg-[var(--background)]" /><div className="h-9 w-20 rounded-lg border border-[var(--border)] bg-[var(--background)]" /></div></div>;
+  if (type === "success") return <div className="flex min-h-[190px] flex-col items-center justify-center rounded-2xl border border-[var(--primary)]/20 bg-[var(--primary)]/5 text-center"><motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 260 }} className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--primary)] text-3xl text-white">✓</motion.div><h4 className="mt-4 text-lg font-black">سفارش با موفقیت ثبت شد</h4><p className="mt-1 text-xs text-[var(--text-muted)]">شماره سفارش: #۱۲۴۸۵</p><div className="mt-3 rounded-full bg-[var(--surface)] px-3 py-1 text-[10px] font-bold text-[var(--primary)]">در انتظار بررسی توسن</div></div>;
+  return <div className="flex min-h-[190px] flex-col items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] text-center"><motion.div initial={{ y: 18, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="text-5xl">📦</motion.div><h4 className="mt-3 text-lg font-black">خدمت آماده تحویل است</h4><p className="mt-1 text-xs text-[var(--text-muted)]">سفارش شما تکمیل و نتیجه نهایی تحویل شد.</p><div className="mt-3 rounded-full bg-[var(--primary)]/10 px-3 py-1 text-[10px] font-bold text-[var(--primary)]">✓ تکمیل شده</div></div>;
+}
 
-        <div className="mt-6 md:hidden">
-          <div className="relative overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/70 p-4">
-            <div className="flex gap-3 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory">
-              {steps.map((step, index) => (
-                <motion.div key={step.title} initial={{ opacity: 0, x: 16 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ duration: 0.35 }} className="min-w-[78%] snap-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 text-center">
-                  <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-2xl">{step.icon}</div>
-                  <div className="mt-3 text-xs font-bold text-[var(--primary)]">مرحله {(index + 1).toLocaleString("fa-IR")}</div>
-                  <h3 className="mt-1 font-black">{step.title}</h3>
-                  <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">{step.description}</p>
-                </motion.div>
-              ))}
-            </div>
-            <div className="mt-2 text-center text-[10px] text-[var(--text-muted)]">برای دیدن مرحله بعد، افقی بکشید ←</div>
-          </div>
-        </div>
-      </div>
-    </section>
-  );
+export default function ProcessTimeline() {
+  const [active, setActive] = useState(0);
+  useEffect(() => { const timer = window.setInterval(() => setActive((current) => (current + 1) % steps.length), 5000); return () => window.clearInterval(timer); }, []);
+  const step = steps[active];
+  return <section id="order-process" className="relative scroll-mt-28 overflow-hidden py-10 md:py-12" dir="rtl"><div className="mx-auto max-w-6xl px-6 lg:px-8"><SectionHeader title="روند ثبت سفارش در ۵ مرحله ساده" description="از انتخاب خدمت تا تکمیل و تحویل، همه‌چیز ساده و شفاف است." align="center" /><div className="mt-7 overflow-hidden rounded-[2rem] border border-[var(--border)] bg-[var(--surface)]/70 p-4 shadow-sm sm:p-6"><div className="mb-5 flex items-center justify-between gap-3"><div className="text-xs font-bold text-[var(--text-muted)]">مرحله {(active + 1).toLocaleString("fa-IR")} از {steps.length.toLocaleString("fa-IR")}</div><div className="h-1.5 w-32 overflow-hidden rounded-full bg-[var(--border)]"><motion.div key={active} initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 5, ease: "linear" }} className="h-full origin-right rounded-full bg-[var(--primary)]" /></div></div><div className="grid items-center gap-6 md:grid-cols-[.85fr_1.15fr]"><div className="text-center md:text-right"><AnimatePresence mode="wait"><motion.div key={active} initial={{ opacity: 0, x: 25 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -25 }} transition={{ duration: .35 }}><div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-3xl md:mx-0">{step.icon}</div><div className="mt-4 text-xs font-bold text-[var(--primary)]">مرحله {(active + 1).toLocaleString("fa-IR")}</div><h3 className="mt-1 text-xl font-black text-[var(--text)]">{step.title}</h3><p className="mx-auto mt-2 max-w-sm text-sm leading-7 text-[var(--text-muted)] md:mx-0">{step.description}</p></motion.div></AnimatePresence></div><div className="min-h-[220px] rounded-2xl border border-[var(--border)] bg-[var(--background)]/60 p-3 sm:p-4"><AnimatePresence mode="wait"><motion.div key={active} initial={{ opacity: 0, scale: .97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.02 }} transition={{ duration: .3 }}><DemoScene type={step.visual} /></motion.div></AnimatePresence></div></div><div className="mt-6 grid grid-cols-5 gap-1.5 sm:gap-2">{steps.map((item, index) => <button key={item.title} type="button" onClick={() => setActive(index)} aria-label={`نمایش مرحله ${index + 1}`} className={`group rounded-xl border px-1 py-2.5 transition sm:px-2 ${index === active ? "border-[var(--primary)] bg-[var(--primary)]/10" : "border-[var(--border)] bg-[var(--surface)] hover:border-[var(--primary)]/40"}`}><span className={`mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-sm transition group-hover:scale-105 ${index === active ? "bg-[var(--primary)] text-white" : "bg-[var(--primary)]/10"}`}>{item.icon}</span><span className="mt-1 block truncate text-[9px] font-bold sm:text-[10px]">{item.title}</span></button>)}</div></div></div></section>;
 }
