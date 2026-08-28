@@ -87,13 +87,13 @@ export default function FloatingHeader() {
             <div className="mx-auto max-w-7xl px-4 pt-4">
                 <div className={`rounded-2xl border transition-all duration-300 ${scrolled ? "border-white/10 bg-[var(--surface)]/85 backdrop-blur-xl shadow-xl" : "border-transparent bg-transparent"}`}>
                     <div className={`flex items-center justify-between gap-3 ${scrolled ? "px-4 py-3" : "px-3 py-2"}`}>
-                        <Link href="/" onClick={closeMobile} className="flex shrink-0 items-center gap-3">
-                            <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl bg-[var(--primary)]/10 text-xl">
-                                {logoUrl ? <img src={logoUrl} alt={`لوگوی ${siteName}`} className="h-full w-full object-contain p-1" /> : "🛡️"}
+                        <Link href="/" onClick={closeMobile} className="flex min-w-0 shrink-0 items-center gap-3">
+                            <div className="flex h-11 w-auto min-w-[5.5rem] max-w-[9rem] items-center justify-center overflow-hidden rounded-2xl bg-[var(--primary)]/10">
+                                {logoUrl ? <img src={logoUrl} alt={`لوگوی ${siteName}`} className="block h-full w-full object-contain" /> : <span className="text-xl">🛡️</span>}
                             </div>
-                            <div className="hidden sm:block">
-                                <div className="font-black text-[var(--text)]">{siteName}</div>
-                                <div className="text-xs text-[var(--text-muted)]">{siteDescription}</div>
+                            <div className="hidden min-w-0 sm:block">
+                                <div className="truncate font-black text-[var(--text)]">{siteName}</div>
+                                <div className="truncate text-xs text-[var(--text-muted)]">{siteDescription}</div>
                             </div>
                         </Link>
 
