@@ -10,7 +10,6 @@ import ProcessTimeline from "@/components/home/ProcessTimeline";
 import FaqSection from "@/components/home/FaqSection";
 import RulesSection from "@/components/home/RulesSection";
 import FinalCTA from "@/components/home/FinalCTA";
-import SupportChatWidget from "@/components/home/SupportChatWidget";
 import HomeFooter from "@/components/home/HomeFooter";
 
 export default function HomePage() {
@@ -34,7 +33,6 @@ export default function HomePage() {
       <FinalCTA />
 
       <HomeFooter />
-      <SupportChatWidget />
     </>
   );
 }
