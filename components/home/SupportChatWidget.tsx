@@ -15,12 +15,15 @@ export default function SupportChatWidget() {
     const [draft, setDraft] = useState("");
     const [loading, setLoading] = useState(false);
     const [sending, setSending] = useState(false);
+    const [error, setError] = useState("");
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         let mounted = true;
         supabase.auth.getUser().then(({ data }) => {
             if (mounted) setUserId(data.user?.id || null);
+        }).catch(() => {
+            if (mounted) setUserId(null);
         });
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
             if (mounted) setUserId(session?.user?.id || null);
@@ -51,35 +54,48 @@ export default function SupportChatWidget() {
 
     async function loadConversation(id: string) {
         setLoading(true);
-        const { data: existing } = await supabase
-            .from("support_conversations")
-            .select("id")
-            .eq("user_id", id)
-            .eq("status", "open")
-            .order("updated_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-        let currentId = existing?.id || null;
-        if (!currentId) {
-            const { data: created } = await supabase
+        setError("");
+        setMessages([]);
+        try {
+            const { data: existing, error: existingError } = await supabase
                 .from("support_conversations")
-                .insert({ user_id: id })
                 .select("id")
-                .single();
-            currentId = created?.id || null;
-        }
+                .eq("user_id", id)
+                .eq("status", "open")
+                .order("updated_at", { ascending: false })
+                .limit(1)
+                .maybeSingle();
+            if (existingError) throw existingError;
 
-        setConversationId(currentId);
-        if (currentId) {
-            const { data } = await supabase
+            let currentId = existing?.id || null;
+            if (!currentId) {
+                const { data: created, error: createError } = await supabase
+                    .from("support_conversations")
+                    .insert({ user_id: id })
+                    .select("id")
+                    .single();
+                if (createError) throw createError;
+                currentId = created?.id || null;
+            }
+
+            setConversationId(currentId);
+            if (!currentId) throw new Error("شناسه گفتگوی پشتیبانی دریافت نشد.");
+
+            const { data, error: messagesError } = await supabase
                 .from("support_messages")
                 .select("id, conversation_id, sender_id, sender_role, message, is_read, created_at")
                 .eq("conversation_id", currentId)
                 .order("created_at", { ascending: true });
+            if (messagesError) throw messagesError;
             setMessages((data || []) as SupportMessage[]);
+        } catch (err: any) {
+            console.error("[SupportChatWidget] load failed", err);
+            setConversationId(null);
+            setMessages([]);
+            setError("ارتباط با بخش پشتیبانی برقرار نشد. لطفاً دوباره تلاش کنید.");
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }
 
     async function sendMessage(event: React.FormEvent) {
@@ -87,12 +103,17 @@ export default function SupportChatWidget() {
         const text = draft.trim();
         if (!text || !userId || !conversationId || sending) return;
         setSending(true);
+        setError("");
         const optimistic: SupportMessage = { id: `temp-${Date.now()}`, conversation_id: conversationId, sender_id: userId, sender_role: "user", message: text, is_read: false, created_at: new Date().toISOString() };
         setMessages((current) => [...current, optimistic]);
         setDraft("");
-        const { error } = await supabase.from("support_messages").insert({ conversation_id: conversationId, sender_id: userId, sender_role: "user", message: text });
-        if (error) setMessages((current) => current.filter((item) => item.id !== optimistic.id));
-        else setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+        const { error: insertError } = await supabase.from("support_messages").insert({ conversation_id: conversationId, sender_id: userId, sender_role: "user", message: text });
+        if (insertError) {
+            setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+            setError("ارسال پیام انجام نشد. لطفاً دوباره تلاش کنید.");
+        } else {
+            setMessages((current) => current.filter((item) => item.id !== optimistic.id));
+        }
         setSending(false);
     }
 
@@ -104,7 +125,6 @@ export default function SupportChatWidget() {
                         <div><div className="font-black">پشتیبانی آنلاین توسن</div><div className="mt-1 text-xs text-white/75">گفتگو مستقیم با اپراتور</div></div>
                         <button type="button" onClick={() => setOpen(false)} className="rounded-xl p-2 hover:bg-white/10" aria-label="بستن"><X size={19} /></button>
                     </div>
-
                     {!userId ? (
                         <div className="flex flex-1 flex-col items-center justify-center px-7 text-center">
                             <MessageCircle size={42} className="text-[var(--primary)]" />
@@ -115,7 +135,7 @@ export default function SupportChatWidget() {
                     ) : (
                         <>
                             <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-                                {loading ? <div className="py-10 text-center text-sm text-[var(--text-muted)]">در حال بارگذاری گفتگو...</div> : messages.length === 0 ? <div className="py-10 text-center text-sm leading-7 text-[var(--text-muted)]">سلام 👋<br />پیام خود را بنویسید؛ اپراتور توسن در ساعات پشتیبانی پاسخ می‌دهد.</div> : messages.map((item) => (
+                                {loading ? <div className="py-10 text-center text-sm text-[var(--text-muted)]">در حال بارگذاری گفتگو...</div> : error ? <div className="flex h-full flex-col items-center justify-center px-5 text-center"><MessageCircle size={38} className="text-[var(--primary)]" /><p className="mt-4 text-sm leading-7 text-[var(--text-muted)]">{error}</p><button type="button" onClick={() => void loadConversation(userId)} className="mt-4 rounded-xl bg-[var(--primary)] px-5 py-2.5 text-sm font-black text-white">تلاش مجدد</button></div> : messages.length === 0 ? <div className="py-10 text-center text-sm leading-7 text-[var(--text-muted)]">سلام 👋<br />پیام خود را بنویسید؛ اپراتور توسن در ساعات پشتیبانی پاسخ می‌دهد.</div> : messages.map((item) => (
                                     <div key={item.id} className={`flex ${item.sender_role === "user" ? "justify-start" : "justify-end"}`}>
                                         <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-7 ${item.sender_role === "user" ? "bg-[var(--primary)] text-white rounded-bl-md" : "bg-[var(--surface-muted)] text-[var(--text)] rounded-br-md"}`}>
                                             {item.message}
@@ -127,14 +147,13 @@ export default function SupportChatWidget() {
                             <form onSubmit={sendMessage} className="border-t border-[var(--border)] p-3">
                                 <div className="flex items-end gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2">
                                     <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} maxLength={4000} placeholder="پیام شما..." className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text)] outline-none" />
-                                    <button type="submit" disabled={!draft.trim() || sending} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-white disabled:opacity-40" aria-label="ارسال"><Send size={17} /></button>
+                                    <button type="submit" disabled={!draft.trim() || sending || !conversationId} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-white disabled:opacity-40" aria-label="ارسال"><Send size={17} /></button>
                                 </div>
                             </form>
                         </>
                     )}
                 </div>
             )}
-
             <button type="button" onClick={() => setOpen((value) => !value)} className="flex items-center gap-2 rounded-full bg-[var(--primary)] px-5 py-3.5 font-black text-white shadow-[0_14px_40px_rgba(9,150,124,0.3)] transition hover:-translate-y-1" aria-label="پشتیبانی آنلاین">
                 <MessageCircle size={20} />
                 <span className="hidden sm:inline">پشتیبانی آنلاین</span>
