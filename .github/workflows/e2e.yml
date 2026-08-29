@@ -26,7 +26,7 @@ jobs:
       - name: Run E2E regression suite
         run: npm run test:e2e
         env:
-          PLAYWRIGHT_SERVICE_SLUG: ${{ secrets.PLAYWRIGHT_SERVICE_SLUG }}
+          PLAYWRIGHT_BASE_URL: https://www.tusancn.ir
 
       - name: Upload Playwright report
         if: always()
