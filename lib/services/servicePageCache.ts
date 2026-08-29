@@ -78,6 +78,10 @@ export function normalizeServicePath(value: string) {
     .trim();
 }
 
+function rawServicePath(value: string) {
+  return decodeURIComponent(value).normalize("NFC").trim();
+}
+
 function normalizeService(data: any): ServicePageService {
   return {
     ...data,
@@ -90,6 +94,7 @@ function normalizeService(data: any): ServicePageService {
 
 async function loadServicePageData(path: string): Promise<ServicePageData> {
   const supabase = createSupabaseServerClient();
+  const requestedRaw = rawServicePath(path);
   const requested = normalizeServicePath(path);
   let service: ServicePageService | null = null;
 
@@ -102,13 +107,25 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
       .maybeSingle();
     if (!error && data) service = normalizeService(data);
   } else {
-    const { data, error } = await supabase
+    // Try the exact stored slug first. Persian slugs may contain ZWNJ characters;
+    // removing them before the database lookup can turn a valid slug into a miss.
+    const exactSlug = await supabase
       .from("services")
       .select(SERVICE_SELECT)
       .eq("is_active", true)
-      .eq("slug", requested)
+      .eq("slug", requestedRaw)
       .maybeSingle();
-    if (!error && data) service = normalizeService(data);
+    if (!exactSlug.error && exactSlug.data) service = normalizeService(exactSlug.data);
+
+    if (!service && requested !== requestedRaw) {
+      const normalizedSlug = await supabase
+        .from("services")
+        .select(SERVICE_SELECT)
+        .eq("is_active", true)
+        .eq("slug", requested)
+        .maybeSingle();
+      if (!normalizedSlug.error && normalizedSlug.data) service = normalizeService(normalizedSlug.data);
+    }
   }
 
   // Legacy ZWNJ/normalization compatibility without loading the whole table.
@@ -117,8 +134,8 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
       .from("services")
       .select(SERVICE_SELECT)
       .eq("is_active", true)
-      .ilike("slug", requested)
-      .limit(5);
+      .ilike("slug", `%${requested}%`)
+      .limit(20);
     const match = (candidates || []).find(
       (item: any) => normalizeServicePath(String(item.slug || "")) === requested,
     );
