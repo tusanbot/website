@@ -1,44 +1,26 @@
-import {
-  AlignmentType,
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-} from "docx";
-
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export async function createDocxBlob(text: string): Promise<Blob> {
-  const paragraphs = text.split(/\n+/).map((line) =>
-    new Paragraph({
-      alignment: AlignmentType.RIGHT,
-      bidirectional: true,
-      children: [
-        new TextRun({
-          text: line,
-          rightToLeft: true,
-          font: "Arial",
-        }),
-      ],
-    }),
-  );
+  if (!text.trim()) throw new Error("متنی برای ساخت فایل Word وجود ندارد.");
 
-  const document = new Document({
-    creator: "کافی‌نت توسن",
-    title: "تبدیل PDF به Word",
-    description: "متن استخراج‌شده از فایل PDF",
-    sections: [
-      {
-        properties: {},
-        children: paragraphs,
-      },
-    ],
+  const response = await fetch("/api/tools/pdf-to-word/docx", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
   });
 
-  const blob = await Packer.toBlob(document);
-  if (!(blob instanceof Blob) || blob.size < 1000) {
-    throw new Error("ساختار فایل Word معتبر نیست.");
+  if (!response.ok) {
+    let message = "ساخت فایل Word انجام نشد.";
+    try {
+      const payload = await response.json() as { error?: string };
+      if (payload.error) message = payload.error;
+    } catch {}
+    throw new Error(message);
   }
 
-  return new Blob([await blob.arrayBuffer()], { type: DOCX_MIME });
+  const blob = await response.blob();
+  if (blob.size < 1000 || blob.type !== DOCX_MIME) {
+    throw new Error("سرور فایل Word معتبر برنگرداند.");
+  }
+  return blob;
 }
