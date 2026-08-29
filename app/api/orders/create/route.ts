@@ -6,240 +6,70 @@ import type { FormSchema } from '@/types/forms';
 
 function normalizeSchema(value: unknown): FormSchema {
   let parsed = value;
-  if (typeof parsed === 'string') {
-    try { parsed = JSON.parse(parsed); } catch { parsed = []; }
-  }
+  if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { parsed = []; } }
   if (Array.isArray(parsed)) return { fields: parsed as FormSchema['fields'] };
-  if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { fields?: unknown }).fields)) {
-    return parsed as FormSchema;
-  }
+  if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { fields?: unknown }).fields)) return parsed as FormSchema;
   return { fields: [] };
 }
-
 function normalizeRules(value: unknown): PricingRule[] {
-  if (typeof value === 'string') {
-    try { value = JSON.parse(value); } catch { value = []; }
-  }
+  if (typeof value === 'string') { try { value = JSON.parse(value); } catch { value = []; } }
   return Array.isArray(value) ? value as PricingRule[] : [];
 }
-
 function mergeSchemas(parent: FormSchema, child: FormSchema): FormSchema {
-  const fields = [...parent.fields, ...child.fields];
-  const seen = new Set<string>();
-  const unique = fields.filter((field: any) => {
-    if (!field || typeof field !== 'object') return false;
-    const key = String(field.name || field.id || '').trim().toLowerCase();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const fields = [...parent.fields, ...child.fields]; const seen = new Set<string>();
+  const unique = fields.filter((field: any) => { if (!field || typeof field !== 'object') return false; const key = String(field.name || field.id || '').trim().toLowerCase(); if (!key || seen.has(key)) return false; seen.add(key); return true; });
   return { ...child, fields: unique };
 }
+function generateTrackingCode(): string { return `TUS-${Date.now().toString().slice(-6)}-${Math.floor(100000 + Math.random() * 900000)}`; }
 
-function generateTrackingCode(): string {
-  return `TUS-${Date.now().toString().slice(-6)}-${Math.floor(100000 + Math.random() * 900000)}`;
-}
-
-type FormRecord = {
-  id: string;
-  schema: unknown;
-  service_id: string;
-  is_public: boolean;
-  price: number | null;
-  active_version_id: string | null;
-  parent_form_id: string | null;
-};
+type ServiceRecord = { id: string; title: string; price: number | null; form_schema: unknown; is_active: boolean; parent_service_id: string | null; parent_form_id: string | null; pricing_rules: unknown; };
 
 async function resolveParentSchema(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, parentFormId: string | null) {
   if (!parentFormId) return { schema: { fields: [] } as FormSchema };
-  const { data: parentForm, error } = await supabase
-    .from('custom_forms')
-    .select('id,schema,service_id,is_public,active_version_id')
-    .eq('id', parentFormId)
-    .eq('is_public', true)
-    .maybeSingle();
-  if (error) throw new Error(error.message);
-  if (!parentForm) return { schema: { fields: [] } as FormSchema };
-
+  const { data: parentForm, error } = await supabase.from('custom_forms').select('id,schema,service_id,is_public,active_version_id').eq('id', parentFormId).eq('is_public', true).maybeSingle();
+  if (error) throw new Error(error.message); if (!parentForm) return { schema: { fields: [] } as FormSchema };
   let schema = normalizeSchema(parentForm.schema);
-  if (parentForm.active_version_id) {
-    const { data: version, error: versionError } = await supabase
-      .from('form_versions')
-      .select('id,schema')
-      .eq('id', parentForm.active_version_id)
-      .eq('form_id', parentForm.id)
-      .maybeSingle();
-    if (versionError) throw new Error(versionError.message);
-    if (!version) throw new Error('نسخه فعال فرم مادر پیدا نشد.');
-    schema = normalizeSchema(version.schema);
-  }
+  if (parentForm.active_version_id) { const { data: version, error: versionError } = await supabase.from('form_versions').select('id,schema').eq('id', parentForm.active_version_id).eq('form_id', parentForm.id).maybeSingle(); if (versionError) throw new Error(versionError.message); if (!version) throw new Error('نسخه فعال فرم مادر پیدا نشد.'); schema = normalizeSchema(version.schema); }
   return { schema };
 }
 
-async function resolveCustomForm(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  formId: string,
-  serviceId: string,
-) {
-  const { data: customForm, error: formError } = await supabase
-    .from('custom_forms')
-    .select('id,schema,service_id,is_public,price,active_version_id,parent_form_id')
-    .eq('id', formId)
-    .eq('service_id', serviceId)
-    .eq('is_public', true)
-    .maybeSingle();
-  if (formError) throw new Error(formError.message);
-  if (!customForm) return null;
-
-  let schema = normalizeSchema(customForm.schema);
-  let formVersionId: string | null = null;
-  let price = Number(customForm.price ?? 0);
-  if (customForm.active_version_id) {
-    const { data: version, error: versionError } = await supabase
-      .from('form_versions')
-      .select('id,schema,price')
-      .eq('id', customForm.active_version_id)
-      .eq('form_id', customForm.id)
-      .maybeSingle();
-    if (versionError) throw new Error(versionError.message);
-    if (!version) throw new Error('نسخه فعال فرم پیدا نشد.');
-    formVersionId = version.id;
-    schema = normalizeSchema(version.schema);
-    price = Number(version.price ?? price);
-  }
-
+async function resolveCustomForm(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, formId: string, serviceId: string) {
+  const { data: customForm, error: formError } = await supabase.from('custom_forms').select('id,schema,service_id,is_public,price,active_version_id,parent_form_id').eq('id', formId).eq('service_id', serviceId).eq('is_public', true).maybeSingle();
+  if (formError) throw new Error(formError.message); if (!customForm) return null;
+  let schema = normalizeSchema(customForm.schema); let formVersionId: string | null = null; let price = Number(customForm.price ?? 0);
+  if (customForm.active_version_id) { const { data: version, error: versionError } = await supabase.from('form_versions').select('id,schema,price').eq('id', customForm.active_version_id).eq('form_id', customForm.id).maybeSingle(); if (versionError) throw new Error(versionError.message); if (!version) throw new Error('نسخه فعال فرم پیدا نشد.'); formVersionId = version.id; schema = normalizeSchema(version.schema); price = Number(version.price ?? price); }
   const parent = await resolveParentSchema(supabase, customForm.parent_form_id);
-  return {
-    formId: customForm.id as string,
-    formVersionId,
-    schema: mergeSchemas(parent.schema, schema),
-    price,
-  };
+  return { formId: customForm.id as string, formVersionId, schema: mergeSchemas(parent.schema, schema), price };
 }
 
-async function inferServiceForm(
-  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
-  service: FormRecord & { parent_form_id: string | null },
-) {
-  const { data: inferredForm, error } = await supabase
-    .from('custom_forms')
-    .select('id,schema,service_id,is_public,price,active_version_id,parent_form_id,form_type')
-    .eq('service_id', service.id)
-    .eq('is_public', true)
-    .in('form_type', ['normal', 'parent'])
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+async function inferServiceForm(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, service: ServiceRecord) {
+  const { data: inferredForm, error } = await supabase.from('custom_forms').select('id,schema,service_id,is_public,price,active_version_id,parent_form_id,form_type').eq('service_id', service.id).eq('is_public', true).in('form_type', ['normal', 'parent']).order('created_at', { ascending: true }).limit(1).maybeSingle();
   if (error) throw new Error(error.message);
-
-  if (inferredForm) {
-    return resolveCustomForm(supabase, inferredForm.id, service.id);
-  }
-
-  // Important: a child service can intentionally have no custom_forms row.
-  // In that case its parent_form_id still defines the form it inherits.
+  if (inferredForm) { const resolved = await resolveCustomForm(supabase, inferredForm.id, service.id); if (resolved) return resolved; }
   const parent = await resolveParentSchema(supabase, service.parent_form_id);
-  if (parent.schema.fields.length === 0 && service.form_schema) {
-    return { formId: null, formVersionId: null, schema: normalizeSchema(service.form_schema), price: Number(service.price || 0) };
-  }
+  if (parent.schema.fields.length === 0 && service.form_schema) return { formId: null, formVersionId: null, schema: normalizeSchema(service.form_schema), price: Number(service.price || 0) };
   return { formId: null, formVersionId: null, schema: parent.schema, price: Number(service.price || 0) };
 }
 
 export async function POST(request: Request): Promise<Response> {
   try {
-    const supabase = await createSupabaseServerClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const supabase = await createSupabaseServerClient(); const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: 'برای ثبت سفارش ابتدا وارد حساب شوید.' }, { status: 401 });
-
-    const body = await request.json() as {
-      serviceId?: string;
-      formId?: string | null;
-      formData?: Record<string, unknown>;
-      idempotencyKey?: string;
-    };
-    if (!body.serviceId || !body.formData || typeof body.formData !== 'object' || Array.isArray(body.formData)) {
-      return NextResponse.json({ error: 'اطلاعات فرم ناقص است.' }, { status: 400 });
-    }
-
+    const body = await request.json() as { serviceId?: string; formId?: string | null; formData?: Record<string, unknown>; idempotencyKey?: string };
+    if (!body.serviceId || !body.formData || typeof body.formData !== 'object' || Array.isArray(body.formData)) return NextResponse.json({ error: 'اطلاعات فرم ناقص است.' }, { status: 400 });
     const idempotencyKey = String(body.idempotencyKey || request.headers.get('x-idempotency-key') || '').trim();
     if (idempotencyKey.length > 128) return NextResponse.json({ error: 'شناسه تکرارنشدنی نامعتبر است.' }, { status: 400 });
-
-    if (idempotencyKey) {
-      const { data: existingOrder, error: existingOrderError } = await supabase
-        .from('orders')
-        .select('id,tracking_code,price,form_version_id')
-        .eq('user_id', user.id)
-        .eq('idempotency_key', idempotencyKey)
-        .maybeSingle();
-      if (existingOrderError) throw new Error(existingOrderError.message);
-      if (existingOrder) return NextResponse.json({ order: existingOrder, idempotent: true });
-    }
-
-    const { data: service, error: serviceError } = await supabase
-      .from('services')
-      .select('id,title,price,form_schema,is_active,parent_service_id,parent_form_id,pricing_rules')
-      .eq('id', body.serviceId)
-      .eq('is_active', true)
-      .maybeSingle();
-    if (serviceError) throw new Error(serviceError.message);
-    if (!service) return NextResponse.json({ error: 'خدمت انتخاب‌شده در دسترس نیست.' }, { status: 404 });
-
-    let schema = normalizeSchema(service.form_schema);
-    let formId: string | null = body.formId ?? null;
-    let formVersionId: string | null = null;
-    let orderPrice = Number(service.price || 0);
-    const pricingRules = normalizeRules(service.pricing_rules);
-
-    if (formId) {
-      const resolved = await resolveCustomForm(supabase, formId, service.id);
-      if (!resolved) return NextResponse.json({ error: 'فرم انتخاب‌شده معتبر نیست.' }, { status: 400 });
-      formId = resolved.formId;
-      formVersionId = resolved.formVersionId;
-      schema = resolved.schema;
-      orderPrice = resolved.price;
-    } else {
-      const resolved = await inferServiceForm(supabase, service as FormRecord & { parent_form_id: string | null });
-      formId = resolved.formId;
-      formVersionId = resolved.formVersionId;
-      schema = resolved.schema;
-      orderPrice = resolved.price;
-    }
-
+    if (idempotencyKey) { const { data: existingOrder, error: existingOrderError } = await supabase.from('orders').select('id,tracking_code,price,form_version_id').eq('user_id', user.id).eq('idempotency_key', idempotencyKey).maybeSingle(); if (existingOrderError) throw new Error(existingOrderError.message); if (existingOrder) return NextResponse.json({ order: existingOrder, idempotent: true }); }
+    const { data: service, error: serviceError } = await supabase.from('services').select('id,title,price,form_schema,is_active,parent_service_id,parent_form_id,pricing_rules').eq('id', body.serviceId).eq('is_active', true).maybeSingle();
+    if (serviceError) throw new Error(serviceError.message); if (!service) return NextResponse.json({ error: 'خدمت انتخاب‌شده در دسترس نیست.' }, { status: 404 });
+    let schema = normalizeSchema(service.form_schema); let formId: string | null = body.formId ?? null; let formVersionId: string | null = null; let orderPrice = Number(service.price || 0); const pricingRules = normalizeRules(service.pricing_rules);
+    if (formId) { const resolved = await resolveCustomForm(supabase, formId, service.id); if (!resolved) return NextResponse.json({ error: 'فرم انتخاب‌شده معتبر نیست.' }, { status: 400 }); formId = resolved.formId; formVersionId = resolved.formVersionId; schema = resolved.schema; orderPrice = resolved.price; }
+    else { const resolved = await inferServiceForm(supabase, service as ServiceRecord); formId = resolved.formId; formVersionId = resolved.formVersionId; schema = resolved.schema; orderPrice = resolved.price; }
     const validation = validateFormData(schema, body.formData);
-    if (!validation.valid) {
-      return NextResponse.json({ error: 'اطلاعات فرم کامل یا معتبر نیست.', errors: validation.errors }, { status: 422 });
-    }
-
+    if (!validation.valid) return NextResponse.json({ error: 'اطلاعات فرم کامل یا معتبر نیست.', errors: validation.errors }, { status: 422 });
     const finalPrice = calculateServicePrice(orderPrice, pricingRules, validation.data as Record<string, unknown>);
-    const { data: order, error: orderError } = await supabase.from('orders').insert({
-      user_id: user.id,
-      service_id: service.id,
-      form_id: formId,
-      form_version_id: formVersionId,
-      idempotency_key: idempotencyKey || null,
-      tracking_code: generateTrackingCode(),
-      status: 'registered',
-      form_data: validation.data,
-      form_schema_snapshot: schema,
-      price: finalPrice,
-    }).select('id,tracking_code,price,form_version_id').single();
-
-    if (orderError) {
-      if (orderError.code === '23505' && idempotencyKey) {
-        const { data: concurrentOrder } = await supabase
-          .from('orders')
-          .select('id,tracking_code,price,form_version_id')
-          .eq('user_id', user.id)
-          .eq('idempotency_key', idempotencyKey)
-          .maybeSingle();
-        if (concurrentOrder) return NextResponse.json({ order: concurrentOrder, idempotent: true });
-      }
-      throw new Error(orderError.message);
-    }
-
+    const { data: order, error: orderError } = await supabase.from('orders').insert({ user_id: user.id, service_id: service.id, form_id: formId, form_version_id: formVersionId, idempotency_key: idempotencyKey || null, tracking_code: generateTrackingCode(), status: 'registered', form_data: validation.data, form_schema_snapshot: schema, price: finalPrice }).select('id,tracking_code,price,form_version_id').single();
+    if (orderError) { if (orderError.code === '23505' && idempotencyKey) { const { data: concurrentOrder } = await supabase.from('orders').select('id,tracking_code,price,form_version_id').eq('user_id', user.id).eq('idempotency_key', idempotencyKey).maybeSingle(); if (concurrentOrder) return NextResponse.json({ order: concurrentOrder, idempotent: true }); } throw new Error(orderError.message); }
     return NextResponse.json({ order });
-  } catch (error) {
-    console.error('Order creation error:', error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'خطایی هنگام ثبت سفارش رخ داد.' }, { status: 500 });
-  }
+  } catch (error) { console.error('Order creation error:', error); return NextResponse.json({ error: error instanceof Error ? error.message : 'خطایی هنگام ثبت سفارش رخ داد.' }, { status: 500 }); }
 }
