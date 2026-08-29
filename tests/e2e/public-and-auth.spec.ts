@@ -12,9 +12,10 @@ test.describe("public and authorization smoke tests", () => {
     await expect(page.locator("body")).toContainText("خدمات");
   });
 
-  test("unauthenticated users cannot open admin", async ({ page }) => {
+  test("unauthenticated users see the admin access-denied guard", async ({ page }) => {
     await page.goto("/admin");
-    await expect(page).not.toHaveURL(/\/admin(?:\/|$)/);
-    await expect(page).toHaveURL(/\/auth\?mode=login/);
+    await expect(page.locator("h1")).toContainText("دسترسی غیرمجاز");
+    await expect(page.locator('a[href="/auth?mode=login"]')).toBeVisible();
+    await expect(page.locator("body")).not.toContainText("مدیریت خدمات");
   });
 });
