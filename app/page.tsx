@@ -15,23 +15,21 @@ import SupportChatWidget from "@/components/home/SupportChatWidget";
 import HomeFooter from "@/components/home/HomeFooter";
 
 export default function HomePage() {
-  return (
-    <>
-      <FloatingHeader />
-      <HeroSection />
-      <ActiveAnnouncements />
-      <PopularServices />
-      <BlogPreview />
-      <SocialServicesPreview />
-      <ToolsPreview />
-      <ProcessTimeline />
-      <StatsSection />
-      <FeaturesSection />
-      <FaqSection />
-      <RulesSection />
-      <FinalCTA />
-      <HomeFooter />
-      <SupportChatWidget />
-    </>
-  );
+  return <main className="home-compact">
+    <FloatingHeader />
+    <HeroSection />
+    <ActiveAnnouncements />
+    <PopularServices />
+    <BlogPreview />
+    <SocialServicesPreview />
+    <ToolsPreview />
+    <ProcessTimeline />
+    <StatsSection />
+    <FeaturesSection />
+    <FaqSection />
+    <RulesSection />
+    <FinalCTA />
+    <HomeFooter />
+    <SupportChatWidget />
+  </main>;
 }
