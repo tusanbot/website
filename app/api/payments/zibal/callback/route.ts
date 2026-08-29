@@ -72,7 +72,7 @@ export async function GET(request: Request) {
         .from("orders")
         .update({ status: "checking", updated_at: new Date().toISOString() })
         .eq("id", payment.order_id)
-        .in("status", ["registered", "checking"]);
+        .in("status", ["pending_payment", "registered", "checking"]);
 
       if (orderUpdateError) throw new Error(orderUpdateError.message);
     }
