@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.112.0",
     "@supabase/ssr": "^0.12.4",
     "axios": "^1.11.0",
+    "docx": "^8.5.0",
     "framer-motion": "^13.1.0",
     "html2canvas": "^1.4.1",
     "jspdf": "^4.0.0",
@@ -36,7 +37,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.12",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "tailwindcss": "^4"
   }
 }
