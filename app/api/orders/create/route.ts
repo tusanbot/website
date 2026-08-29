@@ -40,6 +40,111 @@ function generateTrackingCode(): string {
   return `TUS-${Date.now().toString().slice(-6)}-${Math.floor(100000 + Math.random() * 900000)}`;
 }
 
+type FormRecord = {
+  id: string;
+  schema: unknown;
+  service_id: string;
+  is_public: boolean;
+  price: number | null;
+  active_version_id: string | null;
+  parent_form_id: string | null;
+};
+
+async function resolveParentSchema(supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>, parentFormId: string | null) {
+  if (!parentFormId) return { schema: { fields: [] } as FormSchema };
+  const { data: parentForm, error } = await supabase
+    .from('custom_forms')
+    .select('id,schema,service_id,is_public,active_version_id')
+    .eq('id', parentFormId)
+    .eq('is_public', true)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!parentForm) return { schema: { fields: [] } as FormSchema };
+
+  let schema = normalizeSchema(parentForm.schema);
+  if (parentForm.active_version_id) {
+    const { data: version, error: versionError } = await supabase
+      .from('form_versions')
+      .select('id,schema')
+      .eq('id', parentForm.active_version_id)
+      .eq('form_id', parentForm.id)
+      .maybeSingle();
+    if (versionError) throw new Error(versionError.message);
+    if (!version) throw new Error('نسخه فعال فرم مادر پیدا نشد.');
+    schema = normalizeSchema(version.schema);
+  }
+  return { schema };
+}
+
+async function resolveCustomForm(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  formId: string,
+  serviceId: string,
+) {
+  const { data: customForm, error: formError } = await supabase
+    .from('custom_forms')
+    .select('id,schema,service_id,is_public,price,active_version_id,parent_form_id')
+    .eq('id', formId)
+    .eq('service_id', serviceId)
+    .eq('is_public', true)
+    .maybeSingle();
+  if (formError) throw new Error(formError.message);
+  if (!customForm) return null;
+
+  let schema = normalizeSchema(customForm.schema);
+  let formVersionId: string | null = null;
+  let price = Number(customForm.price ?? 0);
+  if (customForm.active_version_id) {
+    const { data: version, error: versionError } = await supabase
+      .from('form_versions')
+      .select('id,schema,price')
+      .eq('id', customForm.active_version_id)
+      .eq('form_id', customForm.id)
+      .maybeSingle();
+    if (versionError) throw new Error(versionError.message);
+    if (!version) throw new Error('نسخه فعال فرم پیدا نشد.');
+    formVersionId = version.id;
+    schema = normalizeSchema(version.schema);
+    price = Number(version.price ?? price);
+  }
+
+  const parent = await resolveParentSchema(supabase, customForm.parent_form_id);
+  return {
+    formId: customForm.id as string,
+    formVersionId,
+    schema: mergeSchemas(parent.schema, schema),
+    price,
+  };
+}
+
+async function inferServiceForm(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  service: FormRecord & { parent_form_id: string | null },
+) {
+  const { data: inferredForm, error } = await supabase
+    .from('custom_forms')
+    .select('id,schema,service_id,is_public,price,active_version_id,parent_form_id,form_type')
+    .eq('service_id', service.id)
+    .eq('is_public', true)
+    .in('form_type', ['normal', 'parent'])
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+
+  if (inferredForm) {
+    return resolveCustomForm(supabase, inferredForm.id, service.id);
+  }
+
+  // Important: a child service can intentionally have no custom_forms row.
+  // In that case its parent_form_id still defines the form it inherits.
+  const parent = await resolveParentSchema(supabase, service.parent_form_id);
+  if (parent.schema.fields.length === 0 && service.form_schema) {
+    return { formId: null, formVersionId: null, schema: normalizeSchema(service.form_schema), price: Number(service.price || 0) };
+  }
+  return { formId: null, formVersionId: null, schema: parent.schema, price: Number(service.price || 0) };
+}
+
 export async function POST(request: Request): Promise<Response> {
   try {
     const supabase = await createSupabaseServerClient();
@@ -85,122 +190,19 @@ export async function POST(request: Request): Promise<Response> {
     let orderPrice = Number(service.price || 0);
     const pricingRules = normalizeRules(service.pricing_rules);
 
-    // In the current service/form architecture the client normally sends only
-    // serviceId for a child service. Resolve its custom form server-side so the
-    // order keeps a reliable form_id and the server validates the same combined
-    // parent + child schema that the browser displayed.
-    if (!formId) {
-      const { data: inferredForm, error: inferredFormError } = await supabase
-        .from('custom_forms')
-        .select('id,schema,service_id,is_public,price,active_version_id,parent_form_id,form_type')
-        .eq('service_id', service.id)
-        .eq('is_public', true)
-        .in('form_type', ['normal', 'parent'])
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (inferredFormError) throw new Error(inferredFormError.message);
-      if (inferredForm) {
-        formId = inferredForm.id;
-        schema = normalizeSchema(inferredForm.schema);
-        orderPrice = Number(inferredForm.price ?? service.price ?? 0);
-
-        if (inferredForm.active_version_id) {
-          const { data: version, error: versionError } = await supabase
-            .from('form_versions')
-            .select('id,schema,price')
-            .eq('id', inferredForm.active_version_id)
-            .eq('form_id', inferredForm.id)
-            .maybeSingle();
-          if (versionError) throw new Error(versionError.message);
-          if (!version) return NextResponse.json({ error: 'نسخه فعال فرم پیدا نشد.' }, { status: 409 });
-          formVersionId = version.id;
-          schema = normalizeSchema(version.schema);
-          orderPrice = Number(version.price ?? orderPrice);
-        }
-
-        const parentFormId = inferredForm.parent_form_id || service.parent_form_id || null;
-        if (parentFormId) {
-          const { data: parentForm, error: parentError } = await supabase
-            .from('custom_forms')
-            .select('id,schema,service_id,is_public,active_version_id')
-            .eq('id', parentFormId)
-            .eq('is_public', true)
-            .maybeSingle();
-          if (parentError) throw new Error(parentError.message);
-          if (parentForm) {
-            let parentSchema = normalizeSchema(parentForm.schema);
-            if (parentForm.active_version_id) {
-              const { data: parentVersion, error: parentVersionError } = await supabase
-                .from('form_versions')
-                .select('id,schema')
-                .eq('id', parentForm.active_version_id)
-                .eq('form_id', parentForm.id)
-                .maybeSingle();
-              if (parentVersionError) throw new Error(parentVersionError.message);
-              if (!parentVersion) return NextResponse.json({ error: 'نسخه فعال فرم مادر پیدا نشد.' }, { status: 409 });
-              parentSchema = normalizeSchema(parentVersion.schema);
-            }
-            schema = mergeSchemas(parentSchema, schema);
-          }
-        }
-      }
-    }
-
     if (formId) {
-      const { data: customForm, error: formError } = await supabase
-        .from('custom_forms')
-        .select('id,schema,service_id,is_public,price,active_version_id,parent_form_id')
-        .eq('id', formId)
-        .eq('service_id', service.id)
-        .eq('is_public', true)
-        .maybeSingle();
-      if (formError) throw new Error(formError.message);
-      if (!customForm) return NextResponse.json({ error: 'فرم انتخاب‌شده معتبر نیست.' }, { status: 400 });
-
-      formId = customForm.id;
-      orderPrice = Number(customForm.price ?? service.price ?? 0);
-      schema = normalizeSchema(customForm.schema);
-
-      if (customForm.active_version_id) {
-        const { data: version, error: versionError } = await supabase
-          .from('form_versions')
-          .select('id,schema,price')
-          .eq('id', customForm.active_version_id)
-          .eq('form_id', customForm.id)
-          .maybeSingle();
-        if (versionError) throw new Error(versionError.message);
-        if (!version) return NextResponse.json({ error: 'نسخه فعال فرم پیدا نشد.' }, { status: 409 });
-        formVersionId = version.id;
-        schema = normalizeSchema(version.schema);
-        orderPrice = Number(version.price ?? orderPrice);
-      }
-
-      const parentFormId = customForm.parent_form_id || service.parent_form_id || null;
-      if (parentFormId) {
-        const { data: parentForm, error: parentError } = await supabase
-          .from('custom_forms')
-          .select('id,schema,service_id,is_public,active_version_id')
-          .eq('id', parentFormId)
-          .eq('is_public', true)
-          .maybeSingle();
-        if (parentError) throw new Error(parentError.message);
-        if (parentForm) {
-          let parentSchema = normalizeSchema(parentForm.schema);
-          if (parentForm.active_version_id) {
-            const { data: parentVersion, error: parentVersionError } = await supabase
-              .from('form_versions')
-              .select('id,schema')
-              .eq('id', parentForm.active_version_id)
-              .eq('form_id', parentForm.id)
-              .maybeSingle();
-            if (parentVersionError) throw new Error(parentVersionError.message);
-            if (!parentVersion) return NextResponse.json({ error: 'نسخه فعال فرم مادر پیدا نشد.' }, { status: 409 });
-            parentSchema = normalizeSchema(parentVersion.schema);
-          }
-          schema = mergeSchemas(parentSchema, schema);
-        }
-      }
+      const resolved = await resolveCustomForm(supabase, formId, service.id);
+      if (!resolved) return NextResponse.json({ error: 'فرم انتخاب‌شده معتبر نیست.' }, { status: 400 });
+      formId = resolved.formId;
+      formVersionId = resolved.formVersionId;
+      schema = resolved.schema;
+      orderPrice = resolved.price;
+    } else {
+      const resolved = await inferServiceForm(supabase, service as FormRecord & { parent_form_id: string | null });
+      formId = resolved.formId;
+      formVersionId = resolved.formVersionId;
+      schema = resolved.schema;
+      orderPrice = resolved.price;
     }
 
     const validation = validateFormData(schema, body.formData);
