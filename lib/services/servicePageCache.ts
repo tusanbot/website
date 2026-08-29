@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import type { PricingRule } from "@/lib/forms/pricing";
+import type { ServiceSeoContentData } from "./seoContent";
 
 export type ServicePageService = {
   id: string;
@@ -17,6 +18,7 @@ export type ServicePageService = {
   meta_title?: string | null;
   meta_description?: string | null;
   seo_keywords?: string[] | null;
+  seo_content?: ServiceSeoContentData | null;
   created_at?: string | null;
 };
 
@@ -36,7 +38,7 @@ export type ServicePageData = {
   parent: Pick<ServicePageLink, "id" | "title" | "slug" | "icon"> | null;
 };
 
-const SERVICE_SELECT = "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,created_at";
+const SERVICE_SELECT = "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at";
 
 function normalizeSchema(value: any): any[] {
   if (Array.isArray(value)) return value;
@@ -48,9 +50,23 @@ function normalizeRules(value: any): PricingRule[] {
   return Array.isArray(value) ? value : [];
 }
 function normalizeKeywords(value: any): string[] { return Array.isArray(value) ? value.map(String).filter(Boolean) : []; }
+function normalizeSeoContent(value: unknown): ServiceSeoContentData | null {
+  if (!value || typeof value !== "object") return null;
+  const input = value as Record<string, unknown>;
+  const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
+  const list = (v: unknown) => Array.isArray(v) ? v.map(text).filter(Boolean) : [];
+  const faq = Array.isArray(input.faq) ? input.faq.map((item) => {
+    if (!item || typeof item !== "object") return null;
+    const row = item as Record<string, unknown>;
+    const question = text(row.question), answer = text(row.answer);
+    return question && answer ? { question, answer } : null;
+  }).filter(Boolean) as NonNullable<ServiceSeoContentData["faq"]> : [];
+  const result: ServiceSeoContentData = { intro: text(input.intro) || undefined, body: text(input.body) || undefined, steps: list(input.steps), requirements: list(input.requirements), notes: list(input.notes), faq };
+  return result.intro || result.body || result.steps?.length || result.requirements?.length || result.notes?.length || result.faq?.length ? result : null;
+}
 function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 export function normalizeServicePath(value: string) { return decodeURIComponent(value).normalize("NFC").replace(/\u200c/g, "").replace(/\u200d/g, "").trim(); }
-function normalizeService(data: any): ServicePageService { return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules), seo_keywords: normalizeKeywords(data.seo_keywords) }; }
+function normalizeService(data: any): ServicePageService { return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules), seo_keywords: normalizeKeywords(data.seo_keywords), seo_content: normalizeSeoContent(data.seo_content) }; }
 
 async function loadServicePageData(path: string): Promise<ServicePageData> {
   const supabase = createSupabaseServerClient();
@@ -69,7 +85,6 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
     if (match) service = normalizeService(match);
   }
   if (!service) return { service: null, related: [], children: [], parent: null };
-
   const linkSelect = "id,title,slug,icon,description,price";
   const [{ data: related }, { data: children }, { data: parent }] = await Promise.all([
     service.category ? supabase.from("services").select(linkSelect).eq("is_active", true).eq("category", service.category).neq("id", service.id).limit(4) : Promise.resolve({ data: [] }),
