@@ -27,7 +27,7 @@ jobs:
       - name: Run E2E regression suite
         run: npm run test:e2e
         env:
-          PLAYWRIGHT_SERVICE_SLUG: ${ { secrets.PLAYWRIGHT_SERVICE_SLUG } }
+          PLAYWRIGHT_SERVICE_SLUG: ${{ secrets.PLAYWRIGHT_SERVICE_SLUG }}
 
       - name: Upload Playwright report
         if: always()
