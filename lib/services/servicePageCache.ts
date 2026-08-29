@@ -91,7 +91,7 @@ function normalizeService(data: any): ServicePageService {
 async function loadServicePageData(path: string): Promise<ServicePageData> {
   const supabase = createSupabaseServerClient();
   const rawPath = decodeServicePath(path);
-  const requested = normalizeServicePath(path);
+  const requested = normalizeServicePath(rawPath);
   let service: ServicePageService | null = null;
 
   if (isUuid(requested)) {
@@ -103,7 +103,7 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
       .maybeSingle();
     if (!error && data) service = normalizeService(data);
   } else {
-    // First try the stored slug verbatim. This preserves Persian ZWNJ characters.
+    // Prefer the stored slug verbatim so Persian ZWNJ characters remain matchable.
     const { data, error } = await supabase
       .from("services")
       .select(SERVICE_SELECT)
@@ -164,9 +164,10 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
 }
 
 export async function getCachedServicePageData(path: string): Promise<ServicePageData> {
-  const normalized = normalizeServicePath(path);
+  const rawPath = decodeServicePath(path);
+  const normalized = normalizeServicePath(rawPath);
   const cached = unstable_cache(
-    () => loadServicePageData(normalized),
+    () => loadServicePageData(rawPath),
     ["service-page-data", normalized],
     {
       revalidate: 60,
