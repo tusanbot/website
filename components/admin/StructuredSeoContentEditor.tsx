@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ServiceSeoContentData } from "@/lib/services/seoContent";
-import { TusanButton, TusanInput } from "@/components/ui";
+import { TusanButton, TusanCard, TusanInput } from "@/components/ui";
 
 export const emptyServiceSeoContent = (): ServiceSeoContentData => ({ intro: "", body: "", steps: [], requirements: [], notes: [], faq: [] });
 
