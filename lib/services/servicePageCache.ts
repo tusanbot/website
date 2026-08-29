@@ -17,6 +17,7 @@ export type ServicePageService = {
   meta_title?: string | null;
   meta_description?: string | null;
   seo_keywords?: string[] | null;
+  seo_content?: unknown;
   created_at?: string | null;
 };
 
@@ -36,7 +37,7 @@ export type ServicePageData = {
 };
 
 const SERVICE_SELECT =
-  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,created_at";
+  "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at";
 
 function normalizeSchema(value: any): any[] {
   if (Array.isArray(value)) return value;

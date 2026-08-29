@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import ServiceOrderClient from "./ServiceOrderClient";
+import ServiceSeoContent, { getServiceSeoFaqSchema } from "@/components/services/ServiceSeoContent";
 import {
   getCachedServicePageData,
   normalizeServicePath,
@@ -123,11 +124,13 @@ export default async function ServicePage({
     "@type": "BreadcrumbList",
     itemListElement: breadcrumbItems,
   };
+  const faqJsonLd = getServiceSeoFaqSchema(service.seo_content);
 
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
+      {faqJsonLd && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />}
 
       <div dir="rtl" className="max-w-3xl mx-auto px-6 pt-5">
         <nav aria-label="مسیر صفحه" className="text-sm text-[var(--text-muted)]">
@@ -201,6 +204,8 @@ export default async function ServicePage({
           </div>
         </div>
       </section>
+
+      <ServiceSeoContent content={service.seo_content} />
 
       <ServiceOrderClient initialService={service} />
 
