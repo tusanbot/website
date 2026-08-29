@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, SectionHeader, TusanButton } from "@/components/ui";
 
@@ -29,6 +30,9 @@ const icons: Record<string, string> = {
 };
 
 export default function NotificationsPage() {
+  const pathname = usePathname();
+  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+  const orderBasePath = isAdminRoute ? "/admin/orders" : "/orders";
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -82,7 +86,7 @@ export default function NotificationsPage() {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between gap-4 mb-6">
           <SectionHeader title="اعلان‌ها" description="آخرین رویدادها و اطلاع‌رسانی‌های حساب شما" />
-          <Link href="/"><TusanButton variant="outline">بازگشت</TusanButton></Link>
+          <Link href={isAdminRoute ? "/admin" : "/"}><TusanButton variant="outline">بازگشت</TusanButton></Link>
         </div>
         <GlassPanel className="overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
@@ -104,7 +108,7 @@ export default function NotificationsPage() {
                       <div className="mt-2 flex items-center justify-between gap-3">
                         <time className="text-xs text-[var(--text-muted)]">{new Date(item.created_at).toLocaleString("fa-IR")}</time>
                         <div className="flex gap-3">
-                          {item.order_id && <Link href={`/orders/${item.order_id}`} className="text-xs font-bold text-[var(--primary)]">مشاهده سفارش</Link>}
+                          {item.order_id && <Link href={`${orderBasePath}/${item.order_id}`} className="text-xs font-bold text-[var(--primary)]">مشاهده سفارش</Link>}
                           {!item.read_at && <button type="button" onClick={() => markRead(item.id)} className="text-xs font-bold text-[var(--text-muted)]">خوانده شد</button>}
                         </div>
                       </div>
