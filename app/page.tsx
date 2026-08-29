@@ -1,9 +1,9 @@
 import FloatingHeader from "@/components/home/FloatingHeader";
 import HeroSection from "@/components/home/HeroSection";
-import ActiveAnnouncements from "@/components/home/ActiveAnnouncements";
+import HomeAnnouncementsRail from "@/components/home/HomeAnnouncementsRail";
 import PopularServices from "@/components/home/PopularServices";
 import BlogPreview from "@/components/home/BlogPreview";
-import SocialServicesPreview from "@/components/home/SocialServicesPreview";
+import SocialServicesRail from "@/components/home/SocialServicesRail";
 import ToolsPreview from "@/components/home/ToolsPreview";
 import ProcessTimeline from "@/components/home/ProcessTimeline";
 import StatsSection from "@/components/home/StatsSection";
@@ -18,10 +18,10 @@ export default function HomePage() {
   return <main className="home-compact">
     <FloatingHeader />
     <HeroSection />
-    <ActiveAnnouncements />
+    <HomeAnnouncementsRail />
     <PopularServices />
     <BlogPreview />
-    <SocialServicesPreview />
+    <SocialServicesRail />
     <ToolsPreview />
     <ProcessTimeline />
     <StatsSection />
