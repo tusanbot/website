@@ -70,12 +70,12 @@ function isUuid(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function decodeServicePath(value: string) {
+  return decodeURIComponent(value).normalize("NFC").trim();
+}
+
 export function normalizeServicePath(value: string) {
-  return decodeURIComponent(value)
-    .normalize("NFC")
-    .replace(/\u200c/g, "")
-    .replace(/\u200d/g, "")
-    .trim();
+  return decodeServicePath(value).replace(/\u200c/g, "").replace(/\u200d/g, "");
 }
 
 function normalizeService(data: any): ServicePageService {
@@ -90,6 +90,7 @@ function normalizeService(data: any): ServicePageService {
 
 async function loadServicePageData(path: string): Promise<ServicePageData> {
   const supabase = createSupabaseServerClient();
+  const rawPath = decodeServicePath(path);
   const requested = normalizeServicePath(path);
   let service: ServicePageService | null = null;
 
@@ -102,23 +103,24 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
       .maybeSingle();
     if (!error && data) service = normalizeService(data);
   } else {
+    // First try the stored slug verbatim. This preserves Persian ZWNJ characters.
     const { data, error } = await supabase
       .from("services")
       .select(SERVICE_SELECT)
       .eq("is_active", true)
-      .eq("slug", requested)
+      .eq("slug", rawPath)
       .maybeSingle();
     if (!error && data) service = normalizeService(data);
   }
 
-  // Legacy ZWNJ/normalization compatibility without loading the whole table.
+  // Compatibility for URLs/slugs that differ only by ZWNJ/ZWJ normalization.
   if (!service && !isUuid(requested)) {
     const { data: candidates } = await supabase
       .from("services")
       .select(SERVICE_SELECT)
       .eq("is_active", true)
-      .ilike("slug", requested)
-      .limit(5);
+      .ilike("slug", `%${requested}%`)
+      .limit(20);
     const match = (candidates || []).find(
       (item: any) => normalizeServicePath(String(item.slug || "")) === requested,
     );
