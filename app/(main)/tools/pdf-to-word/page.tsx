@@ -9,6 +9,7 @@ type PdfDoc = { numPages: number; getPage: (n: number) => Promise<PdfPage>; clea
 type PdfJs = { GlobalWorkerOptions: { workerSrc: string }; getDocument: (o: { data: ArrayBuffer }) => { promise: Promise<PdfDoc> } };
 type DocxApi = { Document: new (o: any) => any; Packer: { toBlob: (d: any) => Promise<Blob> }; Paragraph: new (o: any) => any; TextRun: new (o: any) => any; Table: new (o: any) => any; TableRow: new (o: any) => any; TableCell: new (o: any) => any; WidthType: { PERCENTAGE: string } };
 type Tess = { createWorker: (langs?: string, oem?: number, options?: any) => Promise<any> };
+type OcrResult = { data?: { text?: string } };
 type Libs = { pdfjsLib?: PdfJs; docx?: DocxApi; Tesseract?: Tess };
 const w = () => window as unknown as Libs;
 const PDFJS_URL = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js";
@@ -52,11 +53,10 @@ export default function PdfToWordPage() {
       for(let n=1;n<=pdf.numPages;n++){
         const page=await pdf.getPage(n); try{
           const content=page.getTextContent?await withTimeout(page.getTextContent(),15000,"خواندن متن PDF بیش از حد طول کشید."):null; const lines=extractLines(content?.items||[]); const direct=lines.map(x=>x.text).filter(Boolean).join("\n").trim();
-          // هر PDF دارای متن واقعی، حتی متن کوتاه، نباید به OCR فرستاده شود. این شرط علت رایج گیرکردن روی ۹۰٪ بود.
           const nativeText=direct.replace(/\s/g,"").length>=5;
           if(nativeText){chunks.push(direct);all.push(lines);setProgress(Math.max(10,Math.round(n/pdf.numPages*90)));continue;}
           if(!worker){setProgress(Math.max(8,Math.round((n-1)/pdf.numPages*70)));await loadScript(TESS_URL,"tusan-tesseract");const t=w().Tesseract;if(!t)throw new Error("موتور OCR بارگذاری نشد."); worker=await withTimeout(t.createWorker("fas+eng",1,{logger:(m:any)=>{if(m.status==="recognizing text"&&typeof m.progress==="number")setProgress(Math.min(90,Math.round(((n-1)+m.progress)/pdf!.numPages*90)));}}),60000,"راه‌اندازی موتور OCR بیش از حد طول کشید.");}
-          const canvas=await render(page); try{const r=await withTimeout(worker.recognize(canvas),120000,"OCR این صفحه بیش از حد طول کشید و متوقف شد.");const o=norm(r?.data?.text||"").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();if(o)chunks.push(o);all.push(o.split(/\n+/).filter(Boolean).map(s=>({text:s,y:0,font:10})));}finally{canvas.width=1;canvas.height=1;canvas.remove();} setProgress(Math.round(n/pdf.numPages*90));
+          const canvas=await render(page); try{const r=await withTimeout(worker.recognize(canvas) as Promise<OcrResult>,120000,"OCR این صفحه بیش از حد طول کشید و متوقف شد.");const o=norm(r.data?.text||"").replace(/[ \t]+\n/g,"\n").replace(/\n{3,}/g,"\n\n").trim();if(o)chunks.push(o);all.push(o.split(/\n+/).filter(Boolean).map(s=>({text:s,y:0,font:10})));}finally{canvas.width=1;canvas.height=1;canvas.remove();} setProgress(Math.round(n/pdf.numPages*90));
         }finally{page.cleanup?.();}
       }
       const result=chunks.map((c,i)=>`صفحه ${i+1}\n${c}`).join("\n\n").trim(); if(!result)throw new Error("هیچ متن قابل استخراجی از PDF پیدا نشد."); setText(result);setLayouts(all);setProgress(100);setStatus("done");
