@@ -1,89 +1,28 @@
 import { unstable_cache } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 import type { PricingRule } from "@/lib/forms/pricing";
-import type { ServiceSeoContentData } from "./seoContent";
+import { normalizeServiceSeoContent, type ServiceSeoContentData } from "./seoContent";
 
 export type ServicePageService = {
-  id: string;
-  title: string;
-  slug: string;
-  category: string | null;
-  description: string | null;
-  price: number;
-  icon: string | null;
-  form_schema: any[];
-  pricing_rules: PricingRule[];
-  is_active: boolean;
-  parent_service_id: string | null;
-  meta_title?: string | null;
-  meta_description?: string | null;
-  seo_keywords?: string[] | null;
-  seo_content?: ServiceSeoContentData | null;
-  created_at?: string | null;
+  id: string; title: string; slug: string; category: string | null; description: string | null; price: number; icon: string | null;
+  form_schema: any[]; pricing_rules: PricingRule[]; is_active: boolean; parent_service_id: string | null;
+  meta_title?: string | null; meta_description?: string | null; seo_keywords?: string[] | null;
+  seo_content?: ServiceSeoContentData | null; created_at?: string | null;
 };
-
-export type ServicePageLink = {
-  id: string;
-  title: string;
-  slug: string;
-  icon: string | null;
-  description?: string | null;
-  price: number;
-};
-
-export type ServicePageData = {
-  service: ServicePageService | null;
-  related: ServicePageLink[];
-  children: ServicePageLink[];
-  parent: Pick<ServicePageLink, "id" | "title" | "slug" | "icon"> | null;
-};
-
+export type ServicePageLink = { id: string; title: string; slug: string; icon: string | null; description?: string | null; price: number };
+export type ServicePageData = { service: ServicePageService | null; related: ServicePageLink[]; children: ServicePageLink[]; parent: Pick<ServicePageLink, "id" | "title" | "slug" | "icon"> | null };
 const SERVICE_SELECT = "id,title,slug,category,description,price,icon,form_schema,pricing_rules,is_active,parent_service_id,meta_title,meta_description,seo_keywords,seo_content,created_at";
-
-function normalizeSchema(value: any): any[] {
-  if (Array.isArray(value)) return value;
-  if (typeof value === "string") { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } }
-  return [];
-}
-function normalizeRules(value: any): PricingRule[] {
-  if (typeof value === "string") { try { value = JSON.parse(value); } catch { value = []; } }
-  return Array.isArray(value) ? value : [];
-}
+function normalizeSchema(value: any): any[] { if (Array.isArray(value)) return value; if (typeof value === "string") { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : []; } catch { return []; } } return []; }
+function normalizeRules(value: any): PricingRule[] { if (typeof value === "string") { try { value = JSON.parse(value); } catch { value = []; } } return Array.isArray(value) ? value : []; }
 function normalizeKeywords(value: any): string[] { return Array.isArray(value) ? value.map(String).filter(Boolean) : []; }
-function normalizeSeoContent(value: unknown): ServiceSeoContentData | null {
-  if (!value || typeof value !== "object") return null;
-  const input = value as Record<string, unknown>;
-  const text = (v: unknown) => typeof v === "string" ? v.trim() : "";
-  const list = (v: unknown) => Array.isArray(v) ? v.map(text).filter(Boolean) : [];
-  const faq = Array.isArray(input.faq) ? input.faq.map((item) => {
-    if (!item || typeof item !== "object") return null;
-    const row = item as Record<string, unknown>;
-    const question = text(row.question), answer = text(row.answer);
-    return question && answer ? { question, answer } : null;
-  }).filter(Boolean) as NonNullable<ServiceSeoContentData["faq"]> : [];
-  const result: ServiceSeoContentData = { intro: text(input.intro) || undefined, body: text(input.body) || undefined, steps: list(input.steps), requirements: list(input.requirements), notes: list(input.notes), faq };
-  return result.intro || result.body || result.steps?.length || result.requirements?.length || result.notes?.length || result.faq?.length ? result : null;
-}
 function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
 export function normalizeServicePath(value: string) { return decodeURIComponent(value).normalize("NFC").replace(/\u200c/g, "").replace(/\u200d/g, "").trim(); }
-function normalizeService(data: any): ServicePageService { return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules), seo_keywords: normalizeKeywords(data.seo_keywords), seo_content: normalizeSeoContent(data.seo_content) }; }
-
+function normalizeService(data: any): ServicePageService { return { ...data, price: Number(data.price || 0), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules), seo_keywords: normalizeKeywords(data.seo_keywords), seo_content: normalizeServiceSeoContent(data.seo_content) }; }
 async function loadServicePageData(path: string): Promise<ServicePageData> {
-  const supabase = createSupabaseServerClient();
-  const requested = normalizeServicePath(path);
-  let service: ServicePageService | null = null;
-  if (isUuid(requested)) {
-    const { data, error } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("id", requested).maybeSingle();
-    if (!error && data) service = normalizeService(data);
-  } else {
-    const { data, error } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("slug", requested).maybeSingle();
-    if (!error && data) service = normalizeService(data);
-  }
-  if (!service && !isUuid(requested)) {
-    const { data: candidates } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).ilike("slug", requested).limit(5);
-    const match = (candidates || []).find((item: any) => normalizeServicePath(String(item.slug || "")) === requested);
-    if (match) service = normalizeService(match);
-  }
+  const supabase = createSupabaseServerClient(); const requested = normalizeServicePath(path); let service: ServicePageService | null = null;
+  if (isUuid(requested)) { const { data, error } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("id", requested).maybeSingle(); if (!error && data) service = normalizeService(data); }
+  else { const { data, error } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("slug", requested).maybeSingle(); if (!error && data) service = normalizeService(data); }
+  if (!service && !isUuid(requested)) { const { data: candidates } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).ilike("slug", requested).limit(5); const match = (candidates || []).find((item: any) => normalizeServicePath(String(item.slug || "")) === requested); if (match) service = normalizeService(match); }
   if (!service) return { service: null, related: [], children: [], parent: null };
   const linkSelect = "id,title,slug,icon,description,price";
   const [{ data: related }, { data: children }, { data: parent }] = await Promise.all([
@@ -93,9 +32,4 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
   ]);
   return { service, related: (related || []) as ServicePageLink[], children: (children || []) as ServicePageLink[], parent: (parent || null) as ServicePageData["parent"] };
 }
-
-export async function getCachedServicePageData(path: string): Promise<ServicePageData> {
-  const normalized = normalizeServicePath(path);
-  const cached = unstable_cache(() => loadServicePageData(normalized), ["service-page-data", normalized], { revalidate: 60, tags: ["services", `service:${normalized}`] });
-  return cached();
-}
+export async function getCachedServicePageData(path: string): Promise<ServicePageData> { const normalized = normalizeServicePath(path); const cached = unstable_cache(() => loadServicePageData(normalized), ["service-page-data", normalized], { revalidate: 60, tags: ["services", `service:${normalized}`] }); return cached(); }
