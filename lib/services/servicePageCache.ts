@@ -181,7 +181,7 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
 export async function getCachedServicePageData(path: string): Promise<ServicePageData> {
   const normalized = normalizeServicePath(path);
   const cached = unstable_cache(
-    () => loadServicePageData(normalized),
+    () => loadServicePageData(path),
     ["service-page-data", normalized],
     {
       revalidate: 60,
