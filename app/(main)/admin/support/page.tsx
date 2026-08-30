@@ -12,6 +12,7 @@ const PAGE_SIZE = 50;
 
 export default function AdminSupportPage() {
     const [conversations, setConversations] = useState<Conversation[]>([]);
+    const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
     const [selected, setSelected] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [draft, setDraft] = useState("");
@@ -38,6 +39,10 @@ export default function AdminSupportPage() {
         const channel = supabase
             .channel("support-admin-list")
             .on("postgres_changes", { event: "*", schema: "public", table: "support_conversations" }, () => void loadConversations())
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "support_messages" }, (payload) => {
+                const next = payload.new as Message;
+                void refreshUnreadCount(next.conversation_id);
+            })
             .subscribe();
         return () => { mounted = false; void supabase.removeChannel(channel); };
     }, []);
@@ -51,11 +56,27 @@ export default function AdminSupportPage() {
                 if (!mounted) return;
                 const next = payload.new as Message;
                 setMessages((current) => current.some((item) => item.id === next.id) ? current : [...current, next]);
+                if (next.sender_role === "user") void markConversationRead(selected);
             })
             .subscribe();
         void loadMessages(selected);
         return () => { mounted = false; void supabase.removeChannel(channel); };
     }, [selected]);
+
+    async function refreshUnreadCount(conversationId: string) {
+        const { data, error: queryError } = await supabase.rpc("get_support_unread_count", { p_conversation_id: conversationId });
+        if (!queryError && typeof data === "number") setUnreadCounts((current) => ({ ...current, [conversationId]: data }));
+    }
+
+    async function markConversationRead(conversationId: string) {
+        const { data, error: rpcError } = await supabase.rpc("mark_support_messages_read", { p_conversation_id: conversationId });
+        if (rpcError) {
+            setError("پیام‌ها نمایش داده شدند، اما وضعیت خوانده‌شدن به‌روزرسانی نشد.");
+            return;
+        }
+        setUnreadCounts((current) => ({ ...current, [conversationId]: 0 }));
+        if (typeof data === "number") return;
+    }
 
     async function loadConversations() {
         const { data, error: queryError } = await supabase
@@ -72,6 +93,7 @@ export default function AdminSupportPage() {
         setConversations(next);
         setSelected((current) => current && next.some((item) => item.id === current) ? current : next[0]?.id ?? null);
         setLoading(false);
+        await Promise.all(next.map((item) => refreshUnreadCount(item.id)));
     }
 
     async function loadMessages(conversationId: string) {
@@ -94,14 +116,7 @@ export default function AdminSupportPage() {
         setHasMore(rows.length > PAGE_SIZE);
         setOldestAt(page[0]?.created_at ?? null);
         setMessagesLoading(false);
-
-        const { error: readError } = await supabase
-            .from("support_messages")
-            .update({ is_read: true })
-            .eq("conversation_id", conversationId)
-            .eq("sender_role", "user")
-            .eq("is_read", false);
-        if (readError) setError("پیام‌ها نمایش داده شدند، اما وضعیت خوانده‌شدن به‌روزرسانی نشد.");
+        await markConversationRead(conversationId);
     }
 
     async function loadOlderMessages() {
@@ -176,7 +191,7 @@ export default function AdminSupportPage() {
                         <div className="max-h-[680px] overflow-y-auto">
                             {loading ? <div className="p-6 text-center text-sm text-[var(--text-muted)]">در حال بارگذاری...</div> : conversations.length === 0 ? <div className="p-8 text-center text-sm leading-7 text-[var(--text-muted)]">گفتگوی بازی وجود ندارد.</div> : conversations.map((item) => (
                                 <button key={item.id} type="button" onClick={() => setSelected(item.id)} className={`w-full border-b border-[var(--border)] p-4 text-right transition ${selected === item.id ? "bg-[var(--primary)]/8" : "hover:bg-[var(--surface-muted)]"}`}>
-                                    <div className="font-black">{item.profiles?.full_name || "کاربر"}</div>
+                                    <div className="flex items-center justify-between gap-2"><div className="font-black">{item.profiles?.full_name || "کاربر"}</div>{(unreadCounts[item.id] || 0) > 0 && <span className="min-w-6 rounded-full bg-red-500 px-2 py-0.5 text-center text-[10px] font-black text-white">{unreadCounts[item.id] > 99 ? "99+" : unreadCounts[item.id]}</span>}</div>
                                     <div className="mt-1 text-xs text-[var(--text-muted)]">{item.profiles?.phone || "بدون شماره"}</div>
                                     <div className="mt-2 text-xs text-[var(--text-muted)]">{new Date(item.updated_at).toLocaleString("fa-IR")}</div>
                                 </button>
