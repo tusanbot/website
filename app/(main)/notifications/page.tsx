@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, SectionHeader, TusanButton } from "@/components/ui";
 
@@ -25,14 +25,17 @@ const icons: Record<string, string> = {
   payment_success: "💳",
   new_message: "💬",
   receipt_uploaded: "🧾",
+  payment_receipt: "🧾",
   document_requested: "📎",
   order_completed: "✅",
 };
 
 export default function NotificationsPage() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
-  const orderBasePath = isAdminRoute ? "/admin/orders" : "/orders";
+  const isAdminScope = isAdminRoute || searchParams.get("scope") === "admin";
+  const orderBasePath = isAdminScope ? "/admin/orders" : "/orders";
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
@@ -86,7 +89,7 @@ export default function NotificationsPage() {
       <div className="max-w-3xl mx-auto">
         <div className="flex items-center justify-between gap-4 mb-6">
           <SectionHeader title="اعلان‌ها" description="آخرین رویدادها و اطلاع‌رسانی‌های حساب شما" />
-          <Link href={isAdminRoute ? "/admin" : "/"}><TusanButton variant="outline">بازگشت</TusanButton></Link>
+          <Link href={isAdminScope ? "/admin" : "/"}><TusanButton variant="outline">بازگشت</TusanButton></Link>
         </div>
         <GlassPanel className="overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--border)]">
