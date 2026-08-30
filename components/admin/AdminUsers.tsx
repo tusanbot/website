@@ -11,6 +11,7 @@ import {
     TusanBadge,
     TusanStatCard,
 } from "@/components/ui";
+import StaffRoleManagement from "@/components/admin/StaffRoleManagement";
 
 type UserProfile = {
     id: string;
@@ -29,6 +30,7 @@ export default function AdminUsers() {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState<"all" | "user" | "admin">("all");
+    const [selectedStaffUser, setSelectedStaffUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -115,6 +117,19 @@ export default function AdminUsers() {
                 </div>
             </GlassPanel>
 
+            {selectedStaffUser && (
+                <GlassPanel className="p-5">
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                        <div>
+                            <h2 className="font-bold text-lg">مدیریت مقام و دسترسی</h2>
+                            <p className="text-sm text-[var(--text-muted)]">{selectedStaffUser.full_name || selectedStaffUser.email || selectedStaffUser.id}</p>
+                        </div>
+                        <TusanButton variant="secondary" onClick={() => setSelectedStaffUser(null)}>بستن</TusanButton>
+                    </div>
+                    <StaffRoleManagement userId={selectedStaffUser.id} />
+                </GlassPanel>
+            )}
+
             {loading ? (
                 <GlassPanel className="p-10 text-center text-gray-500">در حال دریافت کاربران...</GlassPanel>
             ) : error ? (
@@ -151,7 +166,12 @@ export default function AdminUsers() {
                         profile: user.profile_completed ? <TusanBadge variant="success">تکمیل‌شده</TusanBadge> : <TusanBadge variant="warning">تکمیل نشده</TusanBadge>,
                         orders: <span className="font-bold text-[var(--text)]">{user.order_count.toLocaleString("fa-IR")}</span>,
                         created: formatDate(user.created_at),
-                        actions: <Link href={`/admin/orders?user=${user.id}`}><TusanButton size="sm" variant="outline">سفارش‌ها</TusanButton></Link>,
+                        actions: (
+                            <div className="flex flex-wrap gap-2 justify-end">
+                                <Link href={`/admin/orders?user=${user.id}`}><TusanButton size="sm" variant="outline">سفارش‌ها</TusanButton></Link>
+                                <TusanButton size="sm" variant="secondary" onClick={() => setSelectedStaffUser(user)}>مقام و دسترسی</TusanButton>
+                            </div>
+                        ),
                     }))}
                     emptyTitle="کاربری با این مشخصات پیدا نشد"
                     emptyDescription="عبارت جستجو یا فیلتر نقش را تغییر دهید."
