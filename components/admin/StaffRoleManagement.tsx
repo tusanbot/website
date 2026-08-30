@@ -5,15 +5,7 @@ import { supabase } from '@/lib/supabase'
 
 type StaffRole = 'order_manager' | 'support_operator'
 
-type Assignment = {
-  id: string
-  user_id: string
-  role_id: string
-  status: string
-  commission_percent: number | null
-  staff_roles?: { code: StaffRole; name: string } | null
-}
-
+type Assignment = { id: string; user_id: string; role_id: string; staff_code: StaffRole | null; status: string; commission_percent: number | null }
 type Service = { id: string; title: string; category: string; is_active: boolean }
 type ServiceAccess = { service_id: string; status: string; commission_percent: number | null }
 
@@ -31,18 +23,14 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
 
   const load = async () => {
     const [{ data: roleData, error: roleError }, { data: serviceData, error: serviceError }] = await Promise.all([
-      supabase.from('staff_role_assignments').select('id,user_id,role_id,status,commission_percent,staff_roles(code,name)').eq('user_id', userId),
+      supabase.from('staff_role_assignments').select('id,user_id,role_id,staff_code,status,commission_percent').eq('user_id', userId),
       supabase.from('services').select('id,title,category,is_active').eq('is_active', true).order('title'),
     ])
     if (roleError) setMessage(`خطا در دریافت مقام‌ها: ${roleError.message}`)
     if (serviceError) setMessage(`خطا در دریافت خدمات: ${serviceError.message}`)
-    setRoles((roleData ?? []) as unknown as Assignment[])
+    setRoles((roleData ?? []) as Assignment[])
     setServices((serviceData ?? []) as Service[])
-
-    const { data: accessData, error: accessError } = await supabase
-      .from('staff_service_access')
-      .select('service_id,status,commission_percent')
-      .eq('user_id', userId)
+    const { data: accessData, error: accessError } = await supabase.from('staff_service_access').select('service_id,status,commission_percent').eq('user_id', userId)
     if (accessError) setMessage(`خطا در دریافت دسترسی خدمات: ${accessError.message}`)
     setAccess((accessData ?? []) as ServiceAccess[])
   }
@@ -51,10 +39,7 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
 
   const grant = async () => {
     const value = Number(commission)
-    if (!Number.isFinite(value) || value < 0 || value > 100) {
-      setMessage('درصد کارمزد باید بین ۰ تا ۱۰۰ باشد.')
-      return
-    }
+    if (!Number.isFinite(value) || value < 0 || value > 100) { setMessage('درصد کارمزد باید بین ۰ تا ۱۰۰ باشد.'); return }
     setBusy(true); setMessage('')
     try {
       const { error } = await supabase.rpc('approve_staff_role', { p_user_id: userId, p_role_code: selected, p_approve: true, p_commission: value })
@@ -74,16 +59,13 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
     finally { setBusy(false) }
   }
 
-  const activeAssignment = roles.find(r => r.status === 'approved' && r.staff_roles?.code === 'order_manager')
+  const activeAssignment = roles.find(r => r.status === 'approved' && r.staff_code === 'order_manager')
   const categories = useMemo(() => ['all', ...Array.from(new Set(services.map(s => s.category).filter(Boolean)))], [services])
   const filteredServices = useMemo(() => {
     const q = serviceSearch.trim().toLowerCase()
     return services.filter(s => (categoryFilter === 'all' || s.category === categoryFilter) && (!q || `${s.title} ${s.category}`.toLowerCase().includes(q)))
   }, [services, serviceSearch, categoryFilter])
-  const isEnabled = (serviceId: string) => {
-    const row = access.find(a => a.service_id === serviceId)
-    return !row || row.status === 'approved'
-  }
+  const isEnabled = (serviceId: string) => { const row = access.find(a => a.service_id === serviceId); return !row || row.status === 'approved' }
   const setService = async (serviceId: string, enabled: boolean) => {
     setServiceBusy(serviceId); setMessage('')
     try {
@@ -113,7 +95,7 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
         <input value={commission} onChange={e => setCommission(e.target.value)} inputMode="decimal" min="0" max="100" type="number" className="w-24 rounded-lg border px-3 py-2" placeholder="کارمزد %" aria-label="درصد کارمزد" />
         <button type="button" onClick={grant} disabled={busy} className="rounded-lg border px-4 py-2 disabled:opacity-50">{busy ? 'در حال ثبت…' : 'اعطای مقام'}</button>
       </div>
-      {roles.length > 0 && <div className="space-y-2">{roles.map(role => { const code = role.staff_roles?.code; const title = role.staff_roles?.name ?? (code === 'order_manager' ? 'مدیر سفارشات' : 'اپراتور پشتیبانی'); return <div key={role.id} className="flex flex-wrap gap-3 items-center justify-between rounded-lg border px-3 py-2 text-sm"><span>{title}</span><span>{role.status === 'approved' ? 'تأیید شده' : role.status}</span><span>{role.commission_percent ?? 0}%</span>{code && <button type="button" onClick={() => revoke(code)} disabled={busy} className="rounded-lg border px-3 py-1.5 disabled:opacity-50">لغو مقام</button>}</div> })}</div>}
+      {roles.length > 0 && <div className="space-y-2">{roles.map(role => { const code = role.staff_code; const title = code === 'order_manager' ? 'مدیر سفارشات' : 'اپراتور پشتیبانی'; return <div key={role.id} className="flex flex-wrap gap-3 items-center justify-between rounded-lg border px-3 py-2 text-sm"><span>{title}</span><span>{role.status === 'approved' ? 'تأیید شده' : role.status}</span><span>{role.commission_percent ?? 0}%</span>{code && <button type="button" onClick={() => revoke(code)} disabled={busy} className="rounded-lg border px-3 py-1.5 disabled:opacity-50">لغو مقام</button>}</div> })}</div>}
       {activeAssignment && <div className="border-t pt-4 space-y-3">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2"><div><h4 className="font-semibold">دسترسی به خدمات</h4><p className="text-xs opacity-70 mt-1">به‌صورت پیش‌فرض همه خدمات فعال هستند و می‌توانید هرکدام را جداگانه تغییر دهید.</p></div><div className="flex gap-2"><button type="button" onClick={() => void setAllServices(true)} disabled={busy} className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50">فعال کردن همه</button><button type="button" onClick={() => void setAllServices(false)} disabled={busy} className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50">غیرفعال کردن همه</button></div></div>
         <div className="grid md:grid-cols-[1fr_220px] gap-2"><input value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} placeholder="جستجوی خدمت..." className="rounded-lg border px-3 py-2" /><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="rounded-lg border px-3 py-2">{categories.map(category => <option key={category} value={category}>{category === 'all' ? 'همه دسته‌بندی‌ها' : category}</option>)}</select></div>
