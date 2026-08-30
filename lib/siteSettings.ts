@@ -14,6 +14,12 @@ export type SiteSettings = {
       iconUrl?: string;
       faviconUrl?: string;
     };
+    maintenance?: {
+      enabled?: boolean;
+      title?: string;
+      message?: string;
+      eta?: string;
+    };
   };
 };
 
@@ -25,7 +31,7 @@ const defaultSettings: SiteSettings = {
   primary_dark: "#087d69",
   radius: "28px",
   font_family: "Vazirmatn",
-  config: { assets: {} },
+  config: { assets: {}, maintenance: { enabled: false } },
 };
 
 export async function getSiteSettings(): Promise<SiteSettings> {
@@ -42,13 +48,27 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     return defaultSettings;
   }
 
+  const dataConfig = data.config && typeof data.config === "object" && !Array.isArray(data.config)
+    ? data.config as Record<string, unknown>
+    : {};
+  const dataAssets = dataConfig.assets && typeof dataConfig.assets === "object" && !Array.isArray(dataConfig.assets)
+    ? dataConfig.assets as Record<string, unknown>
+    : {};
+  const dataMaintenance = dataConfig.maintenance && typeof dataConfig.maintenance === "object" && !Array.isArray(dataConfig.maintenance)
+    ? dataConfig.maintenance as Record<string, unknown>
+    : {};
+
   return {
     ...defaultSettings,
     ...data,
     config: {
       assets: {
         ...(defaultSettings.config?.assets || {}),
-        ...(data.config?.assets || {}),
+        ...dataAssets,
+      },
+      maintenance: {
+        ...(defaultSettings.config?.maintenance || {}),
+        ...dataMaintenance,
       },
     },
   } as SiteSettings;
