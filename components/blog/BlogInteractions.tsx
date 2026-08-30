@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Copy, MessageCircle, Send, Star, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Copy, Eye, MessageCircle, Send, Star, ThumbsDown, ThumbsUp } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 type Comment = { id: string; content: string; author_name: string | null; created_at: string };
 type Props = { postId: string; postTitle: string; postUrl: string };
 
 export default function BlogInteractions({ postId, postTitle, postUrl }: Props) {
-  const [engagement, setEngagement] = useState({ likes: 0, dislikes: 0, rating_count: 0, rating_average: 0, comment_count: 0 });
+  const [engagement, setEngagement] = useState({ likes: 0, dislikes: 0, rating_count: 0, rating_average: 0, comment_count: 0, view_count: 0 });
   const [myReaction, setMyReaction] = useState<string | null>(null);
   const [myRating, setMyRating] = useState<number | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -84,7 +84,7 @@ export default function BlogInteractions({ postId, postTitle, postUrl }: Props) 
   return <section className="mt-14 space-y-6" aria-label="تعامل با مقاله">
     <div className="rounded-3xl border border-[color-mix(in_srgb,var(--primary)_14%,transparent)] bg-gradient-to-br from-[var(--surface-strong)] to-[var(--primary-light)]/70 p-6 shadow-[var(--shadow-md)] md:p-8">
       <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between"><div><span className="inline-flex rounded-full bg-[var(--primary-light)] px-3 py-1 text-xs font-extrabold text-[var(--primary-dark)]">نظر شما مهم است</span><h2 className="mt-3 text-2xl font-black text-[var(--text)]">این مقاله چقدر برای شما مفید بود؟</h2><p className="mt-2 text-sm text-[var(--text-secondary)]">{ratingText}</p></div><div className="flex items-center gap-1 rounded-2xl bg-white/85 p-3 shadow-sm"><span className="ml-2 text-xl font-black text-[var(--primary-dark)]">{engagement.rating_average ? Number(engagement.rating_average).toFixed(1) : "—"}</span>{[1,2,3,4,5].map(v => <button key={v} type="button" disabled={loading} onClick={() => rate(v)} aria-label={`امتیاز ${v} از ۵`} className={`rounded-lg p-1 transition hover:scale-110 ${v <= (myRating ?? Math.round(Number(engagement.rating_average))) ? "text-amber-400" : "text-slate-300"}`}><Star size={22} fill="currentColor" /></button>)}</div></div>
-      <div className="mt-6 flex flex-wrap gap-3"><button type="button" disabled={loading} onClick={() => react("like")} className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-bold transition hover:-translate-y-0.5 ${myReaction === "like" ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary-dark)]" : "border-[var(--border)] bg-white text-[var(--text-secondary)]"}`}><ThumbsUp size={19} /> مفید بود <strong>{engagement.likes}</strong></button><button type="button" disabled={loading} onClick={() => react("dislike")} className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-bold transition hover:-translate-y-0.5 ${myReaction === "dislike" ? "border-red-200 bg-red-50 text-red-600" : "border-[var(--border)] bg-white text-[var(--text-secondary)]"}`}><ThumbsDown size={19} /> مفید نبود <strong>{engagement.dislikes}</strong></button></div>
+      <div className="mt-6 flex flex-wrap items-center gap-3"><button type="button" disabled={loading} onClick={() => react("like")} className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-bold transition hover:-translate-y-0.5 ${myReaction === "like" ? "border-[var(--primary)] bg-[var(--primary-light)] text-[var(--primary-dark)]" : "border-[var(--border)] bg-white text-[var(--text-secondary)]"}`}><ThumbsUp size={19} /> مفید بود <strong>{engagement.likes}</strong></button><button type="button" disabled={loading} onClick={() => react("dislike")} className={`inline-flex items-center gap-2 rounded-2xl border px-5 py-3 text-sm font-bold transition hover:-translate-y-0.5 ${myReaction === "dislike" ? "border-red-200 bg-red-50 text-red-600" : "border-[var(--border)] bg-white text-[var(--text-secondary)]"}`}><ThumbsDown size={19} /> مفید نبود <strong>{engagement.dislikes}</strong></button><span className="inline-flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-white px-5 py-3 text-sm font-bold text-[var(--text-secondary)]"><Eye size={18} /> {engagement.view_count.toLocaleString("fa-IR")} بازدید</span></div>
       {message && <p className="mt-4 rounded-xl bg-white/75 px-4 py-3 text-sm font-medium text-[var(--text-secondary)]" role="status">{message}</p>}
     </div>
 
