@@ -1,0 +1,17 @@
+.status-brand-mark {
+  background-image: url('/api/site-settings/logo') !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: contain !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.status-brand-mark svg {
+  display: none !important;
+}
+
+.status-brand-mark:has(img) {
+  background-image: none !important;
+}
