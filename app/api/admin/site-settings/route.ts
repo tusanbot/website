@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const ALLOWED_KEYS = new Set(["business", "assets", "social", "display", "orders", "announcements", "pricing"]);
+const ALLOWED_KEYS = new Set(["business", "assets", "social", "display", "orders", "announcements", "pricing", "maintenance"]);
 
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin(request);
