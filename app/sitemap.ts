@@ -4,12 +4,10 @@ import { createSupabaseServerClient } from "@/lib/supabaseServer";
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Keep only routes that actually exist in the public application.
-  // /about and /contact were previously advertised here but currently return 404.
+  // Keep only routes that resolve to a unique, canonical public page.
   const staticPages: MetadataRoute.Sitemap = [
     { url: siteUrl, changeFrequency: "weekly", priority: 1 },
     { url: `${siteUrl}/services`, changeFrequency: "daily", priority: 0.9 },
-    { url: `${siteUrl}/services/categories`, changeFrequency: "weekly", priority: 0.85 },
     { url: `${siteUrl}/blog`, changeFrequency: "daily", priority: 0.8 },
   ];
 
@@ -17,7 +15,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [{ data: services }, { data: posts }] = await Promise.all([
     supabase
       .from("services")
-      .select("id,slug,created_at")
+      .select("id,slug,created_at,updated_at")
       .eq("is_active", true)
       .not("slug", "is", null),
     supabase
@@ -28,7 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const servicePages = (services || []).map((service: any) => ({
     url: `${siteUrl}/services/${encodeURIComponent(service.slug)}`,
-    lastModified: service.created_at || undefined,
+    lastModified: service.updated_at || service.created_at || undefined,
     changeFrequency: "weekly" as const,
     priority: 0.8,
   }));
