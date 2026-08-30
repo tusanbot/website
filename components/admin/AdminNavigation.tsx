@@ -6,7 +6,6 @@ import NotificationBell from "@/components/notifications/NotificationBell";
 export type AdminTab = "dashboard" | "orders" | "services" | "social" | "users" | "messages" | "reports" | "settings";
 
 type Props = { activeTab: AdminTab; unreadMessages: number; onTabChange: (tab: AdminTab) => void };
-
 type MenuItem = { id: AdminTab; label: string; icon: string; href?: string };
 
 const menuItems: MenuItem[] = [
@@ -14,7 +13,7 @@ const menuItems: MenuItem[] = [
     { id: "orders", label: "سفارش‌ها", icon: "📋", href: "/admin/orders" },
     { id: "services", label: "خدمات", icon: "⚙️" },
     { id: "social", label: "شبکه‌های اجتماعی", icon: "📱" },
-    { id: "users", label: "کاربران", icon: "👥" },
+    { id: "users", label: "کاربران", icon: "👥", href: "/admin/users" },
     { id: "messages", label: "پیام‌ها", icon: "💬" },
     { id: "reports", label: "گزارش‌ها", icon: "📈" },
     { id: "settings", label: "تنظیمات", icon: "🔧" },
