@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { supabase } from '@/lib/supabase'
 
 type StaffRole = 'order_manager' | 'support_operator'
 
@@ -18,7 +18,6 @@ type Service = { id: string; title: string; category: string; is_active: boolean
 type ServiceAccess = { service_id: string; status: string; commission_percent: number | null }
 
 export default function StaffRoleManagement({ userId }: { userId: string }) {
-  const supabase = createClient()
   const [roles, setRoles] = useState<Assignment[]>([])
   const [services, setServices] = useState<Service[]>([])
   const [access, setAccess] = useState<ServiceAccess[]>([])
@@ -131,7 +130,6 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
         <h3 className="font-semibold">مقام و دسترسی کارکنان</h3>
         <p className="text-sm opacity-70 mt-1">اعطا و لغو مقام فقط از مسیر RPC امن انجام می‌شود.</p>
       </div>
-
       <div className="flex flex-wrap gap-2 items-center">
         <select value={selected} onChange={e => setSelected(e.target.value as StaffRole)} className="rounded-lg border px-3 py-2">
           <option value="order_manager">مدیر سفارشات</option>
@@ -140,7 +138,6 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
         <input value={commission} onChange={e => setCommission(e.target.value)} inputMode="decimal" min="0" max="100" type="number" className="w-24 rounded-lg border px-3 py-2" placeholder="کارمزد %" aria-label="درصد کارمزد" />
         <button type="button" onClick={grant} disabled={busy} className="rounded-lg border px-4 py-2 disabled:opacity-50">{busy ? 'در حال ثبت…' : 'اعطای مقام'}</button>
       </div>
-
       {roles.length > 0 && <div className="space-y-2">
         {roles.map(role => {
           const code = role.staff_roles?.code
@@ -151,34 +148,15 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
           </div>
         })}
       </div>}
-
       {activeAssignment && <div className="border-t pt-4 space-y-3">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-          <div><h4 className="font-semibold">دسترسی به خدمات</h4><p className="text-xs opacity-70">به‌صورت پیش‌فرض همه خدمات فعال هستند و می‌توانید هرکدام را جداگانه تغییر دهید.</p></div>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setAllServices(true)} disabled={busy} className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50">فعال کردن همه</button>
-            <button type="button" onClick={() => setAllServices(false)} disabled={busy} className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50">غیرفعال کردن همه</button>
-          </div>
+          <div><h4 className="font-semibold">دسترسی به خدمات</h4><p className="text-xs opacity-70 mt-1">به‌صورت پیش‌فرض همه خدمات فعال هستند و می‌توانید هرکدام را جداگانه تغییر دهید.</p></div>
+          <div className="flex gap-2"><button type="button" onClick={() => void setAllServices(true)} disabled={busy} className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50">فعال کردن همه</button><button type="button" onClick={() => void setAllServices(false)} disabled={busy} className="rounded-lg border px-3 py-1.5 text-sm disabled:opacity-50">غیرفعال کردن همه</button></div>
         </div>
-        <div className="grid md:grid-cols-[1fr_220px] gap-2">
-          <input value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} placeholder="جستجوی خدمت..." className="rounded-lg border px-3 py-2" />
-          <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="rounded-lg border px-3 py-2">
-            {categories.map(category => <option key={category} value={category}>{category === 'all' ? 'همه دسته‌بندی‌ها' : category}</option>)}
-          </select>
-        </div>
-        <div className="max-h-80 overflow-auto space-y-1 rounded-lg border p-2">
-          {filteredServices.map(service => {
-            const enabled = isEnabled(service.id)
-            return <label key={service.id} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 hover:bg-black/5 cursor-pointer">
-              <span className="min-w-0"><span className="block truncate font-medium">{service.title}</span><span className="block text-xs opacity-60">{service.category}</span></span>
-              <input type="checkbox" checked={enabled} disabled={busy || serviceBusy === service.id} onChange={e => void setService(service.id, e.target.checked)} className="h-5 w-5" />
-            </label>
-          })}
-          {filteredServices.length === 0 && <p className="p-5 text-center text-sm opacity-60">خدمتی پیدا نشد.</p>}
-        </div>
+        <div className="grid md:grid-cols-[1fr_220px] gap-2"><input value={serviceSearch} onChange={e => setServiceSearch(e.target.value)} placeholder="جستجوی خدمت..." className="rounded-lg border px-3 py-2" /><select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="rounded-lg border px-3 py-2">{categories.map(category => <option key={category} value={category}>{category === 'all' ? 'همه دسته‌بندی‌ها' : category}</option>)}</select></div>
+        <div className="max-h-80 overflow-auto space-y-1 rounded-lg border p-2">{filteredServices.map(service => { const enabled = isEnabled(service.id); return <label key={service.id} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 hover:bg-black/5 cursor-pointer"><span className="min-w-0"><span className="block truncate font-medium">{service.title}</span><span className="block text-xs opacity-60">{service.category}</span></span><input type="checkbox" checked={enabled} disabled={busy || serviceBusy === service.id} onChange={e => void setService(service.id, e.target.checked)} className="h-5 w-5" /></label> })}{filteredServices.length === 0 && <p className="p-5 text-center text-sm opacity-60">خدمتی پیدا نشد.</p>}</div>
         <div className="text-xs opacity-70">{services.filter(s => isEnabled(s.id)).length.toLocaleString('fa-IR')} از {services.length.toLocaleString('fa-IR')} خدمت فعال است.</div>
       </div>}
-
       {message && <p className="text-sm">{message}</p>}
     </section>
   )
