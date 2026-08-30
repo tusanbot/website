@@ -24,6 +24,7 @@ export default function NotificationBell() {
 
   const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
   const orderBasePath = isAdminRoute ? "/admin/orders" : "/orders";
+  const notificationsPath = isAdminRoute ? "/notifications?scope=admin" : "/notifications";
 
   async function load(id: string) {
     const [{ data }, { count }] = await Promise.all([
@@ -89,7 +90,7 @@ export default function NotificationBell() {
               <span className="font-black">اعلان‌ها</span>
               <div className="flex items-center gap-3">
                 {unread > 0 && <button type="button" onClick={markAllRead} className="text-xs font-bold text-[var(--text-muted)]">خواندن همه</button>}
-                <Link href="/notifications" onClick={() => setOpen(false)} className="text-xs font-bold text-[var(--primary)]">مشاهده همه</Link>
+                <Link href={notificationsPath} onClick={() => setOpen(false)} className="text-xs font-bold text-[var(--primary)]">مشاهده همه</Link>
               </div>
             </div>
             {items.length === 0 ? <div className="p-6 text-center text-sm text-[var(--text-muted)]">اعلان جدیدی ندارید.</div> : (
