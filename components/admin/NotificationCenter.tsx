@@ -14,16 +14,9 @@ type NotificationItem = {
 };
 
 const icons: Record<string, string> = {
-  new_order: '📋',
-  order_created: '📋',
-  order_status_changed: '🔄',
-  payment_status: '💳',
-  payment_success: '💳',
-  receipt_uploaded: '🧾',
-  new_message: '💬',
-  document_requested: '📎',
-  documents_requested: '📎',
-  order_completed: '✅',
+  new_order: '📋', order_created: '📋', order_status_changed: '🔄', order_status: '🔄',
+  payment_status: '💳', payment_success: '💳', receipt_uploaded: '🧾', payment_receipt: '🧾',
+  new_message: '💬', document_requested: '📎', documents_requested: '📎', order_completed: '✅',
 };
 
 export default function NotificationCenter() {
@@ -38,7 +31,7 @@ export default function NotificationCenter() {
       const data = await response.json();
       const next = Array.isArray(data.notifications) ? data.notifications : [];
       setItems(next);
-      setUnread(next.filter((item: NotificationItem) => !item.read_at).length);
+      setUnread(Number.isFinite(data.unreadCount) ? Math.max(0, Number(data.unreadCount)) : next.filter((item: NotificationItem) => !item.read_at).length);
     } catch {
       setItems([]);
       setUnread(0);
