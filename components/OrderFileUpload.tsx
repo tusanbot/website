@@ -11,7 +11,6 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
     "application/pdf",
     "application/json",
-    "application/octet-stream",
     "image/jpeg",
     "image/png",
     "image/webp",
@@ -141,7 +140,7 @@ export default function OrderFileUpload({ orderId }: Props) {
                 <input
                     ref={fileInputRef}
                     type="file"
-                    accept="application/pdf,application/json,application/octet-stream,image/jpeg,image/png,image/webp"
+                    accept="application/pdf,application/json,image/jpeg,image/png,image/webp"
                     onChange={(e) => {
                         const selectedFile = e.target.files?.[0] || null;
                         setFile(selectedFile);
