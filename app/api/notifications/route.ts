@@ -23,9 +23,13 @@ export async function GET(request: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const requestedLimit = Number(request.nextUrl.searchParams.get("limit") || 50);
   const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 100) : 50;
-  const { data, error } = await supabase.from("notifications").select("id,type,title,message,order_id,metadata,created_at,read_at").eq("recipient_id", user.id).order("created_at", { ascending: false }).limit(limit);
+  const [{ data, error }, { count: unreadCount, error: unreadError }] = await Promise.all([
+    supabase.from("notifications").select("id,type,title,message,order_id,metadata,created_at,read_at").eq("recipient_id", user.id).order("created_at", { ascending: false }).limit(limit),
+    supabase.from("notifications").select("id", { count: "exact", head: true }).eq("recipient_id", user.id).is("read_at", null),
+  ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ notifications: data ?? [] });
+  if (unreadError) return NextResponse.json({ error: unreadError.message }, { status: 500 });
+  return NextResponse.json({ notifications: data ?? [], unreadCount: unreadCount ?? 0 });
 }
 
 export async function PATCH(request: NextRequest) {
