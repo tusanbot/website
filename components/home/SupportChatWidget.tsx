@@ -76,6 +76,11 @@ export default function SupportChatWidget() {
                 currentId = retry.data.id;
             }
         }
+        if (!currentId) {
+            setError("شناسه گفتگوی پشتیبانی دریافت نشد. لطفاً دوباره تلاش کنید.");
+            setLoading(false);
+            return;
+        }
         setConversationId(currentId);
         const { data, error: messageError } = await supabase.from("support_messages").select("id, conversation_id, sender_id, sender_role, message, is_read, created_at").eq("conversation_id", currentId).order("created_at", { ascending: true }).limit(100);
         if (messageError) setError("بارگذاری پیام‌ها انجام نشد. لطفاً دوباره تلاش کنید.");
