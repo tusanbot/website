@@ -55,6 +55,9 @@ export async function proxy(request: NextRequest) {
     const isAdminRoute =
         pathname === "/admin" ||
         pathname.startsWith("/admin/");
+    const isAuthRoute = pathname === "/auth" || pathname.startsWith("/auth/");
+    const isMaintenanceRoute = pathname === "/maintenance";
+    const isApiRoute = pathname === "/api" || pathname.startsWith("/api/");
 
     if (isAdminRoute && (!userId || claimsError)) {
         return NextResponse.redirect(
@@ -62,6 +65,7 @@ export async function proxy(request: NextRequest) {
         );
     }
 
+    let isAdmin = false;
     if (isAdminRoute && userId) {
         const { data: profile, error } = await supabase
             .from("profiles")
@@ -69,10 +73,36 @@ export async function proxy(request: NextRequest) {
             .eq("id", userId)
             .maybeSingle();
 
-        if (error || profile?.role !== "admin") {
+        isAdmin = !error && profile?.role === "admin";
+        if (!isAdmin) {
             return NextResponse.redirect(
                 new URL("/", request.url)
             );
+        }
+    }
+
+    // Keep the maintenance page itself, authentication flow, admin area and
+    // server APIs available. This lets an administrator sign in and disable
+    // maintenance mode without a deploy, while callbacks/webhooks keep working.
+    if (!isAdmin && !isMaintenanceRoute && !isAuthRoute && !isApiRoute) {
+        const { data: settings } = await supabase
+            .from("site_settings")
+            .select("config")
+            .limit(1)
+            .maybeSingle();
+
+        const config = settings?.config;
+        const maintenance =
+            config && typeof config === "object" && !Array.isArray(config)
+                ? (config as Record<string, unknown>).maintenance
+                : null;
+        const maintenanceEnabled =
+            maintenance && typeof maintenance === "object" && !Array.isArray(maintenance)
+                ? (maintenance as Record<string, unknown>).enabled === true
+                : false;
+
+        if (maintenanceEnabled) {
+            return NextResponse.redirect(new URL("/maintenance", request.url));
         }
     }
 
