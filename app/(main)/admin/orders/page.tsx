@@ -4,12 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import OrderStatus from "@/components/orders/OrderStatus";
-import { getOrderStatus } from "@/lib/orderStatus";
 import TusanIcon from "@/components/ui/TusanIcon";
 
 import {
     GlassPanel,
-    TusanCard,
     TusanButton,
     TusanInput,
     SectionHeader,
@@ -35,7 +33,13 @@ export default function AdminOrdersPage() {
             const { data: profile, error: profileError } = await supabase.from("profiles").select("role").eq("id", user.id).single();
             if (profileError) throw new Error("خطا در بررسی دسترسی کاربر.");
             if (profile?.role !== "admin") { setError("شما دسترسی لازم برای مشاهده سفارش‌ها را ندارید."); return; }
-            const { data, error: ordersError } = await supabase.from("orders").select(`*, services(title, icon), profiles(full_name, phone)`).order("created_at", { ascending: false });
+
+            // orders has two FKs to profiles (user_id and assigned_staff_id),
+            // so the relationship must be explicit to avoid PostgREST ambiguity.
+            const { data, error: ordersError } = await supabase
+                .from("orders")
+                .select(`*, services(title, icon), profiles!orders_user_id_fkey(full_name, phone)`)
+                .order("created_at", { ascending: false });
             if (ordersError) throw new Error(ordersError.message);
             setOrders(data || []);
         } catch (err: any) {
