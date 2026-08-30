@@ -3,6 +3,7 @@ import Script from "next/script";
 import { Vazirmatn } from "next/font/google";
 import "./globals.css";
 import "./design-system-accessibility.css";
+import "./status-brand.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import AnalyticsTracker from "@/components/analytics/AnalyticsTracker";
 import { getSiteSettings } from "@/lib/siteSettings";
