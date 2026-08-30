@@ -37,6 +37,11 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
 
   useEffect(() => { void load() }, [userId])
 
+  const formatError = (error: unknown, fallback: string) => {
+    if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message
+    return fallback
+  }
+
   const grant = async () => {
     const value = Number(commission)
     if (!Number.isFinite(value) || value < 0 || value > 100) { setMessage('درصد کارمزد باید بین ۰ تا ۱۰۰ باشد.'); return }
@@ -45,7 +50,7 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
       const { error } = await supabase.rpc('approve_staff_role', { p_user_id: userId, p_role_code: selected, p_approve: true, p_commission: value })
       if (error) throw error
       await load(); setMessage('مقام با موفقیت اعطا شد. همه خدمات فعال شدند.')
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'اعطای مقام با خطا مواجه شد.') }
+    } catch (e) { setMessage(`اعطای مقام ناموفق بود: ${formatError(e, 'خطای نامشخص')}`) }
     finally { setBusy(false) }
   }
 
@@ -55,7 +60,7 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
       const { error } = await supabase.rpc('approve_staff_role', { p_user_id: userId, p_role_code: role, p_approve: false, p_commission: 0 })
       if (error) throw error
       await load(); setMessage('مقام لغو شد.')
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'لغو مقام با خطا مواجه شد.') }
+    } catch (e) { setMessage(`لغو مقام ناموفق بود: ${formatError(e, 'خطای نامشخص')}`) }
     finally { setBusy(false) }
   }
 
@@ -72,7 +77,7 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
       const { error } = await supabase.rpc('set_staff_service_access', { p_user_id: userId, p_service_id: serviceId, p_approve: enabled, p_commission: Number(activeAssignment?.commission_percent ?? commission) || 0 })
       if (error) throw error
       await load()
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'تغییر دسترسی خدمت با خطا مواجه شد.') }
+    } catch (e) { setMessage(`تغییر دسترسی خدمت ناموفق بود: ${formatError(e, 'خطای نامشخص')}`) }
     finally { setServiceBusy(null) }
   }
   const setAllServices = async (enabled: boolean) => {
@@ -83,7 +88,7 @@ export default function StaffRoleManagement({ userId }: { userId: string }) {
         if (error) throw error
       }
       await load(); setMessage(enabled ? 'همه خدمات فعال شدند.' : 'همه خدمات غیرفعال شدند.')
-    } catch (e) { setMessage(e instanceof Error ? e.message : 'تغییر دسترسی همه خدمات با خطا مواجه شد.') }
+    } catch (e) { setMessage(`تغییر دسترسی خدمات ناموفق بود: ${formatError(e, 'خطای نامشخص')}`) }
     finally { setBusy(false) }
   }
 
