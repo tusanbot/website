@@ -1,5 +1,5 @@
-import AdminSupportPage from "@/app/(main)/admin/support/page";
+import SupportInbox from "@/components/support/SupportInbox";
 
 export default function StaffSupportPage() {
-    return <AdminSupportPage />;
+    return <SupportInbox backHref="/staff" backLabel="بازگشت به پنل کاری ←" />;
 }
