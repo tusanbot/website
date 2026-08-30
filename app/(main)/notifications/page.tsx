@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, SectionHeader, TusanButton } from "@/components/ui";
 
@@ -17,35 +17,21 @@ type NotificationItem = {
 };
 
 const icons: Record<string, string> = {
-  new_order: "📋",
-  order_created: "📋",
-  order_status: "🔄",
-  order_status_changed: "🔄",
-  payment_status: "💳",
-  payment_success: "💳",
-  new_message: "💬",
-  receipt_uploaded: "🧾",
-  payment_receipt: "🧾",
-  document_requested: "📎",
-  order_completed: "✅",
+  new_order: "📋", order_created: "📋", order_status: "🔄", order_status_changed: "🔄",
+  payment_status: "💳", payment_success: "💳", new_message: "💬", receipt_uploaded: "🧾",
+  payment_receipt: "🧾", document_requested: "📎", order_completed: "✅",
 };
 
 export default function NotificationsPage() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
-  const isAdminScope = isAdminRoute || searchParams.get("scope") === "admin";
+  const isAdminScope = pathname === "/admin" || pathname.startsWith("/admin/");
   const orderBasePath = isAdminScope ? "/admin/orders" : "/orders";
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
   async function load(id: string) {
-    const { data } = await supabase
-      .from("notifications")
-      .select("id,type,title,message,order_id,created_at,read_at")
-      .eq("recipient_id", id)
-      .order("created_at", { ascending: false });
+    const { data } = await supabase.from("notifications").select("id,type,title,message,order_id,created_at,read_at").eq("recipient_id", id).order("created_at", { ascending: false });
     setItems((data || []) as NotificationItem[]);
     setLoading(false);
   }
@@ -56,16 +42,14 @@ export default function NotificationsPage() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!mounted || !user) { setLoading(false); return; }
       setUserId(user.id);
-      load(user.id);
-      channel = supabase
-        .channel(`notifications-page-${user.id}`)
+      void load(user.id);
+      channel = supabase.channel(`notifications-page-${user.id}`)
         .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
           const next = payload.new as NotificationItem;
           setItems((current) => [next, ...current.filter((item) => item.id !== next.id)]);
-        })
-        .subscribe();
+        }).subscribe();
     });
-    return () => { mounted = false; if (channel) supabase.removeChannel(channel); };
+    return () => { mounted = false; if (channel) void supabase.removeChannel(channel); };
   }, []);
 
   async function markAllRead() {
@@ -100,23 +84,14 @@ export default function NotificationsPage() {
             <div className="divide-y divide-[var(--border)]">
               {items.map((item) => (
                 <div key={item.id} className={`p-5 ${!item.read_at ? "bg-[var(--primary)]/5" : ""}`}>
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl" aria-hidden="true">{icons[item.type] || "🔔"}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <h2 className="font-black">{item.title}</h2>
-                        {!item.read_at && <span className="w-2 h-2 rounded-full bg-[var(--primary)] mt-2 shrink-0" />}
-                      </div>
-                      {item.message && <p className="mt-1 text-sm text-[var(--text-muted)] leading-7">{item.message}</p>}
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <time className="text-xs text-[var(--text-muted)]">{new Date(item.created_at).toLocaleString("fa-IR")}</time>
-                        <div className="flex gap-3">
-                          {item.order_id && <Link href={`${orderBasePath}/${item.order_id}`} className="text-xs font-bold text-[var(--primary)]">مشاهده سفارش</Link>}
-                          {!item.read_at && <button type="button" onClick={() => markRead(item.id)} className="text-xs font-bold text-[var(--text-muted)]">خوانده شد</button>}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <div className="flex items-start gap-3"><span className="text-xl" aria-hidden="true">{icons[item.type] || "🔔"}</span><div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3"><h2 className="font-black">{item.title}</h2>{!item.read_at && <span className="w-2 h-2 rounded-full bg-[var(--primary)] mt-2 shrink-0" />}</div>
+                    {item.message && <p className="mt-1 text-sm text-[var(--text-muted)] leading-7">{item.message}</p>}
+                    <div className="mt-2 flex items-center justify-between gap-3"><time className="text-xs text-[var(--text-muted)]">{new Date(item.created_at).toLocaleString("fa-IR")}</time><div className="flex gap-3">
+                      {item.order_id && <Link href={`${orderBasePath}/${item.order_id}`} className="text-xs font-bold text-[var(--primary)]">مشاهده سفارش</Link>}
+                      {!item.read_at && <button type="button" onClick={() => markRead(item.id)} className="text-xs font-bold text-[var(--text-muted)]">خوانده شد</button>}
+                    </div></div>
+                  </div></div>
                 </div>
               ))}
             </div>
