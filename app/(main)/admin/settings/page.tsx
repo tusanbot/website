@@ -12,6 +12,7 @@ type Config = {
   orders: { enabled?: boolean; closedMessage?: string };
   announcements: { maxHomeItems?: number; showUndated?: boolean };
   pricing: { defaultMultiplier?: number; currency?: string };
+  maintenance: { enabled?: boolean; title?: string; message?: string; eta?: string };
 };
 
 const defaults: Config = {
@@ -22,6 +23,12 @@ const defaults: Config = {
   orders: { enabled: true, closedMessage: "ثبت سفارش موقتاً غیرفعال است." },
   announcements: { maxHomeItems: 4, showUndated: true },
   pricing: { defaultMultiplier: 2, currency: "تومان" },
+  maintenance: {
+    enabled: false,
+    title: "سایت در حال به‌روزرسانی است",
+    message: "در حال انجام چند به‌روزرسانی و بهبود هستیم. به‌زودی دوباره در خدمت شما خواهیم بود.",
+    eta: "",
+  },
 };
 
 export default function AdminSettingsPage() {
@@ -57,6 +64,7 @@ export default function AdminSettingsPage() {
             business: { ...defaults.business, ...(data.settings.config?.business || {}) },
             assets: { ...defaults.assets, ...(data.settings.config?.assets || {}) },
             social: { ...defaults.social, ...(data.settings.config?.social || {}), icons: { ...defaults.social.icons, ...(data.settings.config?.social?.icons || {}) } },
+            maintenance: { ...defaults.maintenance, ...(data.settings.config?.maintenance || {}) },
           });
         }
       } catch (error) {
@@ -116,6 +124,27 @@ export default function AdminSettingsPage() {
           <div className="grid md:grid-cols-3 gap-4">
             {([["telegram","تلگرام"],["eitaa","ایتا"],["rubika","روبیکا"]] as const).map(([key,label]) => <label key={key} className="font-bold text-sm">آیکون {label}<input type="url" dir="ltr" placeholder="https://..." value={config.social.icons?.[key] || ""} onChange={(e) => updateSocialIcon(key, e.target.value)} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" />{config.social.icons?.[key] && <img src={config.social.icons[key]} alt="پیش‌نمایش" className="mt-3 h-10 w-10 rounded-lg object-contain" onError={(e) => { e.currentTarget.style.display = "none"; }} />}</label>)}
           </div>
+        </GlassPanel>
+
+        <GlassPanel className="p-6 space-y-5 border border-[var(--primary)]/20">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-black">حالت در دست تعمیر</h2>
+              <p className="mt-2 text-sm text-[var(--text-muted)]">با فعال کردن این گزینه، کاربران عادی به صفحه در دست تعمیر هدایت می‌شوند. مدیران سایت و مسیر ورود مدیر همچنان در دسترس خواهند بود.</p>
+            </div>
+            <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black ${config.maintenance.enabled ? "bg-[var(--primary)] text-white" : "bg-[var(--surface-muted)] text-[var(--text-muted)]"}`}>
+              {config.maintenance.enabled ? "فعال" : "خاموش"}
+            </span>
+          </div>
+          <label className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-[var(--surface-muted)]">
+            <span className="font-bold">فعال‌سازی حالت در دست تعمیر</span>
+            <input type="checkbox" checked={config.maintenance.enabled === true} onChange={(e) => setConfig({ ...config, maintenance: { ...config.maintenance, enabled: e.target.checked } })} />
+          </label>
+          <div className="grid md:grid-cols-2 gap-4">
+            <label className="font-bold text-sm block">عنوان صفحه<input value={config.maintenance.title || ""} onChange={(e) => setConfig({ ...config, maintenance: { ...config.maintenance, title: e.target.value } })} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label>
+            <label className="font-bold text-sm block">زمان تقریبی بازگشت (اختیاری)<input value={config.maintenance.eta || ""} onChange={(e) => setConfig({ ...config, maintenance: { ...config.maintenance, eta: e.target.value } })} placeholder="مثلاً تا ساعت ۱۸" className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label>
+          </div>
+          <label className="font-bold text-sm block">پیام صفحه<textarea value={config.maintenance.message || ""} onChange={(e) => setConfig({ ...config, maintenance: { ...config.maintenance, message: e.target.value } })} rows={4} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)] resize-y" /></label>
         </GlassPanel>
 
         <GlassPanel className="p-6 space-y-5">
