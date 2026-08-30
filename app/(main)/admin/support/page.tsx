@@ -6,7 +6,7 @@ import { GlassPanel, SectionHeader } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
 
 type Conversation = { id: string; user_id: string; status: "open" | "closed"; created_at: string; updated_at: string; profiles?: { full_name?: string | null; phone?: string | null } | null };
-type Message = { id: string; conversation_id: string; sender_id: string; sender_role: "user" | "admin"; message: string; is_read: boolean; created_at: string };
+type Message = { id: string; conversation_id: string; sender_id: string; sender_role: "user" | "admin" | "staff"; message: string; is_read: boolean; created_at: string };
 
 const PAGE_SIZE = 50;
 
@@ -15,7 +15,6 @@ export default function AdminSupportPage() {
     const [selected, setSelected] = useState<string | null>(null);
     const [messages, setMessages] = useState<Message[]>([]);
     const [draft, setDraft] = useState("");
-    const [adminId, setAdminId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [messagesLoading, setMessagesLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -33,7 +32,6 @@ export default function AdminSupportPage() {
                 setLoading(false);
                 return;
             }
-            setAdminId(user.id);
             await loadConversations();
         }
         void init();
@@ -132,19 +130,32 @@ export default function AdminSupportPage() {
     async function sendMessage(event: React.FormEvent) {
         event.preventDefault();
         const text = draft.trim();
-        if (!text || !selected || !adminId || sending) return;
+        if (!text || !selected || sending) return;
         setSending(true);
         setError(null);
-        const { data, error: insertError } = await supabase
-            .from("support_messages")
-            .insert({ conversation_id: selected, sender_id: adminId, sender_role: "admin", message: text })
-            .select("id,conversation_id,sender_id,sender_role,message,is_read,created_at")
-            .single();
-        if (insertError || !data) {
+
+        const { data: messageId, error: rpcError } = await supabase.rpc("send_support_message", {
+            p_conversation_id: selected,
+            p_message: text,
+        });
+
+        if (rpcError || !messageId) {
             setError("ارسال پیام انجام نشد. لطفاً دوباره تلاش کنید.");
+            setSending(false);
+            return;
+        }
+
+        const { data: message, error: fetchError } = await supabase
+            .from("support_messages")
+            .select("id,conversation_id,sender_id,sender_role,message,is_read,created_at")
+            .eq("id", messageId)
+            .maybeSingle();
+
+        if (fetchError || !message) {
+            setError("پیام ارسال شد، اما بارگذاری آن در پنل انجام نشد.");
         } else {
             setDraft("");
-            setMessages((current) => current.some((item) => item.id === data.id) ? current : [...current, data as Message]);
+            setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message as Message]);
         }
         setSending(false);
     }
@@ -177,10 +188,10 @@ export default function AdminSupportPage() {
                         <div className="flex-1 space-y-3 overflow-y-auto p-5">
                             {selected && hasMore && <button type="button" onClick={() => void loadOlderMessages()} disabled={messagesLoading} className="mx-auto block text-xs font-bold text-[var(--primary)] disabled:opacity-50">{messagesLoading ? "در حال بارگذاری..." : "نمایش پیام‌های قدیمی‌تر"}</button>}
                             {!selected ? <div className="flex h-full items-center justify-center text-[var(--text-muted)]">یک گفتگو را انتخاب کنید.</div> : messagesLoading && messages.length === 0 ? <div className="flex h-full items-center justify-center text-[var(--text-muted)]">در حال بارگذاری پیام‌ها...</div> : messages.map((item) => (
-                                <div key={item.id} className={`flex ${item.sender_role === "admin" ? "justify-end" : "justify-start"}`}>
-                                    <div className={`max-w-[75%] rounded-2xl px-4 py-3 leading-7 ${item.sender_role === "admin" ? "bg-[var(--primary)] text-white" : "bg-[var(--surface-muted)] text-[var(--text)]"}`}>
+                                <div key={item.id} className={`flex ${item.sender_role === "admin" || item.sender_role === "staff" ? "justify-end" : "justify-start"}`}>
+                                    <div className={`max-w-[75%] rounded-2xl px-4 py-3 leading-7 ${item.sender_role === "admin" || item.sender_role === "staff" ? "bg-[var(--primary)] text-white" : "bg-[var(--surface-muted)] text-[var(--text)]"}`}>
                                         {item.message}
-                                        <div className={`mt-1 text-[10px] ${item.sender_role === "admin" ? "text-white/60" : "text-[var(--text-muted)]"}`}>{new Date(item.created_at).toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" })}</div>
+                                        <div className={`mt-1 text-[10px] ${item.sender_role === "admin" || item.sender_role === "staff" ? "text-white/60" : "text-[var(--text-muted)]"}`}>{new Date(item.created_at).toLocaleTimeString("fa-IR", { hour: "2-digit", minute: "2-digit" })}</div>
                                     </div>
                                 </div>
                             ))}
