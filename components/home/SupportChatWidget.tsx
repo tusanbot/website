@@ -12,6 +12,7 @@ export default function SupportChatWidget() {
     const [userId, setUserId] = useState<string | null>(null);
     const [conversationId, setConversationId] = useState<string | null>(null);
     const [messages, setMessages] = useState<SupportMessage[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [draft, setDraft] = useState("");
     const [loading, setLoading] = useState(false);
     const [sending, setSending] = useState(false);
@@ -35,11 +36,26 @@ export default function SupportChatWidget() {
         const channel = supabase.channel(`support-chat-${conversationId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "support_messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
             const next = payload.new as SupportMessage;
             setMessages((current) => current.some((item) => item.id === next.id) ? current : [...current, next]);
+            if (next.sender_id !== userId) {
+                if (open) void markConversationRead(conversationId);
+                else setUnreadCount((count) => count + 1);
+            }
         }).subscribe();
         return () => { void supabase.removeChannel(channel); };
-    }, [conversationId]);
+    }, [conversationId, userId, open]);
 
     useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, open]);
+
+    async function refreshUnreadCount(id: string) {
+        const { data, error: rpcError } = await supabase.rpc("get_support_unread_count", { p_conversation_id: id });
+        if (!rpcError && typeof data === "number") setUnreadCount(data);
+    }
+
+    async function markConversationRead(id: string) {
+        const { error: rpcError } = await supabase.rpc("mark_support_messages_read", { p_conversation_id: id });
+        if (!rpcError) setUnreadCount(0);
+        else setError("وضعیت خوانده‌شدن پیام‌ها به‌روزرسانی نشد.");
+    }
 
     async function findOpenConversation(id: string) {
         return supabase.from("support_conversations").select("id").eq("user_id", id).eq("status", "open").order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -65,6 +81,8 @@ export default function SupportChatWidget() {
         if (messageError) setError("بارگذاری پیام‌ها انجام نشد. لطفاً دوباره تلاش کنید.");
         else setMessages((data || []) as SupportMessage[]);
         setLoading(false);
+        await refreshUnreadCount(currentId);
+        if (open) await markConversationRead(currentId);
     }
 
     async function sendMessage(event: React.FormEvent) {
@@ -88,7 +106,7 @@ export default function SupportChatWidget() {
                     <form onSubmit={sendMessage} className="border-t border-[var(--border)] p-3"><div className="flex items-end gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2"><textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} maxLength={4000} placeholder="پیام شما..." className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-[var(--text)] outline-none" /><button type="submit" disabled={!draft.trim() || sending} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-white disabled:opacity-40" aria-label="ارسال"><Send size={17} /></button></div></form>
                 </>}
             </div>}
-            <button type="button" onClick={() => setOpen((value) => !value)} className="flex items-center gap-2 rounded-full bg-[var(--primary)] px-5 py-3.5 font-black text-white shadow-[0_14px_40px_rgba(9,150,124,0.3)] transition hover:-translate-y-1" aria-label="پشتیبانی آنلاین"><MessageCircle size={20} /><span className="hidden sm:inline">پشتیبانی آنلاین</span></button>
+            <button type="button" onClick={() => setOpen((value) => !value)} className="relative flex items-center gap-2 rounded-full bg-[var(--primary)] px-5 py-3.5 font-black text-white shadow-[0_14px_40px_rgba(9,150,124,0.3)] transition hover:-translate-y-1" aria-label="پشتیبانی آنلاین"><MessageCircle size={20} /><span className="hidden sm:inline">پشتیبانی آنلاین</span>{!open && unreadCount > 0 && <span className="absolute -right-1 -top-1 min-w-6 rounded-full bg-red-500 px-1.5 py-0.5 text-center text-[10px] font-black text-white">{unreadCount > 99 ? "99+" : unreadCount}</span>}</button>
         </div>
     );
 }
