@@ -53,7 +53,6 @@ const nextConfig: NextConfig = {
                 source: "/(.*)",
                 headers: [
                     ...securityHeaders,
-                    { key: "X-Robots-Tag", value: "index, follow" },
                     { key: "Content-Security-Policy", value: contentSecurityPolicy },
                 ],
             },
