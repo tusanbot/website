@@ -33,11 +33,12 @@ export default function SupportChatWidget() {
 
     useEffect(() => {
         if (!conversationId) return;
-        const channel = supabase.channel(`support-chat-${conversationId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "support_messages", filter: `conversation_id=eq.${conversationId}` }, (payload) => {
+        const activeConversationId = conversationId;
+        const channel = supabase.channel(`support-chat-${activeConversationId}`).on("postgres_changes", { event: "INSERT", schema: "public", table: "support_messages", filter: `conversation_id=eq.${activeConversationId}` }, (payload) => {
             const next = payload.new as SupportMessage;
             setMessages((current) => current.some((item) => item.id === next.id) ? current : [...current, next]);
             if (next.sender_id !== userId) {
-                if (open) void markConversationRead(conversationId);
+                if (open) void markConversationRead(activeConversationId);
                 else setUnreadCount((count) => count + 1);
             }
         }).subscribe();
