@@ -12,8 +12,7 @@ export default function NotFound() {
     <SystemStatusPage
       kind="not-found"
       actionHref="/"
-      secondaryLabel="بازگشت به صفحه قبل"
-      secondaryHref="javascript:history.back()"
+      actionLabel="بازگشت به صفحه اصلی"
     />
   );
 }
