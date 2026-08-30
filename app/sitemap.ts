@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { tools } from "@/lib/tools";
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
 
@@ -9,7 +10,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: siteUrl, changeFrequency: "weekly", priority: 1 },
     { url: `${siteUrl}/services`, changeFrequency: "daily", priority: 0.9 },
     { url: `${siteUrl}/blog`, changeFrequency: "daily", priority: 0.8 },
+    { url: `${siteUrl}/tools`, changeFrequency: "weekly", priority: 0.8 },
   ];
+
+  const toolPages = tools
+    .filter((tool) => tool.enabled && tool.indexable && tool.href)
+    .map((tool) => ({
+      url: `${siteUrl}${tool.href}`,
+      changeFrequency: "monthly" as const,
+      priority: tool.featured ? 0.75 : 0.65,
+    }));
 
   const supabase = createSupabaseServerClient();
   const [{ data: services }, { data: posts }] = await Promise.all([
@@ -38,7 +48,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }));
 
-  return [...staticPages, ...servicePages, ...blogPages];
+  return [...staticPages, ...toolPages, ...servicePages, ...blogPages];
 }
 
 // Sitemap contains only canonical production URLs that are intended to be indexable.
