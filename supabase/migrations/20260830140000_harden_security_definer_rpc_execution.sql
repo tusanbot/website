@@ -38,5 +38,7 @@ GRANT EXECUTE ON FUNCTION public.request_order_assignment(uuid) TO authenticated
 GRANT EXECUTE ON FUNCTION public.request_staff_settlement(uuid, bigint) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.send_support_message(uuid, text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.start_support_conversation(uuid) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.submit_staff_review(uuid, smallint, text, text[]) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.submit_support_review(uuid, smallint, text, text[], text[]) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_staff_review(uuid, smallint, text, text[], text[])
+  TO authenticated;
+GRANT EXECUTE ON FUNCTION public.submit_support_review(uuid, smallint, text, text[], text[])
+  TO authenticated;
