@@ -62,8 +62,8 @@ export default function SupportInbox({ backHref, backLabel = "بازگشت به 
         setUnreadCounts((current) => ({ ...current, [conversationId]: 0 }));
     }
     async function loadConversations() {
-        const { data, error: queryError } = await supabase.from("support_conversations").select("id,user_id,status,created_at,updated_at,profiles(full_name,phone)").eq("status", "open").order("updated_at", { ascending: false });
-        if (queryError) { setError("بارگذاری گفتگوها انجام نشد. لطفاً دوباره تلاش کنید."); setLoading(false); return; }
+        const { data, error: queryError } = await supabase.from("support_conversations").select("id,user_id,status,created_at,updated_at,profiles!support_conversations_user_id_fkey(full_name,phone)").eq("status", "open").order("updated_at", { ascending: false });
+        if (queryError) { console.error(queryError); setError("بارگذاری گفتگوها انجام نشد. لطفاً دوباره تلاش کنید."); setLoading(false); return; }
         const next = (data || []) as Conversation[];
         setConversations(next);
         setSelected((current) => current && next.some((item) => item.id === current) ? current : next[0]?.id ?? null);
@@ -73,7 +73,7 @@ export default function SupportInbox({ backHref, backLabel = "بازگشت به 
     async function loadMessages(conversationId: string) {
         setMessagesLoading(true); setError(null);
         const { data, error: queryError } = await supabase.from("support_messages").select("id,conversation_id,sender_id,sender_role,message,is_read,created_at").eq("conversation_id", conversationId).order("created_at", { ascending: false }).limit(PAGE_SIZE + 1);
-        if (queryError) { setError("بارگذاری پیام‌ها انجام نشد. لطفاً دوباره تلاش کنید."); setMessagesLoading(false); return; }
+        if (queryError) { console.error(queryError); setError("بارگذاری پیام‌ها انجام نشد. لطفاً دوباره تلاش کنید."); setMessagesLoading(false); return; }
         const rows = (data || []) as Message[]; const page = rows.slice(0, PAGE_SIZE).reverse();
         setMessages(page); setHasMore(rows.length > PAGE_SIZE); setOldestAt(page[0]?.created_at ?? null); setMessagesLoading(false); await markConversationRead(conversationId);
     }
@@ -89,7 +89,7 @@ export default function SupportInbox({ backHref, backLabel = "بازگشت به 
         event.preventDefault(); const text = draft.trim(); if (!text || !selected || sending) return;
         setSending(true); setError(null);
         const { data: messageId, error: rpcError } = await supabase.rpc("send_support_message", { p_conversation_id: selected, p_message: text });
-        if (rpcError || !messageId) { setError("ارسال پیام انجام نشد. لطفاً دوباره تلاش کنید."); setSending(false); return; }
+        if (rpcError || !messageId) { console.error(rpcError); setError(rpcError?.message || "ارسال پیام انجام نشد. لطفاً دوباره تلاش کنید."); setSending(false); return; }
         const { data: message, error: fetchError } = await supabase.from("support_messages").select("id,conversation_id,sender_id,sender_role,message,is_read,created_at").eq("id", messageId).maybeSingle();
         if (fetchError || !message) setError("پیام ارسال شد، اما بارگذاری آن در پنل انجام نشد.");
         else { setDraft(""); setMessages((current) => current.some((item) => item.id === message.id) ? current : [...current, message as Message]); }
