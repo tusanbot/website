@@ -2,7 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-const STAFF_ROLE_CODES = new Set(["admin", "order_manager", "support_operator"]);
+const STAFF_ROLE_CODES = new Set(["order_manager", "support_operator"]);
+
+type Review = {
+  id: string;
+  rating: number;
+  comment: string | null;
+  strengths: string[];
+  weaknesses: string[];
+  created_at: string;
+  source?: "order" | "support";
+};
 
 export async function GET(request: NextRequest) {
   const admin = await requireAdmin(request);
@@ -10,11 +20,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const db = supabaseAdmin();
-    const [authResult, profilesResult, assignmentsResult, rolesResult, reviewsResult] = await Promise.all([
+    const [authResult, profilesResult, assignmentsResult, rolesResult, orderReviewsResult, supportReviewsResult] = await Promise.all([
       db.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       db.from("profiles").select("id,full_name,phone,role,created_at"),
       db.from("staff_role_assignments").select("id,user_id,role_id,staff_code,status,commission_percent,approved_at,updated_at"),
       db.from("staff_roles").select("id,code,name,description"),
+      db.from("staff_reviews").select("id,order_id,customer_id,staff_id,rating,comment,strengths,weaknesses,created_at").order("created_at", { ascending: false }),
       db.from("support_reviews").select("id,conversation_id,customer_id,staff_id,rating,comment,strengths,weaknesses,created_at").order("created_at", { ascending: false }),
     ]);
 
@@ -22,7 +33,8 @@ export async function GET(request: NextRequest) {
     if (profilesResult.error) throw profilesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
     if (rolesResult.error) throw rolesResult.error;
-    if (reviewsResult.error) throw reviewsResult.error;
+    if (orderReviewsResult.error) throw orderReviewsResult.error;
+    if (supportReviewsResult.error) throw supportReviewsResult.error;
 
     const profileMap = new Map((profilesResult.data ?? []).map((p) => [p.id, p]));
     const emailMap = new Map((authResult.data?.users ?? []).map((u) => [u.id, u.email ?? null]));
@@ -45,7 +57,7 @@ export async function GET(request: NextRequest) {
       list.push({
         id: assignment.id,
         code,
-        name: role?.name ?? (code === "order_manager" ? "مدیر سفارشات" : code === "support_operator" ? "اپراتور پشتیبانی" : "مدیر اصلی"),
+        name: role?.name ?? (code === "order_manager" ? "مدیر سفارشات" : "اپراتور پشتیبانی"),
         status: assignment.status,
         commission_percent: code === "order_manager" ? assignment.commission_percent : null,
         approved_at: assignment.approved_at,
@@ -57,7 +69,15 @@ export async function GET(request: NextRequest) {
     const staff = [...staffIds]
       .map((id) => {
         const roles = byStaff.get(id) ?? [];
-        const reviews = (reviewsResult.data ?? []).filter((review) => review.staff_id === id);
+        const orderReviews: Review[] = (orderReviewsResult.data ?? [])
+          .filter((review) => review.staff_id === id)
+          .map((review) => ({ ...review, source: "order" }));
+        const supportReviews: Review[] = (supportReviewsResult.data ?? [])
+          .filter((review) => review.staff_id === id)
+          .map((review) => ({ ...review, source: "support" }));
+        const reviews = [...orderReviews, ...supportReviews].sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+        );
         const average = reviews.length
           ? reviews.reduce((sum, review) => sum + Number(review.rating || 0), 0) / reviews.length
           : null;
