@@ -3,7 +3,7 @@
 import Link from "next/link";
 import NotificationBell from "@/components/notifications/NotificationBell";
 
-export type AdminTab = "dashboard" | "orders" | "services" | "social" | "users" | "staff" | "messages" | "reports" | "settings";
+export type AdminTab = "dashboard" | "orders" | "services" | "social" | "users" | "staff" | "settlements" | "messages" | "reports" | "settings";
 type Props = { activeTab: AdminTab; unreadMessages: number; onTabChange: (tab: AdminTab) => void };
 type MenuItem = { id: AdminTab; label: string; icon: string; href?: string };
 const menuItems: MenuItem[] = [
@@ -13,6 +13,7 @@ const menuItems: MenuItem[] = [
     { id: "social", label: "شبکه‌های اجتماعی", icon: "📱" },
     { id: "users", label: "کاربران", icon: "👥", href: "/admin/users" },
     { id: "staff", label: "مدیران و اپراتورها", icon: "🛡️", href: "/admin/staff" },
+    { id: "settlements", label: "تسویه حساب", icon: "💳", href: "/admin/settlements" },
     { id: "messages", label: "پیام‌ها", icon: "💬" },
     { id: "reports", label: "گزارش‌ها", icon: "📈" },
     { id: "settings", label: "تنظیمات", icon: "🔧" },
