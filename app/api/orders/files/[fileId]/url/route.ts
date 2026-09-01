@@ -18,9 +18,8 @@ export async function GET(_request: Request, context: Context) {
     .maybeSingle();
   if (fileError || !file) return NextResponse.json({ error: "فایل پیدا نشد." }, { status: 404 });
 
-  const customer = await supabase.rpc("get_customer_order_detail", { p_order_id: file.order_id });
-  const staff = customer.data ? null : await supabase.rpc("get_staff_order_detail", { p_order_id: file.order_id });
-  if (!customer.data && !staff?.data) {
+  const { data: authorizedFiles, error: authError } = await supabase.rpc("get_order_files_for_current_user", { p_order_id: file.order_id });
+  if (authError || !(authorizedFiles ?? []).some((item: { id: string }) => item.id === file.id)) {
     return NextResponse.json({ error: "دسترسی به این فایل مجاز نیست." }, { status: 403 });
   }
 
