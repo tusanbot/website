@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import StaffRoleManagement from "@/components/admin/StaffRoleManagement";
+import StaffBankAccountsManagement from "@/components/admin/StaffBankAccountsManagement";
 
 type Review = {
   id: string;
@@ -242,6 +243,8 @@ export default function StaffManagement() {
               )}
             </div>
           </div>
+
+          <StaffBankAccountsManagement />
         </>
       )}
     </div>
