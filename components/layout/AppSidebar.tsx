@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { GlassPanel, TusanButton } from "@/components/ui";
 
 type UserRole = "guest" | "user" | "admin";
@@ -50,8 +49,12 @@ export default function AppSidebar({ mobile = false, onClose }: { mobile?: boole
         { href: "/messages", label: "پیام‌ها", icon: "💬" },
     ];
     const staffItems = [
-        ...(staffRoles.includes("order_manager") ? [{ href: "/staff/orders", label: "مدیریت سفارشات", icon: "📦" }] : []),
-        ...(staffRoles.includes("support_operator") ? [{ href: "/staff/support", label: "پشتیبانی آنلاین", icon: "🎧" }] : []),
+        ...(staffRoles.includes("order_manager") ? [
+            { href: "/staff/orders", label: "مدیریت سفارشات", icon: "📦" },
+            { href: "/staff/finance", label: "درآمد و تسویه حساب", icon: "💰" },
+        ] : []),
+        ...(staffRoles.includes("support_operator") && !staffRoles.includes("order_manager") ? [{ href: "/staff/support", label: "پشتیبانی آنلاین", icon: "🎧" }] : []),
+        ...(staffRoles.includes("support_operator") && staffRoles.includes("order_manager") ? [{ href: "/staff/support", label: "پشتیبانی آنلاین", icon: "🎧" }] : []),
     ];
     const adminItems = [
         { href: "/admin", label: "پنل مدیریت", icon: "🛠️" },
@@ -59,6 +62,7 @@ export default function AppSidebar({ mobile = false, onClose }: { mobile?: boole
         { href: "/admin/services", label: "مدیریت خدمات", icon: "⚙️" },
         { href: "/admin/announcements", label: "اطلاعیه‌ها", icon: "📢" },
         { href: "/admin/reports", label: "گزارش‌ها", icon: "📈" },
+        { href: "/admin/settlements", label: "تسویه حساب کارکنان", icon: "💳" },
         { href: "/admin/settings", label: "تنظیمات سایت", icon: "⚙️" },
         { href: "/admin/appearance", label: "ظاهر سایت", icon: "🎨" },
     ];
