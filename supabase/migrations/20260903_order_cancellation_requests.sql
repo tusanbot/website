@@ -14,7 +14,6 @@ create table if not exists public.order_cancellation_requests (
 
 create index if not exists order_cancellation_requests_user_idx on public.order_cancellation_requests(user_id, created_at desc);
 create index if not exists order_cancellation_requests_status_idx on public.order_cancellation_requests(status, created_at desc);
-
 alter table public.order_cancellation_requests enable row level security;
 drop policy if exists "customers can view own cancellation requests" on public.order_cancellation_requests;
 drop policy if exists "admins can view cancellation requests" on public.order_cancellation_requests;
@@ -85,7 +84,9 @@ revoke all on function public.admin_review_order_cancellation(uuid,text,text) fr
 grant execute on function public.request_order_cancellation(uuid,text) to authenticated, service_role;
 grant execute on function public.admin_review_order_cancellation(uuid,text,text) to authenticated, service_role;
 
-create or replace function public.update_order_cancellation_updated_at() returns trigger language plpgsql as $$ begin new.updated_at=now(); return new; end; $$;
+create or replace function public.update_order_cancellation_updated_at()
+returns trigger language plpgsql set search_path = pg_catalog, public
+as $$ begin new.updated_at=now(); return new; end; $$;
 drop trigger if exists trg_order_cancellation_updated_at on public.order_cancellation_requests;
 create trigger trg_order_cancellation_updated_at before update on public.order_cancellation_requests for each row execute function public.update_order_cancellation_updated_at();
 revoke all on function public.update_order_cancellation_updated_at() from anon, authenticated, public;
