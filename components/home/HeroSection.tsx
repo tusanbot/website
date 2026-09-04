@@ -1,5 +1,6 @@
 import Link from "next/link";
 import FloatingBackground from "./FloatingBackground";
+import HomeServiceSearch from "./HomeServiceSearch";
 import { TusanButton } from "@/components/ui";
 
 export default function HeroSection() {
@@ -11,6 +12,7 @@ export default function HeroSection() {
           <div className="inline-flex items-center gap-2 rounded-full border border-[var(--primary)]/20 bg-[var(--surface)]/80 px-3 py-1.5 text-sm font-bold text-[var(--primary)] shadow-sm backdrop-blur hero-item-enter"><span className="h-2 w-2 rounded-full bg-[var(--primary)] animate-pulse" />خدمات آنلاین کافی‌نت توسن</div>
           <h1 className="mt-4 text-4xl font-black leading-tight text-[var(--text)] sm:text-5xl lg:text-6xl hero-item-enter hero-item-delay-1">تمام خدمات کافی‌نت،<span className="block bg-gradient-to-l from-[var(--primary)] via-emerald-500 to-teal-400 bg-clip-text text-transparent">آنلاین و بدون مراجعه حضوری</span></h1>
           <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-[var(--text-muted)] lg:mx-0 hero-item-enter hero-item-delay-2">ثبت‌نام‌های اینترنتی، خدمات دانشجویی، بیمه، مالیات، خودرو و ده‌ها خدمت دیگر را سریع، امن و قابل پیگیری در توسن انجام دهید.</p>
+          <HomeServiceSearch />
           <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start hero-item-enter hero-item-delay-3"><Link href="/services"><TusanButton className="w-full px-7 py-2.5 text-base sm:w-auto">ثبت سفارش</TusanButton></Link><Link href="/orders"><TusanButton variant="secondary" className="w-full px-7 py-2.5 text-base sm:w-auto">پیگیری سفارش</TusanButton></Link></div>
           <div className="mt-7 flex flex-wrap justify-center gap-4 text-sm text-[var(--text-muted)] lg:justify-start hero-item-enter hero-item-delay-4"><div className="flex items-center gap-2"><span className="text-[var(--primary)]">✔</span>ثبت سفارش در کمتر از ۲ دقیقه</div><div className="flex items-center gap-2"><span className="text-[var(--primary)]">✔</span>پیگیری آنلاین وضعیت سفارش</div><div className="flex items-center gap-2"><span className="text-[var(--primary)]">✔</span>پشتیبانی سریع و امن</div></div>
         </div>
