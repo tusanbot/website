@@ -7,7 +7,7 @@ export async function GET() {
   const now = Date.now();
   const { data: announcements, error } = await supabase
     .from("services_announcements")
-    .select("id,title,summary,type,start_at,end_at,extended_end_at,button_label,service_id,priority,created_at")
+    .select("id,title,summary,content,type,start_at,end_at,extended_end_at,button_label,service_id,priority,created_at")
     .eq("is_active", true)
     .order("priority", { ascending: false })
     .order("created_at", { ascending: false })
