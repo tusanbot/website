@@ -1,12 +1,25 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import ToolsExplorer from "@/components/tools/ToolsExplorer";
 import { tools } from "@/lib/tools";
 
-export const metadata = {
+export const metadata: Metadata = {
     title: "ابزارهای آنلاین توسن | ابزار کاربردی و هوش مصنوعی",
     description: "مجموعه ابزارهای آنلاین توسن برای ساخت فاکتور، تبدیل عکس و PDF به متن، PDF به Word، رزومه‌سازی و ابزارهای هوش مصنوعی.",
     alternates: {
-        canonical: "/tools",
+        canonical: "https://www.tusancn.ir/tools",
+    },
+    robots: {
+        index: true,
+        follow: true,
+    },
+    openGraph: {
+        title: "ابزارهای آنلاین توسن | ابزار کاربردی و هوش مصنوعی",
+        description: "مجموعه ابزارهای آنلاین توسن برای ساخت فاکتور، تبدیل عکس و PDF به متن، PDF به Word، رزومه‌سازی و ابزارهای هوش مصنوعی.",
+        url: "https://www.tusancn.ir/tools",
+        type: "website",
+        siteName: "کافی نت توسن",
+        locale: "fa_IR",
     },
 };
 
