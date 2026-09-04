@@ -1,0 +1,15 @@
+{
+  "name": "کافی نت توسن",
+  "short_name": "توسن",
+  "description": "خدمات آنلاین کافی‌نت توسن؛ ثبت نام، امور اداری، اینترنتی و کامپیوتری.",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
+  "theme_color": "#09967c",
+  "background_color": "#ffffff",
+  "categories": ["business", "productivity", "utilities"]
+}
