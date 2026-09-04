@@ -9,9 +9,10 @@ import FaqSection from "@/components/home/FaqSection";
 import RulesSection from "@/components/home/RulesSection";
 import SupportChatWidget from "@/components/home/SupportChatWidget";
 import HomeFooter from "@/components/home/HomeFooter";
+import MobileBottomNav from "@/components/layout/MobileBottomNav";
 
 export default function HomePage() {
-  return <main className="home-compact">
+  return <main className="home-compact pb-24 lg:pb-0">
     <FloatingHeader />
     <HeroSection />
     <HomeAnnouncementsRail />
@@ -23,5 +24,6 @@ export default function HomePage() {
     <RulesSection />
     <HomeFooter />
     <SupportChatWidget />
+    <MobileBottomNav />
   </main>;
 }
