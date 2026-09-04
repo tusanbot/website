@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AppSidebar from "./AppSidebar";
+import MobileBottomNav from "./MobileBottomNav";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, TusanButton } from "@/components/ui";
@@ -40,5 +41,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         return <div dir="rtl" className="min-h-screen bg-[var(--background)] text-[var(--text)] flex items-center justify-center p-6"><GlassPanel className="w-full max-w-md p-8 text-center">{adminAccess === "checking" ? <><div className="text-5xl mb-4">🔐</div><h1 className="text-xl font-black">در حال بررسی دسترسی...</h1><p className="mt-3 text-[var(--text-muted)]">لطفاً چند لحظه صبر کنید.</p></> : <><div className="text-5xl mb-4">⛔</div><h1 className="text-xl font-black">دسترسی غیرمجاز</h1><p className="mt-3 leading-7 text-[var(--text-muted)]">برای ورود به پنل مدیریت باید با حساب مدیر وارد شده باشید.</p><div className="mt-6 flex flex-col gap-3"><Link href="/auth?mode=login"><TusanButton className="w-full">ورود به حساب</TusanButton></Link><Link href="/" className="text-sm font-bold text-[var(--primary)] hover:underline">بازگشت به صفحه اصلی</Link></div></>}</GlassPanel></div>;
     }
 
-    return <div dir="rtl" className="min-h-screen bg-[var(--background)] text-[var(--text)]"><div className="flex"><aside className="hidden lg:block w-72 p-4"><AppSidebar /></aside>{open && <><div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setOpen(false)} /><aside className="fixed right-0 top-0 z-50 h-full w-72 lg:hidden"><AppSidebar mobile onClose={() => setOpen(false)} /></aside></>}<div className="flex-1 min-w-0"><header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur"><div className="flex h-16 items-center justify-between px-4 lg:px-6"><button type="button" className="lg:hidden rounded-xl border border-[var(--border)] px-3 py-2" onClick={() => setOpen(true)}>☰</button><div className="font-bold">پنل توسن</div><NotificationBell /></div></header><main className="p-4 lg:p-6">{children}</main></div></div></div>;
+    return (
+        <div dir="rtl" className="min-h-screen bg-[var(--background)] text-[var(--text)]">
+            <div className="flex">
+                <aside className="hidden lg:block w-72 p-4"><AppSidebar /></aside>
+                {open && <><div className="fixed inset-0 z-40 bg-black/40 lg:hidden" onClick={() => setOpen(false)} /><aside className="fixed right-0 top-0 z-50 h-full w-72 lg:hidden"><AppSidebar mobile onClose={() => setOpen(false)} /></aside></>}
+                <div className="flex-1 min-w-0">
+                    <header className="sticky top-0 z-30 border-b border-[var(--border)] bg-[var(--surface)]/90 backdrop-blur"><div className="flex h-16 items-center justify-between px-4 lg:px-6"><button type="button" className="lg:hidden rounded-xl border border-[var(--border)] px-3 py-2" onClick={() => setOpen(true)}>☰</button><div className="font-bold">پنل توسن</div><NotificationBell /></div></header>
+                    <main className="p-4 pb-28 lg:p-6 lg:pb-6">{children}</main>
+                </div>
+            </div>
+            <MobileBottomNav />
+        </div>
+    );
 }
