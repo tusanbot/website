@@ -72,11 +72,11 @@ export default function SocialServicesPreview() {
       <div className="mx-auto max-w-7xl px-4 lg:px-8">
         <SectionHeader
           title="خدمات شبکه‌های اجتماعی"
-          description="خدمات محبوب شبکه‌های اجتماعی را ببینید و پلتفرم موردنظر را از بخش پایین انتخاب کنید."
+          description="سرویس‌های محبوب را در ریل ببینید و برای ورود مستقیم به خدمات هر پلتفرم، از بخش زیر انتخاب کنید."
           align="center"
         />
 
-        {/* This rail intentionally stays a service ticker. */}
+        {/* The rail remains a service ticker; only the section below it is platform navigation. */}
         <div className="relative mt-5 w-full overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface)]/70 py-3">
           <motion.div ref={ref} style={{ x }} className="flex w-max gap-3 px-3" dir="ltr">
             {[...items, ...items].map((service, index) => (
@@ -94,25 +94,23 @@ export default function SocialServicesPreview() {
           </motion.div>
         </div>
 
-        {/* Platform navigation is deliberately below the service rail. */}
-        <div className="mt-5">
-          <div className="mb-3 text-center text-sm font-black text-[var(--text-muted)]">پلتفرم‌های خدمات اجتماعی</div>
-          <div className="flex flex-wrap justify-center gap-2">
+        <div className="mt-4 rounded-3xl border border-[var(--border)] bg-[var(--surface)]/70 p-3 sm:p-4">
+          <div className="mb-3 flex items-center justify-between gap-3 px-1">
+            <h3 className="text-sm sm:text-base font-black text-[var(--text)]">پلتفرم‌ها</h3>
+            <Link href="/social" className="text-xs font-bold text-[var(--primary)] hover:underline">
+              همه پلتفرم‌ها
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             {platforms.map((platform) => (
               <Link
                 key={platform.id}
                 href={`/social?platform=${encodeURIComponent(platform.id)}`}
-                className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-5 py-2.5 text-xs font-black text-[var(--text)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                className="flex min-h-14 items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--background)] px-3 py-3 text-center text-sm font-black text-[var(--text)] transition hover:-translate-y-0.5 hover:border-[var(--primary)] hover:text-[var(--primary)]"
               >
                 {platform.name}
               </Link>
             ))}
-            <Link
-              href="/social"
-              className="rounded-full bg-[var(--primary)] px-5 py-2.5 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
-            >
-              مشاهده همه پلتفرم‌ها ←
-            </Link>
           </div>
         </div>
 
