@@ -107,17 +107,68 @@ export async function getUnreadMessagesCount() {
     return count ?? 0;
 }
 
-export async function getUnreadMessagesByOrder(orderId: string) {
+type UnreadMessageRow = { order_id: string | null };
+type UnreadMessageCacheEntry = {
+    expiresAt: number;
+    promise: Promise<Record<string, number>>;
+};
+
+const unreadMessagesCache = new Map<string, UnreadMessageCacheEntry>();
+const UNREAD_MESSAGES_CACHE_TTL = 5000;
+
+async function getAllUnreadMessageCounts() {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return 0;
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-    if (!profile) return 0;
-    let query = supabase.from("messages").select("id", { count: "exact", head: true }).eq("order_id", orderId);
-    query = profile.role === "admin"
-        ? query.eq("sender_role", "user").eq("read_by_admin", false)
-        : query.eq("sender_role", "admin").eq("read_by_user", false);
-    const { count } = await query;
-    return count ?? 0;
+    if (!user) return {} as Record<string, number>;
+
+    const cached = unreadMessagesCache.get(user.id);
+    if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
+    const promise = (async () => {
+        const { data: profile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single();
+        if (!profile) return {} as Record<string, number>;
+
+        let query = supabase
+            .from("messages")
+            .select("order_id")
+            .neq("sender_id", user.id);
+
+        query = profile.role === "admin"
+            ? query.eq("sender_role", "user").eq("read_by_admin", false)
+            : query.eq("sender_role", "admin").eq("read_by_user", false);
+
+        const { data, error } = await query;
+        if (error) return {} as Record<string, number>;
+
+        return (data as UnreadMessageRow[] | null ?? []).reduce<Record<string, number>>((counts, row) => {
+            if (row.order_id) counts[row.order_id] = (counts[row.order_id] ?? 0) + 1;
+            return counts;
+        }, {});
+    })();
+
+    unreadMessagesCache.set(user.id, {
+        promise,
+        expiresAt: Date.now() + UNREAD_MESSAGES_CACHE_TTL,
+    });
+
+    return promise;
+}
+
+export async function getUnreadMessagesByOrders(orderIds: string[]) {
+    if (orderIds.length === 0) return {} as Record<string, number>;
+    const counts = await getAllUnreadMessageCounts();
+    return orderIds.reduce<Record<string, number>>((result, orderId) => {
+        result[orderId] = counts[orderId] ?? 0;
+        return result;
+    }, {});
+}
+
+export async function getUnreadMessagesByOrder(orderId: string) {
+    const counts = await getUnreadMessagesByOrders([orderId]);
+    return counts[orderId] ?? 0;
 }
 
 export async function getAdminUnreadMessagesByOrder(orderId: string) {
