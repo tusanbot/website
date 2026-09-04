@@ -21,8 +21,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(siteUrl), title: { default: title, template: `%s | ${title}` }, description,
     applicationName: title,
+    manifest: "/manifest.webmanifest",
     keywords: [title, "کافی نت", "خدمات اینترنتی", "ثبت نام آنلاین", "خدمات اداری آنلاین"],
-    alternates: { canonical: siteUrl }, icons: { icon, shortcut: icon, apple: assets.iconUrl || icon },
+    alternates: { canonical: siteUrl },
+    icons: { icon, shortcut: icon, apple: assets.iconUrl || icon },
     openGraph: { type: "website", locale: "fa_IR", url: siteUrl, siteName: title, title, description },
     robots: { index: true, follow: true },
   };
@@ -45,6 +47,9 @@ function gtag(){dataLayer.push(arguments);}
 window.gtag = gtag;
 gtag('js', new Date());
 gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: false });`}
+        </Script>
+        <Script id="pwa-register" strategy="afterInteractive">
+          {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }`}
         </Script>
         <ThemeProvider><AnalyticsTracker />{children}</ThemeProvider>
       </body>
