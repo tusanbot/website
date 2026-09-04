@@ -67,6 +67,7 @@ export default function ProcessTimeline() {
   }, [reduceMotion]);
 
   const step = steps[active];
+  const activeStepNumber = (active + 1).toLocaleString("fa-IR");
 
   return <section id="order-process" className="relative scroll-mt-28 py-8 sm:py-12" dir="rtl">
     <div className="mx-auto max-w-6xl px-4 lg:px-8">
@@ -76,7 +77,7 @@ export default function ProcessTimeline() {
         <div className="grid items-center gap-5 md:grid-cols-[1fr_auto] md:gap-8">
           <div className="min-w-0 md:order-2">
             <div className="relative min-h-[205px] overflow-hidden rounded-3xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3 sm:min-h-[225px] sm:p-5">
-              <div className="absolute right-4 top-4 rounded-full bg-[var(--surface)] px-3 py-1 text-[11px] font-black text-[var(--primary)] shadow-sm">مرحله {String(active + 1).toLocaleString("fa-IR")} از ۵</div>
+              <div className="absolute right-4 top-4 rounded-full bg-[var(--surface)] px-3 py-1 text-[11px] font-black text-[var(--primary)] shadow-sm">مرحله {activeStepNumber} از ۵</div>
               <AnimatePresence mode="wait">
                 <motion.div key={active} initial={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -24, scale: 0.98 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: 24, scale: 0.98 }} transition={{ duration: reduceMotion ? 0.15 : 0.5, ease: [0.22, 1, 0.36, 1] }} className="pt-8">
                   <Demo index={active} />
@@ -93,7 +94,7 @@ export default function ProcessTimeline() {
         </div>
 
         <div className="mt-5 border-t border-[var(--border)] pt-5 text-right">
-          <div className="flex items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-2xl">{step.icon}</div><div><div className="text-xs font-bold text-[var(--text-muted)]">مرحله {String(active + 1).toLocaleString("fa-IR")}</div><h3 className="mt-0.5 text-lg font-black sm:text-xl">{step.title}</h3></div></div>
+          <div className="flex items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-2xl">{step.icon}</div><div><div className="text-xs font-bold text-[var(--text-muted)]">مرحله {activeStepNumber}</div><h3 className="mt-0.5 text-lg font-black sm:text-xl">{step.title}</h3></div></div>
           <p className="mt-3 text-sm leading-8 text-[var(--text-muted)] sm:text-base">{step.description}</p>
         </div>
       </div>
