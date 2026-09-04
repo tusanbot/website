@@ -16,16 +16,6 @@ const demoServices = ["ثبت‌نام خودرو", "استعلام بیمه", "
 const lineColors = ["bg-emerald-500", "bg-sky-500", "bg-amber-500", "bg-violet-500", "bg-rose-500"];
 
 function Demo({ index }: { index: number }) {
-  const [name, setName] = useState("مهدی رضایی");
-
-  useEffect(() => {
-    if (index !== 1) return;
-    const names = ["مهدی رضایی", "علی احمدی", "سارا کریمی"];
-    let i = 0;
-    const timer = setInterval(() => setName(names[i++ % names.length]), 900);
-    return () => clearInterval(timer);
-  }, [index]);
-
   if (index === 0) {
     return <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3">
       {demoServices.map((service, i) => <motion.div key={service} animate={i === 1 ? { scale: [1, 1.03, 1] } : {}} transition={{ duration: 1, repeat: Infinity }} className={`rounded-xl px-3 py-2.5 text-xs font-bold ${i === 1 ? "bg-[var(--primary)] text-white" : "bg-[var(--surface)]"}`}>{service}{i === 1 && <span className="float-left">✓</span>}</motion.div>)}
@@ -34,17 +24,17 @@ function Demo({ index }: { index: number }) {
 
   if (index === 1) {
     return <div className="space-y-2 rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3">
-      <div className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-xs">نام: <b>{name}</b></div>
-      <div className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-xs">شماره تماس: 0912•••••••</div>
+      <div className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-xs">نام مشتری: <b>کاربر توسن</b></div>
+      <div className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-xs">شماره تماس: 09•••••••••</div>
       <motion.div animate={{ width: ["20%", "100%"] }} transition={{ duration: 2, repeat: Infinity }} className="h-2 rounded-full bg-[var(--primary)]" />
     </div>;
   }
 
   if (index === 2) {
     return <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3">
-      <div className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-xs">مبلغ سفارش: <b>۲۵۰,۰۰۰ تومان</b></div>
+      <div className="rounded-xl bg-[var(--surface)] px-3 py-2.5 text-xs">مبلغ سفارش: <b>هزینه خدمت</b></div>
       <div className="mt-2 flex gap-2"><motion.div animate={{ opacity: [0.5, 1, 0.5] }} transition={{ duration: 1.2, repeat: Infinity }} className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-2 py-2.5 text-center text-[10px]">انتخاب درگاه</motion.div><motion.div animate={{ scale: [1, 0.97, 1] }} transition={{ duration: 1.1, repeat: Infinity }} className="flex-1 rounded-xl bg-[var(--primary)] px-2 py-2.5 text-center text-[10px] font-black text-white">پرداخت امن</motion.div></div>
-      <div className="mt-2 text-center text-[10px] text-[var(--text-muted)]">✓ تراکنش آزمایشی موفق</div>
+      <div className="mt-2 text-center text-[10px] text-[var(--text-muted)]">✓ پرداخت سفارش</div>
     </div>;
   }
 
@@ -96,7 +86,7 @@ export default function ProcessTimeline() {
           </div>
 
           <div className="flex shrink-0 items-center justify-center gap-2 md:order-1 md:flex-col md:gap-2.5" aria-label="مراحل ثبت سفارش">
-            {steps.map((item, index) => <button key={item.title} type="button" onClick={() => setActive(index)} aria-label={`نمایش مرحله ${item.title}`} aria-current={index === active ? "step" : undefined} className="group flex items-center justify-center p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 rounded-full">
+            {steps.map((item, index) => <button key={item.title} type="button" onClick={() => setActive(index)} aria-label={`نمایش مرحله ${item.title}`} aria-current={index === active ? "step" : undefined} className="group flex items-center justify-center rounded-full p-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2">
               <span className={`block h-1.5 w-8 rounded-full transition-all duration-300 sm:w-10 md:h-8 md:w-1.5 ${lineColors[index]} ${index === active ? "opacity-100 md:h-10" : "opacity-20 group-hover:opacity-50"}`} />
             </button>)}
           </div>
