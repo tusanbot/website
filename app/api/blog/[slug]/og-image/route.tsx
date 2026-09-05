@@ -3,14 +3,8 @@ import { supabaseAdmin } from "@/lib/supabaseAdmin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function escapeXml(value: string) {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-}
-
-function wrapTitle(title: string, max = 34) {
-  const words = title.trim().split(/\s+/); const lines: string[] = []; let line = "";
-  for (const word of words) { const next = line ? `${line} ${word}` : word; if (next.length > max && line) { lines.push(line); line = word; } else line = next; }
-  if (line) lines.push(line); return lines.slice(0, 4);
+function cleanHtml(value: unknown) {
+  return String(value ?? "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
 }
 
 function imageQueryForTitle(title: string) {
@@ -33,69 +27,138 @@ function imageQueryForTitle(title: string) {
   return "office paperwork digital services";
 }
 
-function cleanHtml(value: unknown) { return String(value ?? "").replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim(); }
-function isAllowedLicense(name: string) { const n = name.toLowerCase().replace(/\s+/g, " ").trim(); return n.includes("cc0") || n.includes("public domain") || (n.includes("cc by") && !n.includes("sa")); }
+function isAllowedLicense(name: string) {
+  const n = name.toLowerCase().replace(/\s+/g, " ").trim();
+  return n.includes("cc0") || n.includes("public domain") || (n.includes("cc by") && !n.includes("sa"));
+}
 
 async function findLicensedExternalImage(title: string) {
-  const params = new URLSearchParams({ action: "query", format: "json", generator: "search", gsrnamespace: "6", gsrsearch: imageQueryForTitle(title), gsrlimit: "20", prop: "imageinfo", iiprop: "url|size|mime|extmetadata", iiurlwidth: "1200", iiextmetadatafilter: "LicenseShortName|UsageTerms|Artist|Credit|Attribution", origin: "*" });
-  const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params.toString()}`, { headers: { "User-Agent": "TusanCN Blog Image Resolver/1.0 (https://tusancn.ir)", Accept: "application/json" } });
+  const params = new URLSearchParams({
+    action: "query",
+    format: "json",
+    generator: "search",
+    gsrnamespace: "6",
+    gsrsearch: imageQueryForTitle(title),
+    gsrlimit: "20",
+    prop: "imageinfo",
+    iiprop: "url|size|mime|extmetadata",
+    iiurlwidth: "1200",
+    iiextmetadatafilter: "LicenseShortName|UsageTerms|Artist|Credit|Attribution",
+    origin: "*",
+  });
+  const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params.toString()}`, {
+    headers: { "User-Agent": "TusanCN Blog Image Resolver/1.1 (https://tusancn.ir)", Accept: "application/json" },
+  });
   if (!response.ok) return null;
-  const data = await response.json(); const pages = Object.values(data?.query?.pages ?? {}) as any[];
+  const data = await response.json();
+  const pages = Object.values(data?.query?.pages ?? {}) as any[];
   for (const page of pages) {
-    const info = page?.imageinfo?.[0]; if (!info) continue; const mime = String(info.mime ?? "");
+    const info = page?.imageinfo?.[0];
+    if (!info) continue;
+    const mime = String(info.mime ?? "");
     if (!mime.startsWith("image/") || mime === "image/svg+xml") continue;
-    const meta = info.extmetadata ?? {}; const license = cleanHtml(meta.LicenseShortName?.value ?? meta.UsageTerms?.value);
+    const meta = info.extmetadata ?? {};
+    const license = cleanHtml(meta.LicenseShortName?.value ?? meta.UsageTerms?.value);
     if (!isAllowedLicense(license) || Number(info.width ?? 0) < 600 || Number(info.height ?? 0) < 350) continue;
-    return (info.thumburl || info.url) as string;
+    return { url: (info.thumburl || info.url) as string, mime };
   }
   return null;
 }
 
-function storageUrl(id: string) { return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/blog-images/posts/${id}.svg`; }
-
-function fallbackSvg(title: string, category?: string) {
-  const lines = wrapTitle(title); const titleSvg = lines.map((line, index) => `<text x="1100" y="${255 + index * 72}" text-anchor="end" class="title">${escapeXml(line)}</text>`).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#087d69"/><stop offset="0.55" stop-color="#09967c"/><stop offset="1" stop-color="#0b8a86"/></linearGradient></defs><rect width="1200" height="630" fill="url(#g)"/><circle cx="1050" cy="90" r="180" fill="#ffffff" fill-opacity="0.08"/><circle cx="120" cy="570" r="240" fill="#ffffff" fill-opacity="0.06"/><g fill="#dff5ef" font-family="Tahoma, Arial, sans-serif"><text x="1100" y="105" text-anchor="end" font-size="28" font-weight="700">${escapeXml(category || "راهنما و آموزش")}</text><text x="1100" y="170" text-anchor="end" font-size="48" font-weight="900" fill="#ffffff">کافی نت توسن</text>${titleSvg}<text x="1100" y="570" text-anchor="end" font-size="23" font-weight="600">راهنمای کاربردی خدمات آنلاین و اداری</text></g></svg>`;
+function storageUrl(id: string, extension = "jpg") {
+  return `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/blog-images/posts/${id}.${extension}`;
 }
 
-export async function GET(_request: Request, { params }: { params: Promise<{ slug: string }> }) {
-  const slug = decodeURIComponent((await params).slug).normalize("NFC"); const supabase = supabaseAdmin();
-  const { data: post, error: postError } = await supabase.from("blog_posts").select("id,title,featured_image,blog_categories(name)").eq("slug", slug).eq("status", "published").maybeSingle();
-  if (postError) return new Response("Failed to load article", { status: 500 }); if (!post) return new Response("Not found", { status: 404 });
+function fallbackSvg(title: string, category?: string) {
+  const safeTitle = title.replace(/[&<>\"']/g, "").slice(0, 180);
+  const safeCategory = String(category || "راهنما و آموزش").replace(/[&<>\"']/g, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#087d69"/><stop offset="0.55" stop-color="#09967c"/><stop offset="1" stop-color="#0b8a86"/></linearGradient></defs><rect width="1200" height="630" fill="url(#g)"/><text x="1100" y="105" text-anchor="end" font-size="28" font-weight="700" fill="#dff5ef" font-family="Tahoma,Arial,sans-serif">${safeCategory}</text><text x="1100" y="180" text-anchor="end" font-size="48" font-weight="900" fill="#fff" font-family="Tahoma,Arial,sans-serif">کافی نت توسن</text><text x="1100" y="290" text-anchor="end" font-size="40" fill="#fff" font-family="Tahoma,Arial,sans-serif">${safeTitle}</text></svg>`;
+}
 
-  const publicUrl = storageUrl(post.id); const storagePath = `posts/${post.id}.svg`;
-  const { data: existing } = await supabase.storage.from("blog-images").download(storagePath);
-  if (existing) {
-    if (post.featured_image !== publicUrl) await supabase.from("blog_posts").update({ featured_image: publicUrl }).eq("id", post.id);
-    return new Response(existing, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=31536000, immutable" } });
+async function persistExternalImage(supabase: ReturnType<typeof supabaseAdmin>, postId: string, title: string) {
+  const external = await findLicensedExternalImage(title);
+  if (!external) return null;
+  try {
+    const response = await fetch(external.url, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.1" } });
+    const contentType = response.headers.get("content-type") || external.mime || "image/jpeg";
+    if (!response.ok || !contentType.startsWith("image/") || contentType === "image/svg+xml") return null;
+    const bytes = await response.arrayBuffer();
+    const extension = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+    const path = `posts/${postId}.${extension}`;
+    const { error } = await supabase.storage.from("blog-images").upload(path, bytes, {
+      contentType,
+      cacheControl: "31536000",
+      upsert: true,
+    });
+    if (error) return null;
+    const publicUrl = storageUrl(postId, extension);
+    await supabase.from("blog_posts").update({ featured_image: publicUrl }).eq("id", postId);
+    return { bytes, contentType, publicUrl };
+  } catch {
+    return null;
   }
+}
 
-  if (typeof post.featured_image === "string" && /^https?:\/\//i.test(post.featured_image)) {
-    try {
-      const external = await fetch(post.featured_image, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.0" } }); const contentType = external.headers.get("content-type") || "";
-      if (external.ok && contentType.startsWith("image/") && contentType !== "image/svg+xml") {
-        const bytes = await external.arrayBuffer(); const { error: uploadError } = await supabase.storage.from("blog-images").upload(storagePath, bytes, { contentType, cacheControl: "31536000", upsert: true });
-        if (!uploadError) { await supabase.from("blog_posts").update({ featured_image: publicUrl }).eq("id", post.id); return new Response(bytes, { headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=31536000, immutable" } }); }
-      }
-    } catch {}
-  }
+export async function GET(request: Request, { params }: { params: Promise<{ slug: string }> }) {
+  const slug = decodeURIComponent((await params).slug).normalize("NFC");
+  const supabase = supabaseAdmin();
+  const { data: post, error: postError } = await supabase
+    .from("blog_posts")
+    .select("id,title,featured_image,blog_categories(name)")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle();
 
-  if (!post.featured_image) {
-    const externalImage = await findLicensedExternalImage(post.title);
-    if (externalImage) {
-      try {
-        const response = await fetch(externalImage, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.0" } }); const contentType = response.headers.get("content-type") || "";
-        if (response.ok && contentType.startsWith("image/") && contentType !== "image/svg+xml") {
-          const bytes = await response.arrayBuffer(); const { error: uploadError } = await supabase.storage.from("blog-images").upload(storagePath, bytes, { contentType, cacheControl: "31536000", upsert: true });
-          if (!uploadError) { await supabase.from("blog_posts").update({ featured_image: publicUrl }).eq("id", post.id); return new Response(bytes, { headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=31536000, immutable" } }); }
-        }
-      } catch {}
+  if (postError) return new Response("Failed to load article", { status: 500 });
+  if (!post) return new Response("Not found", { status: 404 });
+
+  const currentImage = typeof post.featured_image === "string" ? post.featured_image : "";
+  const isLegacyGenerated = /\/posts\/[^/]+\.svg(?:$|\?)/i.test(currentImage);
+  const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
+  const categoryRelation = (post as any).blog_categories;
+  const category = Array.isArray(categoryRelation) ? categoryRelation[0]?.name : categoryRelation?.name;
+
+  // Existing legacy SVG covers are upgraded to real, license-safe, topic-relevant photos.
+  if (isLegacyGenerated || forceRefresh) {
+    const upgraded = await persistExternalImage(supabase, post.id, post.title);
+    if (upgraded) {
+      return new Response(upgraded.bytes, {
+        headers: { "Content-Type": upgraded.contentType, "Cache-Control": "public, max-age=31536000, immutable" },
+      });
     }
   }
 
-  const relation = (post as any).blog_categories; const category = Array.isArray(relation) ? relation[0]?.name : relation?.name; const bytes = new TextEncoder().encode(fallbackSvg(post.title, category));
-  const { error: uploadError } = await supabase.storage.from("blog-images").upload(storagePath, bytes, { contentType: "image/svg+xml", cacheControl: "31536000", upsert: true });
+  // Prefer the currently persisted raster image.
+  if (currentImage && !isLegacyGenerated && /^https?:\/\//i.test(currentImage)) {
+    try {
+      const response = await fetch(currentImage, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.1" } });
+      if (response.ok) return new Response(await response.arrayBuffer(), {
+        headers: { "Content-Type": response.headers.get("content-type") || "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" },
+      });
+    } catch {}
+  }
+
+  const extensions = ["jpg", "png", "webp"];
+  for (const extension of extensions) {
+    const path = `posts/${post.id}.${extension}`;
+    const { data: existing } = await supabase.storage.from("blog-images").download(path);
+    if (existing) {
+      const contentType = extension === "png" ? "image/png" : extension === "webp" ? "image/webp" : "image/jpeg";
+      const publicUrl = storageUrl(post.id, extension);
+      if (post.featured_image !== publicUrl) await supabase.from("blog_posts").update({ featured_image: publicUrl }).eq("id", post.id);
+      return new Response(existing, { headers: { "Content-Type": contentType, "Cache-Control": "public, max-age=31536000, immutable" } });
+    }
+  }
+
+  const bytes = new TextEncoder().encode(fallbackSvg(post.title, category));
+  const path = `posts/${post.id}.svg`;
+  const { error: uploadError } = await supabase.storage.from("blog-images").upload(path, bytes, {
+    contentType: "image/svg+xml",
+    cacheControl: "31536000",
+    upsert: true,
+  });
   if (uploadError) return new Response(`Failed to store image: ${uploadError.message}`, { status: 500 });
+  const publicUrl = storageUrl(post.id, "svg");
   await supabase.from("blog_posts").update({ featured_image: publicUrl }).eq("id", post.id);
   return new Response(bytes, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=31536000, immutable" } });
 }
