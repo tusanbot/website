@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAiProfile } from "@/lib/ai/server";
-import { generateWithGemini } from "@/lib/ai/gemini";
+import { requireAiAccess } from "@/lib/ai/access";
+import { generateWithGeminiApiKey } from "@/lib/ai/gemini";
 import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 const TYPES: Record<string, string> = { request: "درخواست اداری", general: "نامه اداری عمومی", introduction: "معرفی‌نامه", complaint: "شکایت و اعتراض", thanks: "تقدیر و تشکر", leave: "درخواست مرخصی", custom: "نامه سفارشی" };
@@ -15,11 +15,10 @@ function buildPrompt(input: { action: string; type: string; recipient: string; s
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getAiProfile();
-    if (!session) return NextResponse.json({ error: "AI_PROFILE_REQUIRED" }, { status: 401 });
+    const access = await requireAiAccess();
     const bodySizeError = rejectOversizedJsonBody(request, 16 * 1024);
     if (bodySizeError) return bodySizeError;
-    const rateLimitResponse = await checkRateLimit({ scope: "ai:official-letter", request, userId: session.profile.id, limit: 10, windowSeconds: 60 });
+    const rateLimitResponse = await checkRateLimit({ scope: "ai:official-letter", request, userId: access.rateLimitUserId, limit: 10, windowSeconds: 60 });
     if (rateLimitResponse) return rateLimitResponse;
     const body = await request.json() as Record<string, unknown>;
     const input = {
@@ -34,10 +33,10 @@ export async function POST(request: NextRequest) {
     };
     if (input.action === "generate" && !input.details && !input.subject) return NextResponse.json({ error: "موضوع یا توضیحات نامه را وارد کنید." }, { status: 400 });
     if (input.action !== "generate" && !input.text) return NextResponse.json({ error: "متن نامه را وارد کنید." }, { status: 400 });
-    const result = await generateWithGemini(session.profile.id, buildPrompt(input), session.profile.model || "gemini-2.5-flash", { temperature: 0.35, maxOutputTokens: 1800, timeoutMs: 45000 });
-    return NextResponse.json({ text: result.text });
+    const result = await generateWithGeminiApiKey(access.apiKey, buildPrompt(input), access.model, { temperature: 0.35, maxOutputTokens: 1800, timeoutMs: 45000 });
+    return NextResponse.json({ text: result.text, source: access.source });
   } catch (error) {
-    if (error instanceof Error && error.message === "AI_PROFILE_REQUIRED") return NextResponse.json({ error: "AI_PROFILE_REQUIRED" }, { status: 401 });
+    if (error instanceof Error && error.message === "AI_ACCESS_REQUIRED") return NextResponse.json({ error: "برای استفاده از هوش مصنوعی با حساب Google وارد شوید یا کلید API شخصی خود را وارد کنید." }, { status: 401 });
     if (error instanceof Error && error.message === "GEMINI_AUTH") return NextResponse.json({ error: "کلید Gemini معتبر نیست یا دسترسی لازم را ندارد." }, { status: 401 });
     if (error instanceof Error && error.message === "GEMINI_RATE_LIMIT") return NextResponse.json({ error: "سقف یا محدودیت درخواست Gemini پر شده است." }, { status: 429 });
     if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return NextResponse.json({ error: "زمان پاسخ Gemini تمام شد. دوباره تلاش کنید." }, { status: 504 });
