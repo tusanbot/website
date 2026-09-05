@@ -16,6 +16,11 @@ function categoryData(post: any) {
   return Array.isArray(relation) ? relation[0] ?? null : relation ?? null;
 }
 
+function imageUrlForPost(post: any, siteUrl: string) {
+  if (typeof post?.featured_image === "string" && /^https?:\/\//i.test(post.featured_image)) return post.featured_image;
+  return `${siteUrl}/api/blog/${encodeURIComponent(post.slug)}/og-image`;
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const post = await getPost((await params).slug);
   if (!post) return { title: "مقاله پیدا نشد", robots: { index: false, follow: false } };
@@ -23,7 +28,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const title = post.meta_title || `${post.title} | وبلاگ کافی نت توسن`;
   const description = post.meta_description || post.excerpt || `راهنمای ${post.title} در کافی نت توسن.`;
   const canonical = `/blog/${encodeURIComponent(post.slug)}`;
-  const imageUrl = `${siteUrl}/api/blog/${encodeURIComponent(post.slug)}/og-image`;
+  const imageUrl = imageUrlForPost(post, siteUrl);
   const keywords = [...(Array.isArray(post.seo_keywords) ? post.seo_keywords : []), post.primary_keyword, "کافی نت توسن"].filter(Boolean);
   return { title, description, keywords, alternates: { canonical }, openGraph: { type: "article", locale: "fa_IR", title, description, url: canonical, siteName: "کافی نت توسن", publishedTime: post.published_at || undefined, modifiedTime: post.updated_at || post.published_at || undefined, images: [{ url: imageUrl, width: 1200, height: 630, alt: post.title }] } };
 }
@@ -36,7 +41,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   if (!post) notFound();
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
   const canonical = `${siteUrl}/blog/${encodeURIComponent(post.slug)}`;
-  const imageUrl = `${siteUrl}/api/blog/${encodeURIComponent(post.slug)}/og-image`;
+  const imageUrl = imageUrlForPost(post, siteUrl);
   const category = categoryData(post);
   const categorySlug = category?.slug;
   const relatedCategory = category?.name;
