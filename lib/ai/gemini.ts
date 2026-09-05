@@ -4,6 +4,8 @@ export type GeminiResult = { text: string; model: string };
 export type GeminiOptions = { temperature?: number; maxOutputTokens?: number; timeoutMs?: number };
 export type GeminiSpeechResult = { audioBase64: string; mimeType: string; model: string };
 
+type GeminiError = Error & { status?: number; detail?: string };
+
 function getBaseUrl() {
   return (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
 }
@@ -13,7 +15,7 @@ function safeGeminiError(status: number, data: unknown) {
     ? (data as { error?: { message?: string; status?: string; code?: number } }).error
     : undefined;
   const detail = message?.message || message?.status || "";
-  const error = new Error(`GEMINI_${status}`) as Error & { status?: number; detail?: string };
+  const error = new Error(`GEMINI_${status}`) as GeminiError;
   error.status = status;
   error.detail = detail.slice(0, 300);
   return error;
@@ -30,11 +32,10 @@ function pcm16ToWavBase64(base64: string, sampleRate = 24000) {
   return Buffer.concat([header, binary]).toString("base64");
 }
 
-export async function generateWithGemini(profileId: string, prompt: string, model = "gemini-3.6-flash", options: GeminiOptions = {}): Promise<GeminiResult> {
-  const apiKey = await getProfileApiKey(profileId);
-  const requestedModel = model || "gemini-3.6-flash";
+async function generateWithGeminiKey(apiKey: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}): Promise<GeminiResult> {
+  const requestedModel = model || "gemini-2.5-flash";
   const models = Array.from(new Set([requestedModel, "gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]));
-  let lastError: (Error & { status?: number; detail?: string }) | null = null;
+  let lastError: GeminiError | null = null;
 
   for (const candidate of models) {
     const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(candidate)}:generateContent`, {
@@ -50,8 +51,7 @@ export async function generateWithGemini(profileId: string, prompt: string, mode
     }
 
     const data = await readGeminiError(response);
-    lastError = safeGeminiError(response.status, data) as Error & { status?: number; detail?: string };
-
+    lastError = safeGeminiError(response.status, data);
     if (response.status === 401 || response.status === 403) throw Object.assign(new Error("GEMINI_AUTH"), { status: 401 });
     if (response.status === 429) throw Object.assign(new Error("GEMINI_RATE_LIMIT"), { status: 429 });
     if (response.status === 400 && /model|not found|unsupported|invalid/i.test(lastError.detail || "")) continue;
@@ -63,8 +63,15 @@ export async function generateWithGemini(profileId: string, prompt: string, mode
   throw Object.assign(new Error("GEMINI_UPSTREAM"), { status: 502 });
 }
 
-export async function generateSpeechWithGemini(profileId: string, text: string, voice = "Kore", speed = 1): Promise<GeminiSpeechResult> {
-  const apiKey = await getProfileApiKey(profileId);
+export async function generateWithGemini(profileId: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}) {
+  return generateWithGeminiKey(await getProfileApiKey(profileId), prompt, model, options);
+}
+
+export async function generateWithGeminiApiKey(apiKey: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}) {
+  return generateWithGeminiKey(apiKey, prompt, model, options);
+}
+
+async function generateSpeechWithGeminiKey(apiKey: string, text: string, voice = "Kore", speed = 1): Promise<GeminiSpeechResult> {
   const model = process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
   const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -80,6 +87,14 @@ export async function generateSpeechWithGemini(profileId: string, text: string, 
   if (!audio?.data) throw Object.assign(new Error("GEMINI_AUDIO_EMPTY"), { status: 502 });
   const isPcm = (audio.mimeType || "").toLowerCase().includes("l16") || (audio.mimeType || "").toLowerCase().includes("pcm");
   return { audioBase64: isPcm ? pcm16ToWavBase64(audio.data) : audio.data, mimeType: isPcm ? "audio/wav" : (audio.mimeType || "audio/wav"), model };
+}
+
+export async function generateSpeechWithGemini(profileId: string, text: string, voice = "Kore", speed = 1) {
+  return generateSpeechWithGeminiKey(await getProfileApiKey(profileId), text, voice, speed);
+}
+
+export async function generateSpeechWithGeminiApiKey(apiKey: string, text: string, voice = "Kore", speed = 1) {
+  return generateSpeechWithGeminiKey(apiKey, text, voice, speed);
 }
 
 export function parseGeminiJson<T>(text: string): T {
