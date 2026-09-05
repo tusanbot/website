@@ -76,10 +76,13 @@ function calculateAdditional(basePrice: number, rule: PricingRule, data: Record<
 function calculateLegacyPerItem(basePrice: number, rule: PricingRule, data: Record<string, unknown>): number {
   const count = countValue(rule.field ? data[rule.field] : 0);
   const unitPrice = Math.max(0, Number(rule.extra_price ?? rule.amount ?? 0));
+  const configuredBase = rule.base_price ?? rule.base_amount;
+  if (configuredBase === undefined && rule.step === undefined && rule.included === undefined && rule.includedItems === undefined) {
+    return count * unitPrice;
+  }
   const included = Math.max(0, Number(rule.included ?? rule.includedItems ?? 0));
   const step = Math.max(1, Number(rule.step ?? 1));
   const extraUnits = Math.ceil(Math.max(0, count - included) / step);
-  const configuredBase = rule.base_price ?? rule.base_amount;
   return (configuredBase !== undefined ? Math.max(0, Number(configuredBase) || 0) : basePrice) + extraUnits * unitPrice;
 }
 
@@ -88,7 +91,7 @@ export function calculateServicePrice(basePrice: number, rules: PricingRule[], d
   let price = Math.max(0, Number(basePrice) || 0);
   const enabledRules = (rules || []).filter((rule) => rule.enabled !== false);
 
-  const richRules = enabledRules.filter((rule) => rule.conditions?.length || rule.base_price !== undefined || rule.base_amount !== undefined || rule.additional_per_unit || rule.quote_required || rule.type === "per_item" || rule.type === "range");
+  const richRules = enabledRules.filter((rule) => rule.conditions?.length || rule.base_price !== undefined || rule.base_amount !== undefined || rule.additional_per_unit || rule.quote_required || rule.pricing_status === "quote_required" || rule.type === "per_item" || rule.type === "range");
   for (const rule of richRules) {
     if (rule.type === "per_item" && !rule.conditions?.length && !rule.field) continue;
     if (rule.conditions?.length || rule.field) {
@@ -107,9 +110,9 @@ export function calculateServicePrice(basePrice: number, rules: PricingRule[], d
 
   const canonicalRules = enabledRules.filter((rule) => !richRules.includes(rule) && (rule.field || rule.operator));
   for (const rule of canonicalRules) {
-    if (!matchesPricingRule(rule, data)) continue;
-    const amount = Math.max(0, Number(rule.amount) || 0);
-    if (rule.mode === "set") price = amount;
+    if (rule.mode !== "set" || !matchesPricingRule(rule, data)) continue;
+    price = Math.max(0, Number(rule.amount) || 0);
+    break;
   }
   for (const rule of canonicalRules) {
     if (!matchesPricingRule(rule, data)) continue;
