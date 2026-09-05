@@ -11,13 +11,11 @@ async function getPost(slug: string) {
   return data as any;
 }
 
-function categoryData(post: any) {
-  const relation = post?.blog_categories;
-  return Array.isArray(relation) ? relation[0] ?? null : relation ?? null;
-}
+function categoryData(post: any) { const relation = post?.blog_categories; return Array.isArray(relation) ? relation[0] ?? null : relation ?? null; }
 
 function imageUrlForPost(post: any, siteUrl: string) {
-  if (typeof post?.featured_image === "string" && /^https?:\/\//i.test(post.featured_image)) return post.featured_image;
+  const image = typeof post?.featured_image === "string" ? post.featured_image : "";
+  if (image.includes("/storage/v1/object/public/blog-images/")) return image;
   return `${siteUrl}/api/blog/${encodeURIComponent(post.slug)}/og-image`;
 }
 
@@ -42,9 +40,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
   const canonical = `${siteUrl}/blog/${encodeURIComponent(post.slug)}`;
   const imageUrl = imageUrlForPost(post, siteUrl);
-  const category = categoryData(post);
-  const categorySlug = category?.slug;
-  const relatedCategory = category?.name;
+  const category = categoryData(post); const categorySlug = category?.slug; const relatedCategory = category?.name;
   const services = (post.blog_post_services ?? []).map((x: any) => x.services).filter(Boolean);
   const supabase = createSupabaseServerClient();
   const { data: relatedPosts } = categorySlug ? await supabase.from("blog_posts").select("id,title,slug,excerpt,published_at,blog_categories!inner(name,slug)").eq("status", "published").neq("id", post.id).eq("blog_categories.slug", categorySlug).order("published_at", { ascending: false }).limit(3) : { data: [] };
