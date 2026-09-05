@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
 import { generateWithGeminiApiKey, parseGeminiJson } from "@/lib/ai/gemini";
 import { getAdminAiToolAccess, markAdminAiToolUsed } from "@/lib/ai/tools";
+import { checkRateLimit } from "@/lib/security/rateLimit";
 
 const SERVICE_SCHEMA = `{"title":"","slug":"","category":"","description":"","icon":"","meta_title":"","meta_description":"","seo_keywords":[],"formSchema":[]}`;
 const BLOG_SCHEMA = `{"title":"","slug":"","excerpt":"","content":"","meta_title":"","meta_description":"","seo_keywords":[],"headings":[],"faq":[]}`;
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
     let source: "tusan" | "admin_tool" = "tusan";
     let toolId: string | null = null;
     let systemPrompt = "";
+    let toolLimit = 30;
 
     if (body.toolId) {
       const tool = await getAdminAiToolAccess(body.toolId);
@@ -31,8 +33,12 @@ export async function POST(request: NextRequest) {
       source = tool.source;
       toolId = tool.id;
       systemPrompt = tool.systemPrompt || "";
+      toolLimit = tool.rateLimit;
     }
     if (!apiKey) return NextResponse.json({ error: "Credential هوش مصنوعی داخلی تنظیم نشده است." }, { status: 503 });
+
+    const rateLimitResponse = await checkRateLimit({ scope: toolId ? `admin-ai-tool:${toolId}` : "admin-ai-internal", request, userId: admin.id, limit: toolLimit, windowSeconds: 3600 });
+    if (rateLimitResponse) return rateLimitResponse;
 
     const task = target === "blog"
       ? "برای وبلاگ کافی‌نت توسن یک پیش‌نویس حرفه‌ای و سئو محور تولید کن. موضوع را بر اساس هدف جست‌وجو و استراتژی محتوایی سایت تنظیم کن. یک کلمه کلیدی اصلی و کلیدواژه‌های مرتبط انتخاب کن، عنوان و slug مناسب بساز، H2/H3 منطقی ایجاد کن، محتوای HTML ساده و خوانا بنویس، meta title را ترجیحاً حدود 50 تا 60 کاراکتر و meta description را حدود 140 تا 160 کاراکتر نگه دار. در موضوعات زمان‌مند تاریخ و وضعیت را صریحاً مشخص کن و اطلاعات متغیر را قطعی و دائمی ننویس. در صورت مناسب بودن FAQ تولید کن. ادعای factual بدون منبع نساز و از keyword stuffing و تبلیغات اغراق‌آمیز پرهیز کن."
