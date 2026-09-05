@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 function escapeXml(value: string) {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
 export const runtime = "nodejs";
@@ -17,8 +17,12 @@ export default async function OpenGraphImage({ params }: { params: Promise<{ slu
     .eq("status", "published")
     .maybeSingle();
 
+  const categoryRelation = post?.blog_categories;
+  const categoryName = Array.isArray(categoryRelation)
+    ? categoryRelation[0]?.name
+    : categoryRelation?.name;
   const title = escapeXml(post?.title || "مقاله وبلاگ کافی نت توسن");
-  const category = escapeXml(post?.blog_categories?.name || "راهنما و آموزش");
+  const category = escapeXml(categoryName || "راهنما و آموزش");
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
@@ -39,5 +43,10 @@ export default async function OpenGraphImage({ params }: { params: Promise<{ slu
   <text x="1050" y="520" direction="rtl" text-anchor="end" font-family="Vazirmatn, Noto Sans Arabic, Arial, sans-serif" font-size="24" font-weight="600" fill="#e8faf6">راهنمای کاربردی خدمات آنلاین و اداری</text>
 </svg>`;
 
-  return new Response(svg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8", "Cache-Control": "public, max-age=3600, s-maxage=86400" } });
+  return new Response(svg, {
+    headers: {
+      "Content-Type": "image/svg+xml; charset=utf-8",
+      "Cache-Control": "public, max-age=3600, s-maxage=86400"
+    }
+  });
 }
