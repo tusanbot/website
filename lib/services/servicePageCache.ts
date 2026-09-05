@@ -32,4 +32,4 @@ async function loadServicePageData(path: string): Promise<ServicePageData> {
   ]);
   return { service, related: (related || []) as ServicePageLink[], children: (children || []) as ServicePageLink[], parent: (parent || null) as ServicePageData["parent"] };
 }
-export async function getCachedServicePageData(path: string): Promise<ServicePageData> { const normalized = normalizeServicePath(path); const cached = unstable_cache(() => loadServicePageData(path), ["service-page-data", normalized], { revalidate: 60, tags: ["services", `service:${normalized}`] }); return cached(); }
+export async function getCachedServicePageData(path: string): Promise<ServicePageData> { const normalized = normalizeServicePath(path); const cached = unstable_cache(() => loadServicePageData(path), ["service-page-data-v2", normalized], { revalidate: 60, tags: ["services", `service:${normalized}`] }); return cached(); }
