@@ -80,8 +80,9 @@ function calculateLegacyPerItem(basePrice: number, rule: PricingRule, data: Reco
   if (configuredBase === undefined && rule.step === undefined && rule.included === undefined && rule.includedItems === undefined) {
     return count * unitPrice;
   }
-  const included = Math.max(0, Number(rule.included ?? rule.includedItems ?? 0));
   const step = Math.max(1, Number(rule.step ?? 1));
+  const explicitIncluded = rule.included ?? rule.includedItems;
+  const included = explicitIncluded !== undefined ? Math.max(0, Number(explicitIncluded) || 0) : (rule.step !== undefined ? step : 0);
   const extraUnits = Math.ceil(Math.max(0, count - included) / step);
   return (configuredBase !== undefined ? Math.max(0, Number(configuredBase) || 0) : basePrice) + extraUnits * unitPrice;
 }
