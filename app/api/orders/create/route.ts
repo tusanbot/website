@@ -3,7 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { validateFormData } from '@/lib/forms/server-validation';
 import { calculateServicePrice, type PricingRule } from '@/lib/forms/pricing';
 import { MAX_ORDER_BODY_BYTES, validateFormDataShape } from '@/lib/security/request-limits';
-import type { FormSchema } from '@/types/forms';
+import type { FormField, FormSchema } from '@/types/forms';
 
 function normalizeSchema(value: unknown): FormSchema {
   let parsed = value;
@@ -35,6 +35,28 @@ function mergeSchemas(parent: FormSchema, child: FormSchema): FormSchema {
     return true;
   });
   return { ...child, fields: unique };
+}
+
+/**
+ * Server validation stores order data by field id for stable snapshots, while
+ * pricing rules are authored against the public field name. Build a pricing
+ * view that exposes both aliases so either convention works without changing
+ * the persisted order payload.
+ */
+function buildPricingData(fields: FormField[], validated: Record<string, unknown>): Record<string, unknown> {
+  const output: Record<string, unknown> = { ...validated };
+  for (const field of fields) {
+    const value = validated[field.id];
+    if (value === undefined) continue;
+    output[field.name] = value;
+    if (field.type === 'repeatable' && Array.isArray(value) && field.fields?.length) {
+      output[field.name] = value.map((row) => {
+        if (!row || typeof row !== 'object') return row;
+        return buildPricingData(field.fields || [], row as Record<string, unknown>);
+      });
+    }
+  }
+  return output;
 }
 
 function generateTrackingCode(): string {
@@ -154,7 +176,8 @@ export async function POST(request: Request): Promise<Response> {
     const validation = validateFormData(schema, body.formData);
     if (!validation.valid) return NextResponse.json({ error: 'اطلاعات فرم کامل یا معتبر نیست.', errors: validation.errors }, { status: 422 });
 
-    const finalPrice = calculateServicePrice(orderPrice, pricingRules, validation.data as Record<string, unknown>);
+    const pricingData = buildPricingData(schema.fields, validation.data);
+    const finalPrice = calculateServicePrice(orderPrice, pricingRules, pricingData);
     const { data: order, error: orderError } = await supabase.from('orders').insert({ user_id: user.id, service_id: service.id, form_id: formId, form_version_id: formVersionId, idempotency_key: idempotencyKey || null, tracking_code: generateTrackingCode(), status: 'registered', form_data: validation.data, form_schema_snapshot: schema, price: finalPrice }).select('id,tracking_code,price,form_version_id').single();
     if (orderError) {
       if (orderError.code === '23505' && idempotencyKey) {
