@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabase";
 
 type Tool = { id: string; name: string; slug: string; description: string | null; provider: string; model: string; active: boolean; rate_limit: number; system_prompt: string | null; created_at: string; updated_at: string; last_used_at: string | null };
 type FormState = { name: string; slug: string; description: string; model: string; apiKey: string; rateLimit: string; systemPrompt: string; active: boolean };
+type ToolPayload = Omit<FormState, "rateLimit" | "apiKey"> & { rateLimit: number; apiKey?: string; id?: string };
 const empty: FormState = { name: "", slug: "", description: "", model: "gemini-2.5-flash", apiKey: "", rateLimit: "30", systemPrompt: "", active: true };
 
 export default function AiToolsAdmin() {
@@ -36,8 +37,8 @@ export default function AiToolsAdmin() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setSaving(true); setMessage("");
     const headers = await authHeaders();
-    const payload = { ...form, rateLimit: Number(form.rateLimit), ...(editing ? { id: editing } : {}) };
-    if (editing && !form.apiKey) delete (payload as Partial<FormState>).apiKey;
+    const payload: ToolPayload = { ...form, rateLimit: Number(form.rateLimit), ...(editing ? { id: editing } : {}) };
+    if (editing && !form.apiKey) delete payload.apiKey;
     const res = await fetch("/api/admin/ai/tools", { method: editing ? "PATCH" : "POST", headers, body: JSON.stringify(payload) });
     const data = await res.json();
     setSaving(false);
