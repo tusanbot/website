@@ -5,39 +5,25 @@ type AiAccess = {
   apiKey: string;
   model: string;
   rateLimitUserId: string;
-  source: "google" | "personal";
+  source: "personal";
 };
 
-const SHARED_KEY = process.env.TUSAN_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
-const SHARED_MODEL = process.env.TUSAN_GEMINI_MODEL || "gemini-2.5-flash";
-
-function isGoogleUser(user: { app_metadata?: Record<string, unknown> | null }) {
-  return user.app_metadata?.provider === "google";
-}
-
+/**
+ * Public AI tools always use the end user's Gemini credential.
+ * Google OAuth is only the site's identity/authentication layer; it never
+ * becomes a Gemini credential and must never fall back to a Tusan-owned key.
+ */
 export async function getAiAccess(): Promise<AiAccess | null> {
   const site = await createSupabaseServerClient();
   const { data: { user } } = await site.auth.getUser();
 
-  // Google-authenticated site users can use the Tusan-managed Gemini credential.
-  // The credential stays server-side; the user's Google OAuth token is never sent to Gemini.
-  if (user && isGoogleUser(user) && SHARED_KEY) {
-    return {
-      apiKey: SHARED_KEY,
-      model: SHARED_MODEL,
-      rateLimitUserId: user.id,
-      source: "google",
-    };
-  }
-
-  // Users who prefer to bring their own Gemini key keep the existing AI profile flow.
   const personal = await getAiProfile();
   if (!personal) return null;
 
   return {
     apiKey: await getProfileApiKey(personal.profile.id),
     model: personal.profile.model || "gemini-2.5-flash",
-    rateLimitUserId: personal.profile.id,
+    rateLimitUserId: user?.id || personal.profile.id,
     source: "personal",
   };
 }
