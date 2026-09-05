@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     let model = process.env.TUSAN_GEMINI_MODEL || "gemini-2.5-flash";
     let source: "tusan" | "admin_tool" = "tusan";
     let toolId: string | null = null;
+    let systemPrompt = "";
 
     if (body.toolId) {
       const tool = await getAdminAiToolAccess(body.toolId);
@@ -29,13 +30,14 @@ export async function POST(request: NextRequest) {
       model = tool.model;
       source = tool.source;
       toolId = tool.id;
+      systemPrompt = tool.systemPrompt || "";
     }
     if (!apiKey) return NextResponse.json({ error: "Credential هوش مصنوعی داخلی تنظیم نشده است." }, { status: 503 });
 
     const task = target === "blog"
       ? "برای وبلاگ کافی‌نت توسن یک پیش‌نویس حرفه‌ای و سئو محور تولید کن. موضوع را بر اساس هدف جست‌وجو و استراتژی محتوایی سایت تنظیم کن. یک کلمه کلیدی اصلی و کلیدواژه‌های مرتبط انتخاب کن، عنوان و slug مناسب بساز، H2/H3 منطقی ایجاد کن، محتوای HTML ساده و خوانا بنویس، meta title را ترجیحاً حدود 50 تا 60 کاراکتر و meta description را حدود 140 تا 160 کاراکتر نگه دار. در موضوعات زمان‌مند تاریخ و وضعیت را صریحاً مشخص کن و اطلاعات متغیر را قطعی و دائمی ننویس. در صورت مناسب بودن FAQ تولید کن. ادعای factual بدون منبع نساز و از keyword stuffing و تبلیغات اغراق‌آمیز پرهیز کن."
       : "برای یک خدمت کافی‌نت توسن یک پیش‌نویس حرفه‌ای و سئو محور تولید کن. عنوان، slug کوتاه و یکتا، دسته‌بندی، توضیحات، آیکون و متادیتای سئو بساز. meta title را ترجیحاً حدود 50 تا 60 کاراکتر و meta description را حدود 140 تا 160 کاراکتر نگه دار. یک کلمه کلیدی اصلی و چند کلیدواژه مرتبط بر اساس نیت جست‌وجوی کاربر پیشنهاد بده. اگر خدمت نیازمند ثبت اطلاعات است formSchema شامل فیلدهای منطقی با ساختار ساده {name,label,type,required,options} برگردان."
-    const prompt = `${task}\n\n${source === "admin_tool" ? "راهنمای اختصاصی ابزار:\n" : ""}${body.toolId ? ((await getAdminAiToolAccess(body.toolId)).systemPrompt || "") : ""}\n\nورودی فعلی مدیر: ${JSON.stringify(current)}\n\nدستور تکمیلی: ${String(body.instruction || "").slice(0, 1200)}\n\nفقط JSON معتبر مطابق این ساختار برگردان و هیچ Markdown یا توضیح بیرونی ننویس:\n${schema}`;
+    const prompt = `${task}\n\n${systemPrompt ? `راهنمای اختصاصی ابزار:\n${systemPrompt}\n\n` : ""}ورودی فعلی مدیر: ${JSON.stringify(current)}\n\nدستور تکمیلی: ${String(body.instruction || "").slice(0, 1200)}\n\nفقط JSON معتبر مطابق این ساختار برگردان و هیچ Markdown یا توضیح بیرونی ننویس:\n${schema}`;
     const result = await generateWithGeminiApiKey(apiKey, prompt, model);
     if (toolId) await markAdminAiToolUsed(toolId);
     const data = parseGeminiJson<Record<string, unknown>>(result.text);
