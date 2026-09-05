@@ -17,26 +17,14 @@ export default async function OpenGraphImage({ params }: { params: Promise<{ slu
     .eq("status", "published")
     .maybeSingle();
 
-  const relation = post?.blog_categories;
+  const postData = post as any;
+  const relation: any = postData?.blog_categories;
   const category = Array.isArray(relation) ? relation[0]?.name : relation?.name;
-  const title = post?.title || "مقاله وبلاگ کافی نت توسن";
+  const title = postData?.title || "مقاله وبلاگ کافی نت توسن";
 
   return new ImageResponse(
     (
-      <div
-        dir="rtl"
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          padding: "72px",
-          background: "linear-gradient(135deg,#087d69 0%,#09967c 55%,#0b8a86 100%)",
-          color: "white",
-          fontFamily: "Arial, sans-serif",
-        }}
-      >
+      <div dir="rtl" style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "72px", background: "linear-gradient(135deg,#087d69 0%,#09967c 55%,#0b8a86 100%)", color: "white", fontFamily: "Arial, sans-serif" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
           <div style={{ fontSize: 30, fontWeight: 700, color: "#dff5ef" }}>{category || "راهنما و آموزش"}</div>
           <div style={{ fontSize: 52, fontWeight: 900 }}>کافی نت توسن</div>
