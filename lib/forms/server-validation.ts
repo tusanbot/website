@@ -24,11 +24,7 @@ function readFieldValue(field: FormField | undefined, key: string, values: Recor
   return values[key];
 }
 
-function evaluateCondition(
-  condition: FieldCondition,
-  values: Record<string, FormValue>,
-  fields: FormField[] = [],
-) {
+function evaluateCondition(condition: FieldCondition, values: Record<string, FormValue>, fields: FormField[] = []) {
   const key = condition.fieldId ?? condition.field;
   const actual = readFieldValue(findField(fields, key), key, values);
   const expected = condition.value;
@@ -36,32 +32,19 @@ function evaluateCondition(
   const right = normalize(expected);
 
   switch (condition.operator) {
-    case 'equals':
-      return Array.isArray(actual) ? actual.some(value => normalize(value) === right) : left === right;
-    case 'not_equals':
-      return Array.isArray(actual) ? !actual.some(value => normalize(value) === right) : left !== right;
-    case 'contains':
-      return Array.isArray(actual)
-        ? actual.some(value => normalize(value) === right)
-        : left.toLowerCase().includes(right.toLowerCase());
-    case 'not_contains':
-      return Array.isArray(actual)
-        ? !actual.some(value => normalize(value) === right)
-        : !left.toLowerCase().includes(right.toLowerCase());
-    case 'is_true':
-      return actual === true || left === 'true';
-    case 'is_false':
-      return actual === false || left === 'false';
-    case 'gt':
-      return Number(actual) > Number(expected);
-    case 'gte':
-      return Number(actual) >= Number(expected);
-    case 'lt':
-      return Number(actual) < Number(expected);
-    case 'lte':
-      return Number(actual) <= Number(expected);
-    default:
-      return false;
+    case 'equals': return Array.isArray(actual) ? actual.some(value => normalize(value) === right) : left === right;
+    case 'not_equals': return Array.isArray(actual) ? !actual.some(value => normalize(value) === right) : left !== right;
+    case 'contains': return Array.isArray(actual) ? actual.some(value => normalize(value).toLowerCase().includes(right.toLowerCase())) : left.toLowerCase().includes(right.toLowerCase());
+    case 'not_contains': return Array.isArray(actual) ? !actual.some(value => normalize(value).toLowerCase().includes(right.toLowerCase())) : !left.toLowerCase().includes(right.toLowerCase());
+    case 'is_true': return actual === true || left === 'true' || left === '1';
+    case 'is_false': return actual === false || left === 'false' || left === '0';
+    case 'gt': return Number(actual) > Number(expected);
+    case 'gte': return Number(actual) >= Number(expected);
+    case 'lt': return Number(actual) < Number(expected);
+    case 'lte': return Number(actual) <= Number(expected);
+    case 'empty': return actual == null || left === '' || (Array.isArray(actual) && actual.length === 0);
+    case 'not_empty': return !(actual == null || left === '' || (Array.isArray(actual) && actual.length === 0));
+    default: return false;
   }
 }
 
@@ -101,8 +84,10 @@ function validateField(field: FormField, value: FormValue, fields: FormField[] =
   if (field.type === 'number') {
     const number = typeof value === 'number' ? value : Number(value);
     if (!Number.isFinite(number)) return 'مقدار باید عددی باشد.';
-    if (field.validation?.min !== undefined && number < field.validation.min) return `مقدار باید حداقل ${field.validation.min} باشد.`;
-    if (field.validation?.max !== undefined && number > field.validation.max) return `مقدار باید حداکثر ${field.validation.max} باشد.`;
+    const min = field.validation?.min ?? field.min;
+    const max = field.validation?.max ?? field.max;
+    if (min !== undefined && number < min) return `مقدار باید حداقل ${min} باشد.`;
+    if (max !== undefined && number > max) return `مقدار باید حداکثر ${max} باشد.`;
   }
 
   if (typeof value === 'string') {
