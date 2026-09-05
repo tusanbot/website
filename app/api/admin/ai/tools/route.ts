@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, isNextResponse } from "@/lib/auth/requireAdmin";
-import { encryptApiKey, hashApiKey } from "@/lib/ai/crypto";
+import { encryptApiKey } from "@/lib/ai/crypto";
 import { validateGeminiKey } from "@/lib/ai/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
@@ -27,23 +27,11 @@ export async function POST(request: NextRequest) {
     if (!name || !slug || apiKey.length < 20) return NextResponse.json({ error: "نام، slug و کلید API معتبر الزامی است." }, { status: 400 });
     const validation = await validateGeminiKey(apiKey);
     if (!validation.ok) return NextResponse.json({ error: validation.message }, { status: 400 });
-    const { data, error } = await supabaseAdmin().from("ai_tools").insert({
-      name,
-      slug,
-      description: String(body.description || "").trim().slice(0, 500) || null,
-      provider: "gemini",
-      model: String(body.model || validation.model).trim().slice(0, 120) || validation.model,
-      encrypted_api_key: encryptApiKey(apiKey),
-      active: body.active !== false,
-      rate_limit: Math.min(10000, Math.max(1, Number(body.rateLimit) || 30)),
-      system_prompt: String(body.systemPrompt || "").trim().slice(0, 12000) || null,
-      created_by: admin.id,
-    }).select("id,name,slug,description,provider,model,active,rate_limit,system_prompt,created_at,updated_at,last_used_at").single();
+    const { data, error } = await supabaseAdmin().from("ai_tools").insert({ name, slug, description: String(body.description || "").trim().slice(0, 500) || null, provider: "gemini", model: String(body.model || validation.model).trim().slice(0, 120) || validation.model, encrypted_api_key: encryptApiKey(apiKey), active: body.active !== false, rate_limit: Math.min(10000, Math.max(1, Number(body.rateLimit) || 30)), system_prompt: String(body.systemPrompt || "").trim().slice(0, 12000) || null, created_by: admin.id }).select("id,name,slug,description,provider,model,active,rate_limit,system_prompt,created_at,updated_at,last_used_at").single();
     if (error || !data) {
       if (error?.code === "23505") return NextResponse.json({ error: "این slug قبلاً استفاده شده است." }, { status: 409 });
       return NextResponse.json({ error: "ساخت ابزار هوش مصنوعی انجام نشد." }, { status: 500 });
     }
-    void hashApiKey;
     return NextResponse.json({ tool: data }, { status: 201 });
   } catch (error) {
     console.error("admin/ai/tools POST", error);
@@ -68,10 +56,10 @@ export async function PATCH(request: NextRequest) {
     if (body.rateLimit !== undefined) updates.rate_limit = Math.min(10000, Math.max(1, Number(body.rateLimit) || 30));
     if (body.systemPrompt !== undefined) updates.system_prompt = String(body.systemPrompt || "").trim().slice(0, 12000) || null;
     if (body.apiKey !== undefined && String(body.apiKey).trim()) {
-      const apiKey = String(body.apiKey).trim();
-      const validation = await validateGeminiKey(apiKey);
+      const newKey = String(body.apiKey).trim();
+      const validation = await validateGeminiKey(newKey);
       if (!validation.ok) return NextResponse.json({ error: validation.message }, { status: 400 });
-      updates.encrypted_api_key = encryptApiKey(apiKey);
+      updates.encrypted_api_key = encryptApiKey(newKey);
       if (body.model === undefined) updates.model = validation.model;
     }
     const { data, error } = await db.from("ai_tools").update(updates).eq("id", id).select("id,name,slug,description,provider,model,active,rate_limit,system_prompt,created_at,updated_at,last_used_at").single();
