@@ -7,9 +7,22 @@ const MAX_MESSAGE_LENGTH = 4000;
 const MAX_HISTORY = 10;
 const RATE_LIMIT = 20;
 const RATE_WINDOW_SECONDS = 600;
+const GEMINI_KEY_NAMES = [
+  "GEMINI_API_KEY_1",
+  "GEMINI_API_KEY_2",
+  "GEMINI_API_KEY_3",
+  "GEMINI_API_KEY_4",
+  "GEMINI_API_KEY_5",
+] as const;
 
 function cleanText(value: unknown, max = MAX_MESSAGE_LENGTH) {
   return String(value ?? "").replace(/\u0000/g, "").trim().slice(0, max);
+}
+
+function getSupportGeminiKeys() {
+  return GEMINI_KEY_NAMES
+    .map((name) => ({ name, key: process.env[name]?.trim() || "" }))
+    .filter((item): item is { name: (typeof GEMINI_KEY_NAMES)[number]; key: string } => Boolean(item.key));
 }
 
 function publicError(error: unknown) {
@@ -26,13 +39,51 @@ function publicError(error: unknown) {
   return { error: "پاسخ هوش مصنوعی دریافت نشد؛ می‌توانید به پشتیبانی انسانی متصل شوید.", status: 502 };
 }
 
+async function generateWithSupportKeyFailover(prompt: string) {
+  const keys = getSupportGeminiKeys();
+  if (!keys.length) throw Object.assign(new Error("GEMINI_NOT_CONFIGURED"), { status: 503 });
+
+  let lastError: unknown = null;
+  let sawRateLimit = false;
+
+  for (const { name, key } of keys) {
+    try {
+      const result = await generateWithGeminiApiKey(key, prompt, "gemini-2.5-flash", {
+        temperature: 0.2,
+        maxOutputTokens: 700,
+        timeoutMs: 25000,
+      });
+      console.info("support-ai Gemini key succeeded", { key: name, model: result.model });
+      return result;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : "";
+      const status = (error as { status?: number })?.status;
+      const isRateLimited = status === 429 || message === "GEMINI_RATE_LIMIT";
+      const isAuthFailure = status === 401 || message === "GEMINI_AUTH";
+      const isUnavailable = status === 408 || status === 502 || status === 503 || status === 504 || message === "GEMINI_UPSTREAM";
+
+      if (isRateLimited) sawRateLimit = true;
+      if (isRateLimited || isAuthFailure || isUnavailable) {
+        console.warn("support-ai Gemini key failed; trying next key", { key: name, status, message });
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  if (sawRateLimit && lastError) throw Object.assign(new Error("GEMINI_RATE_LIMIT"), { status: 429 });
+  throw lastError || Object.assign(new Error("GEMINI_UPSTREAM"), { status: 502 });
+}
+
 export async function POST(request: NextRequest) {
   const site = await createSupabaseServerClient();
   const { data: { user } } = await site.auth.getUser();
   if (!user) return NextResponse.json({ error: "برای استفاده از پشتیبانی آنلاین وارد حساب خود شوید." }, { status: 401 });
 
-  const apiKey = process.env.TUSAN_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: "سرویس هوش مصنوعی پشتیبانی هنوز پیکربندی نشده است." }, { status: 503 });
+  if (!getSupportGeminiKeys().length) {
+    return NextResponse.json({ error: "سرویس هوش مصنوعی پشتیبانی هنوز پیکربندی نشده است." }, { status: 503 });
+  }
 
   try {
     const body = await request.json() as Record<string, unknown>;
@@ -106,10 +157,13 @@ ${conversationContext || "شروع گفتگو"}
 پیام جدید کاربر:
 ${message}`;
 
-    const result = await generateWithGeminiApiKey(apiKey, prompt, "gemini-2.5-flash", { temperature: 0.2, maxOutputTokens: 700, timeoutMs: 25000 });
+    const result = await generateWithSupportKeyFailover(prompt);
     return NextResponse.json({ reply: result.text, model: result.model, remaining: rate?.remaining ?? null });
   } catch (error) {
     console.error("support-ai", error);
+    if (error instanceof Error && error.message === "GEMINI_NOT_CONFIGURED") {
+      return NextResponse.json({ error: "سرویس هوش مصنوعی پشتیبانی هنوز پیکربندی نشده است." }, { status: 503 });
+    }
     const result = publicError(error);
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
