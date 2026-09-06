@@ -2,13 +2,13 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { FileText, Search, Car, Home, GraduationCap, ShieldCheck, Landmark, CreditCard, BriefcaseBusiness, Printer, FileSpreadsheet, Palette, Globe2, BookOpen, Plane, HeartPulse, BadgeCheck, Bot, LockKeyhole, UserRoundCheck, Presentation, Building2, ReceiptText, WalletCards, Gavel, MapPin, type LucideIcon } from "lucide-react";
+import { FileText, Search, Car, Home, GraduationCap, ShieldCheck, Landmark, CreditCard, BriefcaseBusiness, Printer, FileSpreadsheet, Palette, Globe2, BookOpen, Plane, HeartPulse, BadgeCheck, Bot, LockKeyhole, UserRoundCheck, Presentation, Building2, ReceiptText, WalletCards, Gavel, MapPin, UserRoundSearch, type LucideIcon } from "lucide-react";
 import { GlassPanel } from "@/components/ui";
 import { getTaxonomySlug } from "@/lib/serviceTaxonomy";
 import PriceInquiryDialog from "@/components/services/PriceInquiryDialog";
 
 const ServiceAnnouncementsSlider = dynamic(() => import("@/components/ServiceAnnouncementsSlider"), { loading: () => null });
-type Service = { id: string; title: string; slug: string | null; category: string | null; description: string | null; price: number; icon: string | null; is_active: boolean; parent_service_id: string | null; delivery_mode: string; local_only: boolean };
+type Service = { id: string; title: string; slug: string | null; category: string | null; description: string | null; price: number; icon: string | null; is_active: boolean; parent_service_id: string | null; delivery_mode: string; local_only: boolean; identity_verification_required: boolean };
 type Props = { services: Service[]; initialCategory?: string; initialSearch?: string };
 
 const iconRules: Array<[RegExp, LucideIcon]> = [
@@ -19,7 +19,7 @@ const categoryRules: Array<[RegExp, LucideIcon]> = [
 ];
 function resolveServiceIcon(service: Service): LucideIcon { const haystack = `${service.title} ${service.category || ""} ${service.description || ""}`; const byTitle = iconRules.find(([pattern]) => pattern.test(haystack)); if (byTitle) return byTitle[1]; const byCategory = categoryRules.find(([pattern]) => pattern.test(`${service.category || ""} ${getTaxonomySlug(service.category)}`)); return byCategory?.[1] || FileText; }
 function ServiceIcon({ service, className = "h-6 w-6" }: { service: Service; className?: string }) { const Icon = resolveServiceIcon(service); return <Icon aria-hidden="true" className={className} strokeWidth={2.1} />; }
-function ServiceBadges({ service }: { service: Service }) { return <div className="flex flex-wrap items-center gap-1.5">{service.local_only && <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800"><MapPin className="h-3 w-3" />فقط در مراغه</span>}{service.delivery_mode === "in_person" && !service.local_only && <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800"><MapPin className="h-3 w-3" />حضوری</span>}</div>; }
+function ServiceBadges({ service }: { service: Service }) { return <div className="flex flex-wrap items-center gap-1.5">{service.local_only && <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800"><MapPin className="h-3 w-3" />فقط در مراغه</span>}{service.identity_verification_required && <span className="inline-flex items-center gap-1 rounded-full border border-sky-300/70 bg-sky-50 px-2 py-1 text-[11px] font-black text-sky-800"><UserRoundSearch className="h-3 w-3" />احراز هویت حضوری</span>}{service.delivery_mode === "in_person" && !service.local_only && !service.identity_verification_required && <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800"><MapPin className="h-3 w-3" />حضوری</span>}</div>; }
 function ServicePrice({ service }: { service: Service }) { return service.price > 0 ? <span className="font-black text-[var(--primary)]">{service.price.toLocaleString("fa-IR")} تومان</span> : <PriceInquiryDialog serviceTitle={service.title} />; }
 
 export default function ServicesCatalog({ services, initialCategory = "all", initialSearch = "" }: Props) {
@@ -35,7 +35,7 @@ export default function ServicesCatalog({ services, initialCategory = "all", ini
     <ServiceAnnouncementsSlider />
     <GlassPanel className="p-4 sm:p-5">
       <form method="get" className="flex flex-col lg:flex-row gap-3"><div className="flex-1"><label htmlFor="service-search" className="sr-only">جستجوی خدمت</label><div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2"><Search aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--text-muted)]" /><input id="service-search" name="q" defaultValue={search} placeholder="جستجوی خدمت یا دسته‌بندی..." className="w-full bg-transparent py-2 text-sm outline-none" /></div></div><button type="submit" className="rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-bold text-white">جستجو</button>{initialCategory !== "all" && <input type="hidden" name="category" value={initialCategory} />}</form>
-      <p className="mt-3 text-xs text-[var(--text-muted)]">خدمات حضوری با برچسب «فقط در مراغه» مشخص شده‌اند و خدمات بدون قیمت دارای گزینه «استعلام قیمت» هستند.</p>
+      <p className="mt-3 text-xs text-[var(--text-muted)]">خدمات حضوری با برچسب «فقط در مراغه» مشخص شده‌اند، خدمات نیازمند احراز هویت با برچسب «احراز هویت حضوری» و خدمات بدون قیمت دارای گزینه «استعلام قیمت» هستند.</p>
     </GlassPanel>
     <section className="space-y-4" aria-labelledby="service-hierarchy-title">
       <div className="flex items-end justify-between gap-3"><div><h2 id="service-hierarchy-title" className="text-xl sm:text-2xl font-black">دسته‌بندی و خدمات</h2><p className="mt-1 text-sm text-[var(--text-muted)]">ساختار یکپارچه خدمت مادر ← خدمات زیرمجموعه</p></div><span className="text-sm text-[var(--text-muted)]">{services.length.toLocaleString("fa-IR")} خدمت</span></div>
