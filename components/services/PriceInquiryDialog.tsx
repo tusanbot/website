@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Instagram, MessageCircle, Phone, Send, X } from "lucide-react";
+import { MessageCircle, Phone, Send, X } from "lucide-react";
 
 const channels = [
   { label: "تماس تلفنی", href: "tel:09940838154", icon: Phone },
   { label: "تلگرام", href: "https://t.me/Tusan_admin", icon: Send },
   { label: "ایتا", href: "https://eitaa.com/tusan_c", icon: MessageCircle },
   { label: "روبیکا", href: "https://rubika.ir/tusan_c", icon: MessageCircle },
-  { label: "اینستاگرام", href: "https://www.instagram.com/tusan_c/", icon: Instagram },
+  { label: "اینستاگرام", href: "https://www.instagram.com/tusan_c/", icon: MessageCircle },
   { label: "پشتیبانی آنلاین", href: "/messages", icon: MessageCircle },
 ] as const;
 
