@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://www.tusancn.ir/services" },
 };
 
-type Service = { id: string; title: string; slug: string | null; category: string | null; description: string | null; price: number; icon: string | null; is_active: boolean; parent_service_id: string | null; delivery_mode: string; local_only: boolean };
+type Service = { id: string; title: string; slug: string | null; category: string | null; description: string | null; price: number; icon: string | null; is_active: boolean; parent_service_id: string | null; delivery_mode: string; local_only: boolean; identity_verification_required: boolean };
 type SearchParams = { q?: string; category?: string };
 
 export default async function ServicesPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
@@ -18,11 +18,11 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("services")
-    .select("id,title,slug,category,description,price,icon,is_active,parent_service_id,delivery_mode,local_only")
+    .select("id,title,slug,category,description,price,icon,is_active,parent_service_id,delivery_mode,local_only,identity_verification_required")
     .eq("is_active", true)
     .order("created_at", { ascending: false });
   if (error) console.error("services catalog load failed", error);
-  const services: Service[] = (data || []).map((item: any) => ({ ...item, price: Number(item.price || 0), delivery_mode: item.delivery_mode || "online", local_only: Boolean(item.local_only) }));
+  const services: Service[] = (data || []).map((item: any) => ({ ...item, price: Number(item.price || 0), delivery_mode: item.delivery_mode || "online", local_only: Boolean(item.local_only), identity_verification_required: Boolean(item.identity_verification_required) }));
 
   return <main dir="rtl" className="min-h-screen page-background text-[var(--text)]">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
