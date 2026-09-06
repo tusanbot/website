@@ -24,13 +24,26 @@ export default function SupportChatWidget(){
  async function loadOrders(id:string){const {data,error:e}=await supabase.from("orders").select("id,tracking_code,status,created_at").eq("user_id",id).order("created_at",{ascending:false}).limit(50);if(!e)setOrders((data||[]) as UserOrder[]);else setError(e.message)}
  async function markRead(id:string){const {error:e}=await supabase.rpc("mark_support_messages_read",{p_conversation_id:id});if(e)console.warn(e.message)}
  async function loadConversation(id:string,orderId:string|null){
-  setLoading(true);setError(null);setConversationId(null);setConversation(null);setMessages([]);setReviewSent(false);setRating(0);setReviewComment("");
+  setLoading(true);setError(null);
+  // On first load after a refresh there is no selected order in local state.
+  // Restore the user's latest open conversation regardless of its order, so an
+  // open human chat is never replaced by a fresh AI chat merely because the
+  // page was refreshed. When the user explicitly selects an order, keep the
+  // existing order-specific lookup behavior.
   let q=supabase.from("support_conversations").select("id,status,order_id,assignment_mode,assigned_staff_id").eq("user_id",id).eq("status","open");
-  q=orderId?q.eq("order_id",orderId):q.is("order_id",null);
+  if(orderId) q=q.eq("order_id",orderId);
   const {data:existing,error:e}=await q.order("updated_at",{ascending:false}).limit(1).maybeSingle();
   if(e){setError(e.message);setLoading(false);return}
-  if(existing?.id){setAiMode(false);await hydrate(existing as Conversation);return}
-  setAiMode(true);setLoading(false);
+  if(existing?.id){
+   setSelectedOrderId(existing.order_id||"");
+   setAiMode(false);
+   await hydrate(existing as Conversation);
+   return;
+  }
+  // If the user explicitly switched to an order and there is no open
+  // conversation for that order, start a new AI context. Otherwise this is
+  // simply the normal no-open-conversation state.
+  setConversationId(null);setConversation(null);setMessages([]);setAiMode(true);setLoading(false);
  }
  async function hydrate(c:Conversation){setConversation(c);setConversationId(c.id);setAiMode(false);const {data,error:e}=await supabase.from("support_messages").select("id,conversation_id,sender_id,sender_role,message,is_read,created_at").eq("conversation_id",c.id).order("created_at",{ascending:true}).limit(100);if(e)setError(e.message);else setMessages((data||[]) as SupportMessage[]);await markRead(c.id);setLoading(false)}
  async function searchFaqs(query:string,category:string|null){if(!userId)return;setFaqLoading(true);const {data,error:e}=await supabase.rpc("search_support_faqs",{p_query:query.trim()||null,p_category:category});if(!e)setFaqs((data||[]) as Faq[]);else setError(e.message);setFaqLoading(false)}
@@ -58,16 +71,21 @@ export default function SupportChatWidget(){
     <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
       {aiMessages.length===0&&!showFaq&&<div className="py-8 text-center"><div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]"><Bot size={28}/></div><h3 className="mt-4 font-black">سلام 👋 من دستیار هوشمند توسن هستم</h3><p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">در مورد خدمات، سفارش، پرداخت و روند کارها سؤال کنید. اگر نیاز به بررسی انسانی باشد، شما را مستقیماً به اپراتور وصل می‌کنم.</p></div>}
       {aiMessages.map((m,i)=><div key={`${m.role}-${i}`} className={`flex ${m.role==="user"?"justify-start":"justify-end"}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-7 ${m.role==="user"?"bg-[var(--primary)] text-white":"bg-[var(--surface-muted)]"}`}>{m.text}</div></div>)}
-      {aiLoading&&<div className="flex justify-end"><div className="rounded-2xl bg-[var(--surface-muted)] px-4 py-3 text-sm">در حال بررسی و پاسخ‌گویی…</div></div>}
-      {showFaq&&<div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"><div className="mb-2 flex items-center gap-2 text-sm font-black"><LifeBuoy size={16}/>پاسخ‌های ثبت‌شده توسن</div><div className="flex items-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2"><Search size={16}/><input value={faqQuery} onChange={e=>{setFaqQuery(e.target.value);void searchFaqs(e.target.value,faqCategory)}} placeholder="مثلاً پیگیری سفارش یا پرداخت" className="w-full bg-transparent text-sm outline-none"/></div><div className="mt-2 flex gap-2 overflow-x-auto pb-1">{FAQ_CATEGORIES.map(c=><button key={c} type="button" onClick={()=>{const next=faqCategory===c?null:c;setFaqCategory(next);void searchFaqs(faqQuery,next)}} className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-bold ${faqCategory===c?"bg-[var(--primary)] text-white":"bg-[var(--surface-muted)]"}`}>{c}</button>)}</div><div className="mt-3">{faqLoading?<div className="py-4 text-center text-xs">در حال جستجو...</div>:faqs.length===0?<div className="py-3 text-center text-xs text-[var(--text-muted)]">پاسخی پیدا نشد.</div>:<div className="space-y-2">{faqs.slice(0,5).map(f=><details key={f.id} className="rounded-xl border border-[var(--border)]"><summary className="cursor-pointer px-3 py-2 text-xs font-bold">{f.question}</summary><div className="border-t border-[var(--border)] px-3 py-2 text-xs leading-6 text-[var(--text-muted)]">{f.answer}</div></details>)}</div>}</div></div>}
+      {aiLoading&&<div className="flex justify-end"><div className="rounded-2xl bg-[var(--surface-muted)] px-4 py-3 text-sm">در حال بررسی اطلاعات…</div></div>}
     </div>
-    <div className="border-t border-[var(--border)] p-3"><div className="mb-2 flex gap-2"><button type="button" onClick={()=>setShowFaq(v=>!v)} className="flex-1 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">{showFaq?"بستن پاسخ‌های متداول":"جستجوی پاسخ‌های متداول"}</button><button type="button" onClick={()=>void startHumanSupport()} disabled={loading||aiLoading} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[var(--primary)] px-3 py-2 text-xs font-bold text-[var(--primary)] disabled:opacity-40"><UserRound size={15}/>{loading?"در حال اتصال...":"ارتباط با پشتیبانی انسانی"}</button></div><form onSubmit={sendAiMessage}><div className="flex items-end gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2"><textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={4000} placeholder="سؤال خود را بنویسید..." className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none"/><button type="submit" disabled={!draft.trim()||aiLoading} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-white disabled:opacity-40"><Send size={17}/></button></div></form></div>
-   </div>:<>
+    <div className="border-t border-[var(--border)] p-3">
+      <div className="mb-2 flex gap-2 overflow-x-auto">{FAQ_CATEGORIES.map(c=><button key={c} type="button" onClick={()=>{setFaqCategory(faqCategory===c?null:c);setShowFaq(true)}} className="shrink-0 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs">{c}</button>)}<button type="button" onClick={()=>setShowFaq(v=>!v)} className="shrink-0 rounded-full border border-[var(--border)] px-3 py-1.5 text-xs"><Search size={13} className="inline"/> سوالات متداول</button></div>
+      {showFaq&&<div className="mb-3 max-h-40 overflow-y-auto rounded-2xl bg-[var(--surface-muted)] p-2">{faqLoading?<div className="p-3 text-xs">در حال بارگذاری…</div>:faqs.length?faqs.map(f=><button key={f.id} type="button" onClick={()=>{setDraft(f.question);setShowFaq(false)}} className="block w-full rounded-xl p-2 text-right text-xs leading-6 hover:bg-[var(--surface)]">{f.question}</button>):<div className="p-3 text-xs">موردی پیدا نشد.</div>}</div>}
+      <form onSubmit={sendAiMessage} className="flex items-end gap-2"><textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={4000} placeholder="سؤال خود را بنویسید…" className="min-h-12 flex-1 resize-none rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"/><button disabled={aiLoading||!draft.trim()} className="rounded-2xl bg-[var(--primary)] p-3 text-white disabled:opacity-50"><Send size={18}/></button></form>
+      <button type="button" onClick={startHumanSupport} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-[var(--border)] px-3 py-2.5 text-xs font-bold"><LifeBuoy size={16}/>ارتباط با پشتیبانی انسانی</button>
+    </div>
+   </div>:<div className="flex flex-1 flex-col overflow-hidden">
     <div className="border-b border-[var(--border)] p-3">{routingBanner()}</div>
-    <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">{loading?<div className="py-10 text-center text-sm">در حال بارگذاری گفتگو...</div>:messages.length===0?<div className="py-10 text-center text-sm">سلام 👋<br/>پیام خود را بنویسید.</div>:messages.map(m=><div key={m.id} className={`flex ${m.sender_role==="user"?"justify-start":"justify-end"}`}><div className={`max-w-[82%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-7 ${m.sender_role==="user"?"bg-[var(--primary)] text-white":"bg-[var(--surface-muted)]"}`}>{m.message}<div className="mt-1 text-[10px] opacity-60">{new Date(m.created_at).toLocaleTimeString("fa-IR",{hour:"2-digit",minute:"2-digit"})}</div></div></div>)}</div>
-    <div className="border-t border-[var(--border)] p-3"><button type="button" onClick={()=>void closeConversation()} disabled={closing||loading||!conversationId} className="mb-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold disabled:opacity-40"><CheckCircle size={16}/>{closing?"در حال اتمام گفتگو...":"اتمام گفتگو"}</button><form onSubmit={sendHumanMessage}><div className="flex items-end gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-2"><textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={4000} placeholder="پیام شما..." className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 text-sm outline-none"/><button type="submit" disabled={!draft.trim()||sending||!conversationId} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-white disabled:opacity-40"><Send size={17}/></button></div></form></div>
-   </>}
-  </>}</div>}
-  <button type="button" onClick={()=>setOpen(v=>!v)} className="relative flex items-center gap-2 rounded-full bg-[var(--primary)] px-5 py-3.5 font-black text-white shadow-lg"><MessageCircle size={20}/><span className="hidden sm:inline">پشتیبانی آنلاین</span></button>
- </div>;
+    <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">{loading?<div className="py-10 text-center text-sm">در حال بارگذاری گفتگو…</div>:messages.length?messages.map(m=><div key={m.id} className={`flex ${m.sender_id===userId?"justify-start":"justify-end"}`}><div className={`max-w-[88%] whitespace-pre-wrap rounded-2xl px-4 py-3 text-sm leading-7 ${m.sender_id===userId?"bg-[var(--primary)] text-white":"bg-[var(--surface-muted)]"}`}>{m.message}<div className={`mt-1 text-[10px] ${m.sender_id===userId?"text-white/60":"text-[var(--text-muted)]"}`}>{new Date(m.created_at).toLocaleTimeString("fa-IR",{hour:"2-digit",minute:"2-digit"})}</div></div></div>):<div className="py-10 text-center text-sm text-[var(--text-muted)]">گفتگو خالی است.</div>}</div>
+    <div className="border-t border-[var(--border)] p-3"><form onSubmit={sendHumanMessage} className="flex items-end gap-2"><textarea value={draft} onChange={e=>setDraft(e.target.value)} rows={2} maxLength={4000} placeholder="پیام خود را بنویسید…" className="min-h-12 flex-1 resize-none rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-sm outline-none"/><button disabled={sending||!draft.trim()} className="rounded-2xl bg-[var(--primary)] p-3 text-white disabled:opacity-50"><Send size={18}/></button></form><button type="button" onClick={closeConversation} disabled={closing} className="mt-2 flex w-full items-center justify-center gap-2 rounded-2xl border border-red-500/20 px-3 py-2.5 text-xs font-bold text-red-600"><CheckCircle size={16}/>{closing?"در حال اتمام…":"اتمام گفتگو"}</button></div>
+   </div>}
+  </>}
+ </div>}
+ <button type="button" onClick={()=>setOpen(v=>!v)} className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-xl">{open?<X size={22}/>:<MessageCircle size={24}/>}</button>
+ </div>
 }
