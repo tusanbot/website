@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { FileText, Search, Car, Home, GraduationCap, ShieldCheck, Landmark, Scale, CreditCard, BriefcaseBusiness, Printer, FileSpreadsheet, Palette, Globe2, BookOpen, Plane, HeartPulse, BadgeCheck, Bot, LockKeyhole, UserRoundCheck, Presentation, Building2, ClipboardList, ReceiptText, WalletCards, Gavel, Database, Image, type LucideIcon } from "lucide-react";
+import { FileText, Search, Car, Home, GraduationCap, ShieldCheck, Landmark, CreditCard, BriefcaseBusiness, Printer, FileSpreadsheet, Palette, Globe2, BookOpen, Plane, HeartPulse, BadgeCheck, Bot, LockKeyhole, UserRoundCheck, Presentation, Building2, ReceiptText, WalletCards, Gavel, type LucideIcon } from "lucide-react";
 import { GlassPanel } from "@/components/ui";
 import { getTaxonomySlug } from "@/lib/serviceTaxonomy";
 
