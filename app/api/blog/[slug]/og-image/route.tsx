@@ -29,7 +29,7 @@ function imageQueryForTitle(title: string) {
 
 function isAllowedLicense(name: string) {
   const n = name.toLowerCase().replace(/\s+/g, " ").trim();
-  return n.includes("cc0") || n.includes("public domain") || (n.includes("cc by") && !n.includes("sa"));
+  return n.includes("cc0") || n.includes("public domain");
 }
 
 async function findLicensedExternalImage(title: string) {
@@ -47,7 +47,7 @@ async function findLicensedExternalImage(title: string) {
     origin: "*",
   });
   const response = await fetch(`https://commons.wikimedia.org/w/api.php?${params.toString()}`, {
-    headers: { "User-Agent": "TusanCN Blog Image Resolver/1.1 (https://tusancn.ir)", Accept: "application/json" },
+    headers: { "User-Agent": "TusanCN Blog Image Resolver/1.2 (https://tusancn.ir)", Accept: "application/json" },
   });
   if (!response.ok) return null;
   const data = await response.json();
@@ -79,7 +79,7 @@ async function persistExternalImage(supabase: ReturnType<typeof supabaseAdmin>, 
   const external = await findLicensedExternalImage(title);
   if (!external) return null;
   try {
-    const response = await fetch(external.url, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.1" } });
+    const response = await fetch(external.url, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.2" } });
     const contentType = response.headers.get("content-type") || external.mime || "image/jpeg";
     if (!response.ok || !contentType.startsWith("image/") || contentType === "image/svg+xml") return null;
     const bytes = await response.arrayBuffer();
@@ -114,12 +114,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
 
   const currentImage = typeof post.featured_image === "string" ? post.featured_image : "";
   const isLegacyGenerated = /\/posts\/[^/]+\.svg(?:$|\?)/i.test(currentImage);
+  const isApiPlaceholder = /^\/api\/blog\/.*\/og-image(?:\?.*)?$/i.test(currentImage);
   const forceRefresh = new URL(request.url).searchParams.get("refresh") === "1";
   const categoryRelation = (post as any).blog_categories;
   const category = Array.isArray(categoryRelation) ? categoryRelation[0]?.name : categoryRelation?.name;
 
-  // Existing legacy SVG covers are upgraded to real, license-safe, topic-relevant photos.
-  if (isLegacyGenerated || forceRefresh) {
+  // API placeholders and legacy SVGs are upgrade candidates. The first successful request
+  // persists a real topic-relevant raster image in Supabase Storage and updates featured_image.
+  if (isLegacyGenerated || isApiPlaceholder || forceRefresh) {
     const upgraded = await persistExternalImage(supabase, post.id, post.title);
     if (upgraded) {
       return new Response(upgraded.bytes, {
@@ -129,9 +131,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ slug
   }
 
   // Prefer the currently persisted raster image.
-  if (currentImage && !isLegacyGenerated && /^https?:\/\//i.test(currentImage)) {
+  if (currentImage && !isLegacyGenerated && !isApiPlaceholder && /^https?:\/\//i.test(currentImage)) {
     try {
-      const response = await fetch(currentImage, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.1" } });
+      const response = await fetch(currentImage, { headers: { "User-Agent": "TusanCN Blog Image Proxy/1.2" } });
       if (response.ok) return new Response(await response.arrayBuffer(), {
         headers: { "Content-Type": response.headers.get("content-type") || "image/jpeg", "Cache-Control": "public, max-age=31536000, immutable" },
       });
