@@ -20,11 +20,11 @@ function jalaliToGregorian(jy: number, jm: number, jd: number): GDate {
     leapJ += div(jump, 33) * 8 + div((jump % 33), 4);
     jp = jmBreak;
   }
-  let n = jy - jp;
+  const n = jy - jp;
   leapJ += div(n, 33) * 8 + div((n % 33 + 3), 4);
   const leapG = div(gy, 4) - div((div(gy, 100) + 1) * 3, 4) - 150;
   const march = 20 + leapJ - leapG;
-  let days = (jm <= 6 ? (jm - 1) * 31 : (jm - 1) * 30 + 6) + jd - 1;
+  const days = (jm <= 6 ? (jm - 1) * 31 : (jm - 1) * 30 + 6) + jd - 1;
   let gDay = march + days;
   let gYear = gy;
   const monthLengths = [31, 28 + ((gYear % 4 === 0 && gYear % 100 !== 0) || gYear % 400 === 0 ? 1 : 0), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -37,7 +37,7 @@ function gregorianToJalali(gy: number, gm: number, gd: number): JDate {
   const gDaysInMonth = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   const jDaysInMonth = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
   let gy2 = gy - 1600;
-  let gm2 = gm - 1;
+  const gm2 = gm - 1;
   const gd2 = gd - 1;
   let gDayNo = 365 * gy2 + div(gy2 + 3, 4) - div(gy2 + 99, 100) + div(gy2 + 399, 400);
   for (let i = 0; i < gm2; ++i) gDayNo += gDaysInMonth[i];
@@ -56,15 +56,18 @@ function gregorianToJalali(gy: number, gm: number, gd: number): JDate {
 
 function toUtcDate(g: GDate) { return new Date(Date.UTC(g.gy, g.gm - 1, g.gd)); }
 function formatFa(value: number) { return value.toLocaleString("fa-IR"); }
-function formatJalali(date: JDate) { return `${formatFa(date.jy)}/${formatFa(date.jm).padStart(2, "۰")}/${formatFa(date.jd).padStart(2, "۰")}`; }
+function formatJalali(date: JDate) { return `${formatFa(date.jy)}/${String(date.jm).padStart(2, "0")}/${String(date.jd).padStart(2, "0")}`; }
 function formatGregorian(date: GDate) { return `${date.gy}/${String(date.gm).padStart(2, "0")}/${String(date.gd).padStart(2, "0")}`; }
+function toAscii(value: string) { return value.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d))); }
 
 function parseJalali(value: string): JDate | null {
-  const m = value.trim().replace(/-/g, "/").match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  const m = toAscii(value).trim().replace(/-/g, "/").match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
   if (!m) return null;
   const jy = Number(m[1]), jm = Number(m[2]), jd = Number(m[3]);
   if (jm < 1 || jm > 12 || jd < 1 || jd > (jm <= 6 ? 31 : jm <= 11 ? 30 : 30)) return null;
-  return { jy, jm, jd };
+  const g = jalaliToGregorian(jy, jm, jd);
+  const roundTrip = gregorianToJalali(g.gy, g.gm, g.gd);
+  return roundTrip.jy === jy && roundTrip.jm === jm && roundTrip.jd === jd ? { jy, jm, jd } : null;
 }
 
 function parseGregorian(value: string): GDate | null {
@@ -74,12 +77,6 @@ function parseGregorian(value: string): GDate | null {
   const d = new Date(Date.UTC(gy, gm - 1, gd));
   if (d.getUTCFullYear() !== gy || d.getUTCMonth() !== gm - 1 || d.getUTCDate() !== gd) return null;
   return { gy, gm, gd };
-}
-
-function addMonths(date: Date, months: number) {
-  const result = new Date(date.getTime());
-  result.setUTCMonth(result.getUTCMonth() + months);
-  return result;
 }
 
 function diffAge(birth: Date, now: Date) {
@@ -124,7 +121,7 @@ export default function AgeCalculator() {
       const parsed = calendar === "jalali" ? parseJalali(birth) : parseGregorian(birth);
       if (parsed) {
         const g = calendar === "jalali" ? jalaliToGregorian(parsed.jy, parsed.jm, parsed.jd) : parsed;
-        setBirth(mode === "jalali" ? formatJalali(gregorianToJalali(g.gy, g.gm, g.gd)).replace(/۰/g, "0").replace(/۱/g, "1").replace(/۲/g, "2").replace(/۳/g, "3").replace(/۴/g, "4").replace(/۵/g, "5").replace(/۶/g, "6").replace(/۷/g, "7").replace(/۸/g, "8").replace(/۹/g, "9") : `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`);
+        setBirth(mode === "jalali" ? (() => { const j = gregorianToJalali(g.gy, g.gm, g.gd); return `${j.jy}/${String(j.jm).padStart(2, "0")}/${String(j.jd).padStart(2, "0")}`; })() : `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`);
       }
     }
     setCalendar(mode);
@@ -136,17 +133,17 @@ export default function AgeCalculator() {
     </div>
 
     <label className="mt-6 block text-sm font-black">تاریخ تولد <span className="text-xs font-semibold text-[var(--text-muted)]">({calendar === "jalali" ? "YYYY/MM/DD" : "YYYY-MM-DD"})</span>
-      {calendar === "jalali" ? <input dir="ltr" inputMode="numeric" placeholder="1378/05/20" value={birth} onChange={(e) => setBirth(e.target.value.replace(/[^0-9/]/g, ""))} className="mt-3 w-full rounded-2xl border border-[var(--border)] bg-transparent px-4 py-4 text-center text-lg tracking-wider outline-none focus:ring-2 focus:ring-[var(--primary)]" /> : <input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} className="mt-3 w-full rounded-2xl border border-[var(--border)] bg-transparent px-4 py-4 text-lg outline-none focus:ring-2 focus:ring-[var(--primary)]" />}
+      {calendar === "jalali" ? <input dir="ltr" inputMode="numeric" placeholder="1378/05/20" value={birth} onChange={(e) => setBirth(toAscii(e.target.value).replace(/[^0-9/]/g, ""))} className="mt-3 w-full rounded-2xl border border-[var(--border)] bg-transparent px-4 py-4 text-center text-lg tracking-wider outline-none focus:ring-2 focus:ring-[var(--primary)]" /> : <input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} className="mt-3 w-full rounded-2xl border border-[var(--border)] bg-transparent px-4 py-4 text-lg outline-none focus:ring-2 focus:ring-[var(--primary)]" />}
     </label>
 
     {birth && result?.invalid === "future" && <div className="mt-6 rounded-2xl bg-red-500/10 p-5 text-center text-sm font-bold text-red-600">تاریخ تولد نمی‌تواند در آینده باشد.</div>}
-    {birth && !result && <div className="mt-6 rounded-2xl bg-[var(--surface-secondary)] p-5 text-center text-sm text-[var(--text-muted)]">فرمت تاریخ را بررسی کنید؛ مثال: {calendar === "jalali" ? "1378/05/20" : "2000-08-10"}</div>}
+    {birth && !result && <div className="mt-6 rounded-2xl bg-[var(--surface-secondary)] p-5 text-center text-sm text-[var(--text-muted)]">فرمت یا تاریخ واردشده معتبر نیست؛ مثال: {calendar === "jalali" ? "1378/05/20" : "2000-08-10"}</div>}
     {result && "age" in result && <div className="mt-7 space-y-4">
       <div className="rounded-2xl bg-[var(--primary)]/10 p-6 text-center"><div className="text-sm font-bold text-[var(--text-muted)]">سن دقیق شما</div><div className="mt-3 text-3xl font-black text-[var(--primary)] md:text-4xl">{formatFa(result.age.years)} سال، {formatFa(result.age.months)} ماه و {formatFa(result.age.days)} روز</div><div className="mt-3 text-xs text-[var(--text-muted)]">امروز: {formatJalali(todayJ)}</div></div>
       <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">مجموع روزهای سپری‌شده</div><div className="mt-2 text-xl font-black">{formatFa(result.age.totalDays)} روز</div></div><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">تولد بعدی</div><div className="mt-2 text-xl font-black">{formatJalali(result.birthdayJ)}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{formatFa(result.birthday.days)} روز دیگر</div></div></div>
     </div>}
 
     <button type="button" onClick={() => setBirth("")} className="mt-5 rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-bold">پاک کردن</button>
-    <div className="mt-6 text-xs leading-6 text-[var(--text-muted)]">این ابزار برای محاسبه روزمره سن است و جایگزین محاسبات رسمی سامانه‌های دولتی یا مدارک هویتی نیست.</div>
+    <div className="mt-6 text-xs leading-6 text-[var(--text-muted)]">این ابزار برای محاسبه روزمره سن است و جایگزین محاسبات رسمی سامانه‌های دولتی یا مدارک هویتی نیست. تاریخ تولد فقط در مرورگر شما پردازش می‌شود.</div>
   </section>;
 }
