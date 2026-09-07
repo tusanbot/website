@@ -1,7 +1,7 @@
 export type FieldType =
   | "text" | "textarea" | "number" | "phone" | "email" | "date"
   | "select" | "multiselect" | "boolean" | "checkbox" | "password" | "national_code"
-  | "repeatable";
+  | "repeatable" | "alphanumeric_upper";
 
 export type FormOption = { label: string; value: string };
 export type ConditionOperator = "equals" | "not_equals" | "contains" | "not_contains" | "is_true" | "is_false" | "gt" | "gte" | "lt" | "lte" | "empty" | "not_empty";
