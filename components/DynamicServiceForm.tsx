@@ -9,42 +9,20 @@ import persian_fa from "react-date-object/locales/persian_fa";
 type Props = { fields: FormField[]; onSubmit: (formData: Record<string, any>) => void; onChange?: (formData: Record<string, any>) => void; submitting?: boolean };
 const emptyValue = (field: FormField): any => { if (field.defaultValue !== undefined) return field.defaultValue; if (field.type === "boolean") return null; if (field.type === "checkbox") return false; if (field.type === "multiselect" || field.type === "repeatable") return []; return ""; };
 const normalize = (value: any) => (value == null ? "" : String(value).trim());
+const normalizeLatinAlphanumeric = (value: string) => value
+  .replace(/[۰-۹]/g, (char) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(char)))
+  .replace(/[٠-٩]/g, (char) => String("٠١٢٣٤٥٦٧٨٩".indexOf(char)))
+  .replace(/[آ-ی]/g, (char) => ({ آ: "A", ا: "A", ب: "B", پ: "P", ت: "T", ث: "S", ج: "J", چ: "C", ح: "H", خ: "KH", د: "D", ذ: "Z", ر: "R", ز: "Z", ژ: "ZH", س: "S", ش: "SH", ص: "S", ض: "Z", ط: "T", ظ: "Z", ع: "A", غ: "GH", ف: "F", ق: "GH", ک: "K", گ: "G", ل: "L", م: "M", ن: "N", و: "V", ه: "H", ی: "Y", ء: "" } as Record<string, string>)[char] ?? "")
+  .replace(/[^A-Za-z0-9]/g, "")
+  .toUpperCase();
 function resolveConditionValue(condition: FieldCondition, data: Record<string, any>) { const key = condition.field || condition.fieldId; return key && Object.prototype.hasOwnProperty.call(data, key) ? data[key] : undefined; }
 function evaluateCondition(condition: FieldCondition, data: Record<string, any>) { const actual = resolveConditionValue(condition, data); const expected = condition.value; const left = normalize(actual); const right = normalize(expected); switch (condition.operator as ConditionOperator) { case "equals": return Array.isArray(actual) ? actual.some((v) => normalize(v) === right) : left === right; case "not_equals": return Array.isArray(actual) ? !actual.some((v) => normalize(v) === right) : left !== right; case "contains": return Array.isArray(actual) ? actual.some((v) => normalize(v).toLowerCase().includes(right.toLowerCase())) : left.toLowerCase().includes(right.toLowerCase()); case "not_contains": return Array.isArray(actual) ? !actual.some((v) => normalize(v).toLowerCase().includes(right.toLowerCase())) : !left.toLowerCase().includes(right.toLowerCase()); case "is_true": return actual === true || left.toLowerCase() === "true" || left === "1"; case "is_false": return actual === false || left.toLowerCase() === "false" || left === "0"; case "gt": return Number(actual) > Number(expected); case "gte": return Number(actual) >= Number(expected); case "lt": return Number(actual) < Number(expected); case "lte": return Number(actual) <= Number(expected); case "empty": return actual == null || left === "" || (Array.isArray(actual) && actual.length === 0); case "not_empty": return !(actual == null || left === "" || (Array.isArray(actual) && actual.length === 0)); default: return false; } }
 function isVisible(field: FormField, data: Record<string, any>) { if (!field.conditions?.length) return true; const results = field.conditions.map((condition) => evaluateCondition(condition, data)); return field.conditionLogic === "OR" ? results.some(Boolean) : results.every(Boolean); }
 function isEmpty(value: any) { return value == null || value === "" || (Array.isArray(value) && value.length === 0); }
-function validateField(field: FormField, value: any): string | null { if (field.required && isEmpty(value)) return "تکمیل این فیلد الزامی است."; if (isEmpty(value)) return null; if (field.type === "repeatable") { if (!Array.isArray(value)) return "مقدار گروه نامعتبر است."; if (field.minItems !== undefined && value.length < field.minItems) return `حداقل ${field.minItems} مورد وارد کنید.`; if (field.maxItems !== undefined && value.length > field.maxItems) return `حداکثر ${field.maxItems} مورد مجاز است.`; for (const item of value) for (const child of field.fields || []) { if (!isVisible(child, item)) continue; const error = validateField(child, item[child.name]); if (error) return `${child.label}: ${error}`; } } if (field.type === "number") { const number = Number(value); if (!Number.isFinite(number)) return "مقدار باید عددی باشد."; const min = field.validation?.min ?? field.min; const max = field.validation?.max ?? field.max; if (min !== undefined && number < min) return `مقدار باید حداقل ${min} باشد.`; if (max !== undefined && number > max) return `مقدار باید حداکثر ${max} باشد.`; } if (field.type === "email" && typeof value === "string" && !/^\S+@\S+\.\S+$/.test(value)) return "ایمیل معتبر نیست."; if (field.type === "phone" && typeof value === "string" && !/^(?:\+98|0098|0)?9\d{9}$/.test(value.replace(/[\s-]/g, ""))) return "شماره موبایل معتبر نیست."; if (field.type === "national_code" && typeof value === "string" && !/^\d{10}$/.test(value)) return "کد ملی باید ۱۰ رقم باشد."; const rules = field.validation; if (rules) { if (rules.minLength !== undefined && String(value).length < rules.minLength) return `حداقل ${rules.minLength} کاراکتر وارد کنید.`; if (rules.maxLength !== undefined && String(value).length > rules.maxLength) return `حداکثر ${rules.maxLength} کاراکتر مجاز است.`; if (rules.pattern !== undefined) { try { if (!new RegExp(rules.pattern).test(String(value))) return "فرمت واردشده صحیح نیست."; } catch { return "قانون اعتبارسنجی فرم نامعتبر است."; } } } return null; }
+function validateField(field: FormField, value: any): string | null { if (field.required && isEmpty(value)) return "تکمیل این فیلد الزامی است."; if (isEmpty(value)) return null; if (field.type === "repeatable") { if (!Array.isArray(value)) return "مقدار گروه نامعتبر است."; if (field.minItems !== undefined && value.length < field.minItems) return `حداقل ${field.minItems} مورد وارد کنید.`; if (field.maxItems !== undefined && value.length > field.maxItems) return `حداکثر ${field.maxItems} مورد مجاز است.`; for (const item of value) for (const child of field.fields || []) { if (!isVisible(child, item)) continue; const error = validateField(child, item[child.name]); if (error) return `${child.label}: ${error}`; } } if (field.type === "number") { const number = Number(value); if (!Number.isFinite(number)) return "مقدار باید عددی باشد."; const min = field.validation?.min ?? field.min; const max = field.validation?.max ?? field.max; if (min !== undefined && number < min) return `مقدار باید حداقل ${min} باشد.`; if (max !== undefined && number > max) return `مقدار باید حداکثر ${max} باشد.`; } if (field.type === "email" && typeof value === "string" && !/^\S+@\S+\.\S+$/.test(value)) return "ایمیل معتبر نیست."; if (field.type === "phone" && typeof value === "string" && !/^(?:\+98|0098|0)?9\d{9}$/.test(value.replace(/[\s-]/g, ""))) return "شماره موبایل معتبر نیست."; if (field.type === "national_code" && typeof value === "string" && !/^\d{10}$/.test(value)) return "کد ملی باید ۱۰ رقم باشد."; if (field.type === "alphanumeric_upper" && typeof value === "string" && !/^[A-Z0-9]+$/.test(value)) return "فقط حروف انگلیسی بزرگ و عدد مجاز است."; const rules = field.validation; if (rules) { if (rules.minLength !== undefined && String(value).length < rules.minLength) return `حداقل ${rules.minLength} کاراکتر وارد کنید.`; if (rules.maxLength !== undefined && String(value).length > rules.maxLength) return `حداکثر ${rules.maxLength} کاراکتر مجاز است.`; if (rules.pattern !== undefined) { try { if (!new RegExp(rules.pattern).test(String(value))) return "فرمت واردشده صحیح نیست."; } catch { return "قانون اعتبارسنجی فرم نامعتبر است."; } } } return null; }
 
-function clearHiddenValues(fields: FormField[], data: Record<string, any>) {
-  const next: Record<string, any> = { ...data };
-  let changed = false;
-  for (const field of fields) {
-    if (!isVisible(field, next)) {
-      const empty = emptyValue(field);
-      if (JSON.stringify(next[field.name]) !== JSON.stringify(empty)) { next[field.name] = empty; changed = true; }
-      continue;
-    }
-    if (field.type === "repeatable" && Array.isArray(next[field.name]) && field.fields?.length) {
-      const rows = next[field.name].map((row: any) => clearHiddenValues(field.fields || [], row || {}));
-      if (JSON.stringify(rows) !== JSON.stringify(next[field.name])) { next[field.name] = rows; changed = true; }
-    }
-  }
-  return changed ? next : data;
-}
-
-function buildVisibleOutput(fields: FormField[], data: Record<string, any>) {
-  const output: Record<string, any> = {};
-  for (const field of fields) {
-    if (!isVisible(field, data)) continue;
-    const value = data[field.name];
-    if (field.type === "repeatable" && Array.isArray(value)) {
-      output[field.name] = value.map((row: any) => buildVisibleOutput(field.fields || [], row || {}));
-    } else {
-      output[field.name] = field.type === "number" && value !== "" ? Number(value) : value;
-    }
-  }
-  return output;
-}
+function clearHiddenValues(fields: FormField[], data: Record<string, any>) { const next: Record<string, any> = { ...data }; let changed = false; for (const field of fields) { if (!isVisible(field, next)) { const empty = emptyValue(field); if (JSON.stringify(next[field.name]) !== JSON.stringify(empty)) { next[field.name] = empty; changed = true; } continue; } if (field.type === "repeatable" && Array.isArray(next[field.name]) && field.fields?.length) { const rows = next[field.name].map((row: any) => clearHiddenValues(field.fields || [], row || {})); if (JSON.stringify(rows) !== JSON.stringify(next[field.name])) { next[field.name] = rows; changed = true; } } } return changed ? next : data; }
+function buildVisibleOutput(fields: FormField[], data: Record<string, any>) { const output: Record<string, any> = {}; for (const field of fields) { if (!isVisible(field, data)) continue; const value = data[field.name]; if (field.type === "repeatable" && Array.isArray(value)) output[field.name] = value.map((row: any) => buildVisibleOutput(field.fields || [], row || {})); else output[field.name] = field.type === "number" && value !== "" ? Number(value) : value; } return output; }
 
 export default function DynamicServiceForm({ fields, onSubmit, onChange, submitting = false }: Props) {
   const [data, setData] = useState<Record<string, any>>({});
@@ -63,6 +41,7 @@ export default function DynamicServiceForm({ fields, onSubmit, onChange, submitt
     const common = { disabled: submitting, id: controlId, "aria-invalid": Boolean(error), "aria-describedby": describedBy };
     return <div key={field.id} className="space-y-2"><label htmlFor={controlId} className="block font-bold text-gray-800">{field.label}{field.required && <span className="text-red-500 mr-1" aria-hidden="true">*</span>}</label>{field.description && <p id={descriptionId} className="text-sm text-gray-500 leading-6">{field.description}</p>}
       {field.type === "text" && <input {...common} value={value ?? ""} onChange={(e) => set(e.target.value)} placeholder={field.placeholder || ""} className={baseClass} />}
+      {field.type === "alphanumeric_upper" && <input {...common} type="text" inputMode="text" autoCapitalize="characters" autoCorrect="off" spellCheck={false} dir="ltr" value={value ?? ""} onChange={(e) => set(normalizeLatinAlphanumeric(e.target.value))} placeholder={field.placeholder || "مثلاً IR1234567890"} className={`${baseClass} text-left tracking-widest uppercase`} />}
       {field.type === "password" && <input {...common} type="password" value={value ?? ""} onChange={(e) => set(e.target.value)} placeholder={field.placeholder || ""} className={baseClass} />}
       {field.type === "textarea" && <textarea {...common} value={value ?? ""} onChange={(e) => set(e.target.value)} rows={5} className={`${baseClass} resize-none`} />}
       {field.type === "number" && <input {...common} type="number" value={value ?? ""} onChange={(e) => set(e.target.value)} className={baseClass} />}
