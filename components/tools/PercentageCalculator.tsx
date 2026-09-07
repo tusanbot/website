@@ -1,0 +1,10 @@
+"use client";
+import { useMemo, useState } from "react";
+const fa=(n:number)=>String(Math.round(n*100)/100).replace(/\B(?=(\d{3})+(?!\d))/g,"٬").replace(/\d/g,d=>"۰۱۲۳۴۵۶۷۸۹"[+d]);
+export default function PercentageCalculator(){
+ const [a,setA]=useState(""),[b,setB]=useState(""),[mode,setMode]=useState("of");
+ const x=Number(a),y=Number(b);
+ const result=useMemo(()=>{if(!Number.isFinite(x)||!Number.isFinite(y))return null;if(mode==="of")return x*y/100;if(mode==="what")return y===0?null:x/y*100;if(mode==="change")return y===0?null:(x-y)/y*100;return x-y;},[a,b,mode,x,y]);
+ const modes=[['of','X درصد از Y چقدر است؟'],['what','X چند درصد Y است؟'],['change','درصد تغییر X نسبت به Y'],['points','اختلاف دو عدد']];
+ return <section className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm md:p-7"><div className="grid grid-cols-2 gap-2 md:grid-cols-4">{modes.map(([k,l])=><button key={k} onClick={()=>setMode(k)} className={`rounded-xl px-3 py-3 text-xs font-black ${mode===k?'bg-[var(--primary)] text-white':'border border-[var(--border)]'}`}>{l}</button>)}</div><div className="mt-6 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold">عدد اول<input value={a} onChange={e=>setA(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-xl border border-[var(--border)] bg-transparent p-3" placeholder="مثلاً 25"/></label><label className="text-sm font-bold">عدد دوم<input value={b} onChange={e=>setB(e.target.value)} inputMode="decimal" className="mt-2 w-full rounded-xl border border-[var(--border)] bg-transparent p-3" placeholder="مثلاً 200"/></label></div>{result!==null&&<div className="mt-6 rounded-2xl bg-[var(--primary)]/10 p-6 text-center"><div className="text-sm text-[var(--text-muted)]">نتیجه</div><div className="mt-2 text-3xl font-black text-[var(--primary)]">{fa(result)}{mode==='what'||mode==='change'?'٪':''}</div></div>}<p className="mt-5 text-xs leading-6 text-[var(--text-muted)]">محاسبه‌ها داخل مرورگر انجام می‌شوند و اطلاعات واردشده ذخیره یا ارسال نمی‌شود.</p></section>;
+}
