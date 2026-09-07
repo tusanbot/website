@@ -8,6 +8,7 @@ type AgeResult = {
   age: { years: number; months: number; days: number; totalDays: number };
   birthdayG: GDate;
   birthdayJ: JDate;
+  birthdayDays: number;
 };
 type InvalidResult = { invalid: "future" };
 
@@ -131,7 +132,7 @@ export default function AgeCalculator() {
       gd: birthday.date.getUTCDate(),
     };
 
-    return { age, birthdayG, birthdayJ: gregorianToJalali(birthdayG.gy, birthdayG.gm, birthdayG.gd) };
+    return { age, birthdayG, birthdayJ: gregorianToJalali(birthdayG.gy, birthdayG.gm, birthdayG.gd), birthdayDays: birthday.days };
   }, [birth, calendar, today]);
 
   const setCalendarMode = (mode: "jalali" | "gregorian") => {
@@ -141,13 +142,13 @@ export default function AgeCalculator() {
         const parsedJ = parseJalali(birth);
         if (parsedJ) {
           const g = jalaliToGregorian(parsedJ.jy, parsedJ.jm, parsedJ.jd);
-          setBirth(mode === "gregorian" ? `${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}` : birth);
+          if (mode === "gregorian") setBirth(`${g.gy}-${String(g.gm).padStart(2, "0")}-${String(g.gd).padStart(2, "0")}`);
         }
       } else {
         const parsedG = parseGregorian(birth);
         if (parsedG) {
           const j = gregorianToJalali(parsedG.gy, parsedG.gm, parsedG.gd);
-          setBirth(mode === "jalali" ? `${j.jy}/${String(j.jm).padStart(2, "0")}/${String(j.jd).padStart(2, "0")}` : birth);
+          if (mode === "jalali") setBirth(`${j.jy}/${String(j.jm).padStart(2, "0")}/${String(j.jd).padStart(2, "0")}`);
         }
       }
     }
@@ -167,7 +168,7 @@ export default function AgeCalculator() {
     {birth && !result && <div className="mt-6 rounded-2xl bg-[var(--surface-secondary)] p-5 text-center text-sm text-[var(--text-muted)]">فرمت یا تاریخ واردشده معتبر نیست؛ مثال: {calendar === "jalali" ? "1378/05/20" : "2000-08-10"}</div>}
     {result && "age" in result && <div className="mt-7 space-y-4">
       <div className="rounded-2xl bg-[var(--primary)]/10 p-6 text-center"><div className="text-sm font-bold text-[var(--text-muted)]">سن دقیق شما</div><div className="mt-3 text-3xl font-black text-[var(--primary)] md:text-4xl">{formatFa(result.age.years)} سال، {formatFa(result.age.months)} ماه و {formatFa(result.age.days)} روز</div><div className="mt-3 text-xs text-[var(--text-muted)]">امروز: {formatJalali(todayJ)}</div></div>
-      <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">مجموع روزهای سپری‌شده</div><div className="mt-2 text-xl font-black">{formatFa(result.age.totalDays)} روز</div></div><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">تولد بعدی</div><div className="mt-2 text-xl font-black">{formatJalali(result.birthdayJ)}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{formatFa(nextBirthday(toUtcDate(result.birthdayG), new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()))).days)} روز دیگر</div></div></div>
+      <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">مجموع روزهای سپری‌شده</div><div className="mt-2 text-xl font-black">{formatFa(result.age.totalDays)} روز</div></div><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">تولد بعدی</div><div className="mt-2 text-xl font-black">{formatJalali(result.birthdayJ)}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{formatFa(result.birthdayDays)} روز دیگر</div></div></div>
     </div>}
 
     <button type="button" onClick={() => setBirth("")} className="mt-5 rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-bold">پاک کردن</button>
