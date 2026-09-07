@@ -75,9 +75,17 @@ export default function AgeCalculator() {
   const [birth, setBirth] = useState("");
 
   const result = useMemo<AgeResult | InvalidResult | null>(() => {
-    const parsed = calendar === "jalali" ? parseJalali(birth) : parseGregorian(birth);
-    if (!parsed) return null;
-    const g = calendar === "jalali" ? jalaliToGregorian(parsed.jy, parsed.jm, parsed.jd) : parsed;
+    let g: GDate | null = null;
+
+    if (calendar === "jalali") {
+      const parsedJ = parseJalali(birth);
+      if (parsedJ) g = jalaliToGregorian(parsedJ.jy, parsedJ.jm, parsedJ.jd);
+    } else {
+      const parsedG = parseGregorian(birth);
+      if (parsedG) g = parsedG;
+    }
+
+    if (!g) return null;
     const totalDays = daysBetween(g, todayG);
     if (totalDays < 0) return { invalid: "future" };
 
@@ -114,15 +122,18 @@ export default function AgeCalculator() {
     <div className="flex rounded-2xl border border-[var(--border)] p-1" role="tablist" aria-label="نوع تقویم">
       {([['jalali', 'شمسی / Jalali'], ['gregorian', 'میلادی / Gregorian']] as const).map(([key, label]) => <button key={key} type="button" role="tab" aria-selected={calendar === key} onClick={() => setCalendarMode(key)} className={`flex-1 rounded-xl px-3 py-3 text-sm font-black transition ${calendar === key ? 'bg-[var(--primary)] text-white' : 'text-[var(--text-muted)]'}`}>{label}</button>)}
     </div>
+
     <label className="mt-6 block text-sm font-black">تاریخ تولد <span className="text-xs font-semibold text-[var(--text-muted)]">({calendar === "jalali" ? "YYYY/MM/DD" : "YYYY-MM-DD"})</span>
       {calendar === "jalali" ? <input dir="ltr" inputMode="numeric" placeholder="1378/05/20" value={birth} onChange={(e) => setBirth(toAscii(e.target.value).replace(/[^0-9/]/g, ""))} className="mt-3 w-full rounded-2xl border border-[var(--border)] bg-transparent px-4 py-4 text-center text-lg tracking-wider outline-none focus:ring-2 focus:ring-[var(--primary)]" /> : <input type="date" value={birth} onChange={(e) => setBirth(e.target.value)} className="mt-3 w-full rounded-2xl border border-[var(--border)] bg-transparent px-4 py-4 text-lg outline-none focus:ring-2 focus:ring-[var(--primary)]" />}
     </label>
+
     {birth && result && !('age' in result) && result.invalid === "future" && <div className="mt-6 rounded-2xl bg-red-500/10 p-5 text-center text-sm font-bold text-red-600">تاریخ تولد نمی‌تواند در آینده باشد.</div>}
     {birth && !result && <div className="mt-6 rounded-2xl bg-[var(--surface-secondary)] p-5 text-center text-sm text-[var(--text-muted)]">فرمت یا تاریخ واردشده معتبر نیست؛ مثال: {calendar === "jalali" ? "1378/05/20" : "2000-08-10"}</div>}
     {result && "age" in result && <div className="mt-7 space-y-4">
       <div className="rounded-2xl bg-[var(--primary)]/10 p-6 text-center"><div className="text-sm font-bold text-[var(--text-muted)]">سن دقیق شما</div><div className="mt-3 text-3xl font-black text-[var(--primary)] md:text-4xl">{formatFa(result.age.years)} سال، {formatFa(result.age.months)} ماه و {formatFa(result.age.days)} روز</div><div className="mt-3 text-xs text-[var(--text-muted)]">امروز: {formatJalali(todayJ)}</div></div>
       <div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">مجموع روزهای سپری‌شده</div><div className="mt-2 text-xl font-black">{formatFa(result.age.totalDays)} روز</div></div><div className="rounded-2xl border border-[var(--border)] p-4 text-center"><div className="text-xs text-[var(--text-muted)]">تولد بعدی</div><div className="mt-2 text-xl font-black">{formatJalali(result.birthdayJ)}</div><div className="mt-1 text-xs text-[var(--text-muted)]">{formatFa(result.birthdayDays)} روز دیگر</div></div></div>
     </div>}
+
     <button type="button" onClick={() => setBirth("")} className="mt-5 rounded-xl border border-[var(--border)] px-4 py-2.5 text-sm font-bold">پاک کردن</button>
     <div className="mt-6 text-xs leading-6 text-[var(--text-muted)]">این ابزار برای محاسبه روزمره سن است و جایگزین محاسبات رسمی سامانه‌های دولتی یا مدارک هویتی نیست. تاریخ تولد فقط در مرورگر شما پردازش می‌شود.</div>
   </section>;
