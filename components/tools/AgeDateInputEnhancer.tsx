@@ -18,10 +18,13 @@ export default function AgeDateInputEnhancer() {
       if (!(input instanceof HTMLInputElement) || input.placeholder !== "1378/05/20") return;
       const next = normalize(input.value);
       if (next === input.value) return;
+
+      // Do not dispatch a second input event here. React's controlled input
+      // must receive the original event with the already-normalized value;
+      // dispatching a nested event can cause the following digit to be lost.
       input.value = next;
-      input.dispatchEvent(new Event("input", { bubbles: true }));
       requestAnimationFrame(() => {
-        input.setSelectionRange(next.length, next.length);
+        if (document.activeElement === input) input.setSelectionRange(next.length, next.length);
       });
     };
 
