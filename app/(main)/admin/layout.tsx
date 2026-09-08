@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { GlassPanel, TusanButton } from "@/components/ui";
 import AdminDraftPersistence from "@/components/admin/AdminDraftPersistence";
+
+const ADMIN_ACCESS_HEADER = "x-tusan-admin-access";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
     const supabase = await createSupabaseServerClient();
@@ -11,13 +14,21 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
     if (!user) redirect("/auth?mode=login");
 
-    const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .maybeSingle();
+    // proxy.ts performs the expensive role lookup only when the signed
+    // 20-minute admin-access cache is missing/expired. It forwards this
+    // trusted internal header so the layout does not repeat the same query.
+    const requestHeaders = await headers();
+    const adminAccessGranted = requestHeaders.get(ADMIN_ACCESS_HEADER) === "1";
 
-    if (error || profile?.role !== "admin") redirect("/");
+    if (!adminAccessGranted) {
+        const { data: profile, error } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .maybeSingle();
+
+        if (error || profile?.role !== "admin") redirect("/");
+    }
 
     return (
         <>
