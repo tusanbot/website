@@ -12,6 +12,8 @@ export interface FJPanelStatusResponse {
     charge: string;
     status: string;
     currency: string;
+    start?: string;
+    remains?: string;
 }
 
 async function request<T>(payload: Record<string, string>): Promise<T> {
