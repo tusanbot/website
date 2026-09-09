@@ -38,22 +38,44 @@ export default function NotificationBell() {
   useEffect(() => {
     let mounted = true;
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!mounted || !user) return;
       setUserId(user.id);
-      load(user.id);
-      channel = supabase.channel(`central-notifications-${user.id}`).on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
-        if (payload.eventType === "INSERT") {
-          const next = payload.new as NotificationItem;
-          setItems((current) => [next, ...current.filter((item) => item.id !== next.id)].slice(0, 8));
-        } else if (payload.eventType === "UPDATE") {
-          const next = payload.new as NotificationItem;
-          setItems((current) => current.map((item) => item.id === next.id ? next : item));
-        }
+
+      // Notifications are not part of the page's critical render path.
+      // Defer the initial queries/subscription so navigation can become interactive first.
+      const start = () => {
+        if (!mounted) return;
         load(user.id);
-      }).subscribe();
+        channel = supabase
+          .channel(`central-notifications-${user.id}`)
+          .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_id=eq.${user.id}` }, (payload) => {
+            if (payload.eventType === "INSERT") {
+              const next = payload.new as NotificationItem;
+              setItems((current) => [next, ...current.filter((item) => item.id !== next.id)].slice(0, 8));
+            } else if (payload.eventType === "UPDATE") {
+              const next = payload.new as NotificationItem;
+              setItems((current) => current.map((item) => item.id === next.id ? next : item));
+            }
+            load(user.id);
+          })
+          .subscribe();
+      };
+
+      if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+        window.requestIdleCallback(start, { timeout: 1200 });
+      } else {
+        idleTimer = setTimeout(start, 250);
+      }
     });
-    return () => { mounted = false; if (channel) supabase.removeChannel(channel); };
+
+    return () => {
+      mounted = false;
+      if (idleTimer) clearTimeout(idleTimer);
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   async function markRead(id: string) {
