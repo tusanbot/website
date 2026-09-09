@@ -11,7 +11,7 @@ const labels:Record<string,string>={pending:"در انتظار پرداخت",awa
 const steps=["pending","paid","processing","completed"];
 export default function SocialOrderDetail(){
  const {id}=useParams<{id:string}>(); const [order,setOrder]=useState<Order|null>(null); const [loading,setLoading]=useState(true); const [busy,setBusy]=useState(false); const [message,setMessage]=useState("");
- async function load(){setLoading(true);const {data}=await supabase.from("social_orders").select("*, social_services(name), social_platforms(name)").eq("id",id).single();setOrder(data as Order|null);setLoading(false)}
+ async function load(){setLoading(true);const {data}=await supabase.from("social_orders").select("*, social_services(name, social_platforms(name))").eq("id",id).single();if(data){const raw=data as any;setOrder({...raw,social_platforms:raw.social_services?.social_platforms||null,social_services:raw.social_services?{name:raw.social_services.name}:null} as Order)}else setOrder(null);setLoading(false)}
  useEffect(()=>{if(id)void load()},[id]);
  async function authHeaders():Promise<Headers>{const headers=new Headers({"Content-Type":"application/json"});const {data}=await supabase.auth.getSession();if(data.session?.access_token)headers.set("Authorization",`Bearer ${data.session.access_token}`);return headers;}
  async function status(){setBusy(true);setMessage("");try{const r=await fetch("/api/social/provider-status",{method:"POST",headers:await authHeaders(),body:JSON.stringify({orderId:id})});const d=await r.json();if(!r.ok)throw new Error(d.error||"خطا");setMessage(`وضعیت به «${labels[d.status]||d.status}» بروزرسانی شد.`);await load()}catch(e){setMessage(e instanceof Error?e.message:"خطا در بررسی وضعیت")}finally{setBusy(false)}}
