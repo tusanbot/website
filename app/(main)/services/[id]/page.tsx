@@ -5,8 +5,19 @@ import ServiceOrderClient from "./ServiceOrderClient";
 import { getCachedServicePageData } from "@/lib/services/servicePageCache";
 
 type Service = NonNullable<Awaited<ReturnType<typeof getCachedServicePageData>>["service"]>;
-function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value); }
-function getFieldLabels(schema: any[]) { return schema.map((field: any) => String(field?.label || field?.title || field?.name || "").trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).slice(0, 8); }
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function getFieldLabels(schema: any[]) {
+  return schema
+    .map((field: any) => String(field?.label || field?.title || field?.name || "").trim())
+    .filter(Boolean)
+    .filter((value, index, array) => array.indexOf(value) === index)
+    .slice(0, 8);
+}
+
 function getSeoContent(content: any) {
   if (!content || typeof content !== "object" || Array.isArray(content)) return null;
   return {
@@ -18,6 +29,144 @@ function getSeoContent(content: any) {
     cta: typeof content.cta === "string" ? content.cta.trim() : "",
   };
 }
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> { const { id } = await params; const { service } = await getCachedServicePageData(id); if (!service) return { title: "خدمت پیدا نشد", robots: { index: false, follow: false } }; const title = service.meta_title?.trim() || `${service.title} | کافی نت توسن`; const description = service.meta_description?.trim() || service.description?.trim() || `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`; const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, ""); const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`; return { title: { absolute: title }, description, keywords: [...new Set([...(service.seo_keywords || []), service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[])], alternates: { canonical: canonicalUrl }, openGraph: { type: "website", locale: "fa_IR", url: canonicalUrl, siteName: "کافی نت توسن", title, description }, twitter: { card: "summary", title, description }, robots: { index: true, follow: true } }; }
-export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; const { service, related, children, parent } = await getCachedServicePageData(id); if (!service) { if (isUuid(id)) permanentRedirect("/services"); notFound(); } if (isUuid(id)) permanentRedirect(`/services/${encodeURIComponent(service.slug)}`); const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, ""); const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`; const fieldLabels = getFieldLabels(service.form_schema); const seo = getSeoContent(service.seo_content); const jsonLd = { "@context": "https://schema.org", "@type": "Service", name: service.title, description: service.description || undefined, url: canonicalUrl, provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl }, areaServed: { "@type": "Country", name: "ایران" }, ...(service.price > 0 ? { offers: { "@type": "Offer", price: service.price, priceCurrency: "IRR", url: canonicalUrl } } : {}) }; const breadcrumbItems = [{ "@type": "ListItem", position: 1, name: "خانه", item: siteUrl }, { "@type": "ListItem", position: 2, name: "خدمات", item: `${siteUrl}/services` }, ...(service.category ? [{ "@type": "ListItem", position: 3, name: service.category, item: `${siteUrl}/services?category=${encodeURIComponent(service.category)}` }] : []), { "@type": "ListItem", position: service.category ? 4 : 3, name: service.title, item: canonicalUrl }];
-  return <><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} /><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: breadcrumbItems }) }} /><div dir="rtl" className="max-w-3xl mx-auto px-5 pt-4"><nav aria-label="مسیر صفحه" className="text-xs sm:text-sm text-[var(--text-muted)]"><Link href="/" className="hover:underline">خانه</Link><span className="mx-2">/</span><Link href="/services" className="hover:underline">خدمات</Link><span className="mx-2">/</span>{service.category && <><Link href={`/services?category=${encodeURIComponent(service.category)}`} className="hover:underline">{service.category}</Link><span className="mx-2">/</span></>}<span className="font-medium text-[var(--text)]" aria-current="page">{service.title}</span></nav></div>{parent && <section dir="rtl" className="max-w-3xl mx-auto px-5 pt-3" aria-label="خدمت مادر"><div className="rounded-xl border bg-white px-4 py-2.5 text-sm">این خدمت زیرمجموعه <Link href={`/services/${encodeURIComponent(parent.slug)}`} className="font-bold text-[#09967C] hover:underline">{parent.icon || "📄"} {parent.title}</Link> است.</div></section>}<section dir="rtl" className="max-w-3xl mx-auto px-5 pt-4 pb-1" aria-labelledby="service-guide-title"><div className="rounded-2xl border bg-white p-5 shadow-sm"><h1 id="service-guide-title" className="text-xl sm:text-2xl font-bold">{service.title}</h1>{service.description?.trim() && <div className="mt-3 text-sm text-[var(--text-muted)] leading-7"><p>{service.description.trim()}</p></div>}<div className="mt-4 grid gap-4 sm:grid-cols-2"><div><h2 className="font-bold">نحوه ثبت درخواست</h2><ol className="mt-1 list-decimal pr-5 space-y-0.5 text-sm leading-7 text-[var(--text-muted)]"><li>اطلاعات موردنیاز را در فرم وارد کنید.</li><li>اطلاعات را پیش از ارسال بررسی کنید.</li><li>پس از ثبت، وضعیت سفارش را پیگیری کنید.</li></ol></div><div><h2 className="font-bold">اطلاعات موردنیاز</h2>{fieldLabels.length > 0 ? <ul className="mt-1 list-disc pr-5 space-y-0.5 text-sm leading-7 text-[var(--text-muted)]">{fieldLabels.map(label => <li key={label}>{label}</li>)}</ul> : <p className="mt-1 text-sm leading-7 text-[var(--text-muted)]">اطلاعات موردنیاز هنگام تکمیل فرم نمایش داده می‌شود.</p>}</div></div></div></section>{seo && <section dir="rtl" className="max-w-3xl mx-auto px-5 py-5" aria-labelledby="service-seo-content"><div className="rounded-2xl border bg-white p-5 shadow-sm space-y-5"><h2 id="service-seo-content" className="text-lg font-black">راهنمای {service.title}</h2>{seo.introduction && <p className="text-sm leading-8 text-[var(--text-muted)]">{seo.introduction}</p>}{seo.audience && <div><h2 className="font-bold text-base">این خدمت برای چه کسانی مناسب است؟</h2><p className="mt-2 text-sm leading-8 text-[var(--text-muted)]">{seo.audience}</p></div>}{seo.steps.length > 0 && <div><h2 className="font-bold text-base">مراحل انجام {service.title}</h2><ol className="mt-2 list-decimal pr-5 space-y-2 text-sm leading-7 text-[var(--text-muted)]">{seo.steps.map((step: any, index: number) => <li key={index}><strong className="text-[var(--text)]">{String(step.title || `مرحله ${index + 1}`)}</strong>{step.description ? `؛ ${String(step.description)}` : ""}</li>)}</ol></div>}{seo.tips.length > 0 && <div><h2 className="font-bold text-base">نکات مهم</h2><ul className="mt-2 list-disc pr-5 space-y-1 text-sm leading-7 text-[var(--text-muted)]">{seo.tips.map((tip: string, index: number) => <li key={index}>{tip}</li>)}</ul></div>}{seo.faq.length > 0 && <div><h2 className="font-bold text-base">سؤالات متداول درباره {service.title}</h2><div className="mt-2 space-y-3">{seo.faq.map((item: any, index: number) => <div key={index}><h3 className="font-bold text-sm">{String(item.question || "سؤال متداول")}</h3>{item.answer && <p className="mt-1 text-sm leading-7 text-[var(--text-muted)]">{String(item.answer)}</p>}</div>)}</div></div>}{seo.cta && <div className="rounded-xl bg-[var(--primary)]/5 border border-[var(--primary)]/15 p-4 text-sm leading-7 font-bold">{seo.cta}</div>}</div></section>}<ServiceOrderClient initialService={service} />{children && children.length > 0 && <section dir="rtl" className="max-w-3xl mx-auto px-5 pb-5" aria-labelledby="child-services-title"><div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 id="child-services-title" className="text-lg font-bold mb-3">خدمات زیرمجموعه</h2><div className="grid sm:grid-cols-2 gap-2">{children.map(item => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-3 hover:border-[#09967C] transition"><div className="text-sm font-bold">{item.icon || "📄"} {item.title}</div>{item.description && <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div></section>}{related && related.length > 0 && <section dir="rtl" className="max-w-3xl mx-auto px-5 pb-6" aria-labelledby="related-services-title"><div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 id="related-services-title" className="text-lg font-bold mb-3">خدمات مرتبط</h2><div className="grid sm:grid-cols-2 gap-2">{related.map(item => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-3 hover:border-[#09967C] transition"><div className="text-sm font-bold">{item.icon || "📄"}</div>{item.description && <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div></section>}</>; }
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const { service } = await getCachedServicePageData(id);
+  if (!service) return { title: "خدمت پیدا نشد", robots: { index: false, follow: false } };
+
+  const title = service.meta_title?.trim() || `${service.title} | کافی نت توسن`;
+  const description = service.meta_description?.trim() || service.description?.trim() || `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`;
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
+  const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
+
+  return {
+    title: { absolute: title },
+    description,
+    keywords: [...new Set([...(service.seo_keywords || []), service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[])],
+    alternates: { canonical: canonicalUrl },
+    openGraph: { type: "website", locale: "fa_IR", url: canonicalUrl, siteName: "کافی نت توسن", title, description },
+    twitter: { card: "summary", title, description },
+    robots: { index: true, follow: true },
+  };
+}
+
+export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const { service, related, children, parent } = await getCachedServicePageData(id);
+  if (!service) {
+    if (isUuid(id)) permanentRedirect("/services");
+    notFound();
+  }
+  if (isUuid(id)) permanentRedirect(`/services/${encodeURIComponent(service.slug)}`);
+
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
+  const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
+  const fieldLabels = getFieldLabels(service.form_schema);
+  const seo = getSeoContent(service.seo_content);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Service",
+    name: service.title,
+    description: service.description || undefined,
+    url: canonicalUrl,
+    provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl },
+    areaServed: { "@type": "Country", name: "ایران" },
+    ...(service.price > 0 ? { offers: { "@type": "Offer", price: service.price, priceCurrency: "IRR", url: canonicalUrl } } : {}),
+  };
+  const breadcrumbItems = [
+    { "@type": "ListItem", position: 1, name: "خانه", item: siteUrl },
+    { "@type": "ListItem", position: 2, name: "خدمات", item: `${siteUrl}/services` },
+    ...(service.category ? [{ "@type": "ListItem", position: 3, name: service.category, item: `${siteUrl}/services?category=${encodeURIComponent(service.category)}` }] : []),
+    { "@type": "ListItem", position: service.category ? 4 : 3, name: service.title, item: canonicalUrl },
+  ];
+
+  return (
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: breadcrumbItems }) }} />
+
+      <div dir="rtl" className="max-w-3xl mx-auto px-5 pt-4">
+        <nav aria-label="مسیر صفحه" className="text-xs sm:text-sm text-[var(--text-muted)]">
+          <Link href="/" className="hover:underline">خانه</Link><span className="mx-2">/</span>
+          <Link href="/services" className="hover:underline">خدمات</Link><span className="mx-2">/</span>
+          {service.category && <><Link href={`/services?category=${encodeURIComponent(service.category)}`} className="hover:underline">{service.category}</Link><span className="mx-2">/</span></>}
+          <span className="font-medium text-[var(--text)]" aria-current="page">{service.title}</span>
+        </nav>
+      </div>
+
+      {parent && (
+        <section dir="rtl" className="max-w-3xl mx-auto px-5 pt-3" aria-label="خدمت مادر">
+          <div className="rounded-xl border bg-white px-4 py-2.5 text-sm">
+            این خدمت زیرمجموعه <Link href={`/services/${encodeURIComponent(parent.slug)}`} className="font-bold text-[#09967C] hover:underline">{parent.icon || "📄"} {parent.title}</Link> است.
+          </div>
+        </section>
+      )}
+
+      <section dir="rtl" className="max-w-3xl mx-auto px-5 pt-4 pb-1" aria-labelledby="service-guide-title">
+        <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+          <div className="px-5 pt-5 pb-4">
+            <h1 id="service-guide-title" className="text-xl sm:text-2xl font-bold">{service.title}</h1>
+            {service.description?.trim() && <p className="mt-3 text-sm text-[var(--text-muted)] leading-7">{service.description.trim()}</p>}
+          </div>
+
+          <div className="border-t">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 font-bold hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                <span>نحوه ثبت درخواست</span><span className="text-xl text-[#09967C] transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <div className="px-5 pb-5 pt-1 text-sm leading-7 text-[var(--text-muted)]">
+                <ol className="list-decimal pr-5 space-y-1"><li>اطلاعات موردنیاز را در فرم وارد کنید.</li><li>اطلاعات را پیش از ارسال بررسی کنید.</li><li>پس از ثبت، وضعیت سفارش را پیگیری کنید.</li></ol>
+              </div>
+            </details>
+          </div>
+
+          <div className="border-t">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 font-bold hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                <span>مدارک و اطلاعات موردنیاز</span><span className="text-xl text-[#09967C] transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <div className="px-5 pb-5 pt-1 text-sm leading-7 text-[var(--text-muted)]">
+                {fieldLabels.length > 0 ? <ul className="list-disc pr-5 space-y-1">{fieldLabels.map((label) => <li key={label}>{label}</li>)}</ul> : <p>اطلاعات موردنیاز هنگام تکمیل فرم نمایش داده می‌شود.</p>}
+              </div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      {seo && (
+        <section dir="rtl" className="max-w-3xl mx-auto px-5 py-5" aria-labelledby="service-seo-content">
+          <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 font-black hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                <span id="service-seo-content">راهنمای کامل {service.title}</span><span className="text-xl text-[#09967C] transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <div className="px-5 pb-5 space-y-5">
+                {seo.introduction && <p className="text-sm leading-8 text-[var(--text-muted)]">{seo.introduction}</p>}
+                {seo.audience && <div><h2 className="font-bold text-base">این خدمت برای چه کسانی مناسب است؟</h2><p className="mt-2 text-sm leading-8 text-[var(--text-muted)]">{seo.audience}</p></div>}
+                {seo.steps.length > 0 && <div><h2 className="font-bold text-base">مراحل انجام {service.title}</h2><ol className="mt-2 list-decimal pr-5 space-y-2 text-sm leading-7 text-[var(--text-muted)]">{seo.steps.map((step: any, index: number) => <li key={index}><strong className="text-[var(--text)]">{String(step.title || `مرحله ${index + 1}`)}</strong>{step.description ? `؛ ${String(step.description)}` : ""}</li>)}</ol></div>}
+                {seo.tips.length > 0 && <div><h2 className="font-bold text-base">نکات مهم</h2><ul className="mt-2 list-disc pr-5 space-y-1 text-sm leading-7 text-[var(--text-muted)]">{seo.tips.map((tip: string, index: number) => <li key={index}>{tip}</li>)}</ul></div>}
+                {seo.faq.length > 0 && <div><h2 className="font-bold text-base">سؤالات متداول درباره {service.title}</h2><div className="mt-2 space-y-3">{seo.faq.map((item: any, index: number) => <details key={index} className="border rounded-xl"><summary className="cursor-pointer font-bold text-sm p-3">{String(item.question || "سؤال متداول")}</summary>{item.answer && <p className="px-3 pb-3 text-sm leading-7 text-[var(--text-muted)]">{String(item.answer)}</p>}</details>)}</div></div>}
+                {seo.cta && <div className="rounded-xl bg-[var(--primary)]/5 border border-[var(--primary)]/15 p-4 text-sm leading-7 font-bold">{seo.cta}</div>}
+              </div>
+            </details>
+          </div>
+        </section>
+      )}
+
+      <ServiceOrderClient initialService={service} />
+
+      {children && children.length > 0 && (
+        <section dir="rtl" className="max-w-3xl mx-auto px-5 pb-5" aria-labelledby="child-services-title">
+          <div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 id="child-services-title" className="text-lg font-bold mb-3">خدمات زیرمجموعه</h2><div className="grid sm:grid-cols-2 gap-2">{children.map(item => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-3 hover:border-[#09967C] transition"><div className="text-sm font-bold">{item.icon || "📄"} {item.title}</div>{item.description && <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div>
+        </section>
+      )}
+
+      {related && related.length > 0 && (
+        <section dir="rtl" className="max-w-3xl mx-auto px-5 pb-6" aria-labelledby="related-services-title">
+          <div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 id="related-services-title" className="text-lg font-bold mb-3">خدمات مرتبط</h2><div className="grid sm:grid-cols-2 gap-2">{related.map(item => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-3 hover:border-[#09967C] transition"><div className="text-sm font-bold">{item.icon || "📄"} {item.title}</div>{item.description && <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div>
+        </section>
+      )}
+    </>
+  );
+}
