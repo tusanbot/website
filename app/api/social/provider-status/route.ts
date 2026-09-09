@@ -13,13 +13,16 @@ export async function POST(request: NextRequest) {
         const orderId = typeof body?.orderId === "string" ? body.orderId.trim() : ""; if (!orderId) return NextResponse.json({ error: "شناسه سفارش الزامی است." }, { status: 400 });
         const admin = adminClient(); const { data: profile } = await admin.from("profiles").select("role").eq("id", userId).maybeSingle();
         if (profile?.role !== "admin") return NextResponse.json({ error: "دسترسی مدیر لازم است." }, { status: 403 });
-        const { data: order, error: orderError } = await admin.from("social_orders").select("id, user_id, provider, provider_order_id, status").eq("id", orderId).maybeSingle();
+        const { data: order, error: orderError } = await admin.from("social_orders").select("id, user_id, provider, provider_order_id, quantity, status").eq("id", orderId).maybeSingle();
         if (orderError) throw new Error(orderError.message); if (!order) return NextResponse.json({ error: "سفارش پیدا نشد." }, { status: 404 });
         if (order.provider !== "fjpanel" || !order.provider_order_id) return NextResponse.json({ error: "سفارش هنوز شناسه ارائه‌دهنده ندارد." }, { status: 409 });
         const provider = await getFJPanelOrderStatus(String(order.provider_order_id)); const status = mapProviderStatus(provider.status);
-        const { error: updateError } = await admin.from("social_orders").update({ provider_status: provider.status, status }).eq("id", order.id);
+        const start = provider.start != null && /^\d+$/.test(String(provider.start)) ? Number(provider.start) : null;
+        const remaining = provider.remains != null && /^\d+$/.test(String(provider.remains)) ? Number(provider.remains) : null;
+        const completed = remaining == null ? null : Math.max(0, Math.min(Number(order.quantity), Number(order.quantity) - remaining));
+        const { error: updateError } = await admin.from("social_orders").update({ provider_status: provider.status, provider_start: start, provider_remaining: remaining, status }).eq("id", order.id);
         if (updateError) throw new Error(updateError.message);
-        return NextResponse.json({ success: true, status, providerStatus: provider.status, charge: provider.charge, currency: provider.currency });
+        return NextResponse.json({ success: true, status, providerStatus: provider.status, charge: provider.charge, currency: provider.currency, start, remaining, completed });
     } catch (error) {
         console.error("[social/provider-status]", error);
         return NextResponse.json({ error: error instanceof Error ? error.message : "دریافت وضعیت سفارش ناموفق بود." }, { status: 500 });
