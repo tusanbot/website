@@ -1,19 +1,7 @@
 "use client";
 
 import { ChangeEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import {
-  CheckCircle2,
-  Download,
-  Film,
-  Loader2,
-  Maximize2,
-  RotateCcw,
-  Scissors,
-  Subtitles,
-  Upload,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { CheckCircle2, Download, Film, Loader2, Maximize2, RotateCcw, Scissors, Subtitles, Upload, Volume2, VolumeX } from "lucide-react";
 
 type Meta = { duration: number; width: number; height: number; size: number; type: string };
 type Crop = { x: number; y: number; width: number; height: number };
@@ -29,17 +17,37 @@ function parseSubtitles(text: string): SubtitleCue[] { const normalized = text.r
 function pickMime(format: ProcessOptions["format"]) { const candidates = format === "mp4" ? ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4"] : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]; return candidates.find((type) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) || ""; }
 
 export default function VideoManager() {
-  const inputRef = useRef<HTMLInputElement>(null); const videoRef = useRef<HTMLVideoElement>(null); const canvasRef = useRef<HTMLCanvasElement>(null!); const sourceUrlRef = useRef(""); const thumbnailUrlRef = useRef(""); const outputUrlRef = useRef("");
+  const inputRef = useRef<HTMLInputElement>(null); const videoRef = useRef<HTMLVideoElement>(null); const canvasRef = useRef<HTMLCanvasElement>(null!); const sourceUrlRef = useRef(""); const thumbnailUrlRef = useRef(""); const outputUrlRef = useRef(""); const metadataRequestRef = useRef(0);
   const [file, setFile] = useState<File | null>(null); const [sourceUrl, setSourceUrl] = useState(""); const [thumbnail, setThumbnail] = useState(""); const [output, setOutput] = useState<{ url: string; name: string; size: number } | null>(null); const [meta, setMeta] = useState<Meta | null>(null); const [busy, setBusy] = useState(false); const [progress, setProgress] = useState(0); const [message, setMessage] = useState(""); const [operation, setOperation] = useState("آماده");
   const [start, setStart] = useState(0); const [end, setEnd] = useState(0); const [width, setWidth] = useState(0); const [height, setHeight] = useState(0); const [quality, setQuality] = useState(70); const [fps, setFps] = useState(30); const [format, setFormat] = useState<"webm" | "mp4">("webm"); const [muted, setMuted] = useState(false); const [cropEnabled, setCropEnabled] = useState(false); const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 1, height: 1 }); const [subtitleText, setSubtitleText] = useState(""); const [subtitles, setSubtitles] = useState<SubtitleCue[]>([]); const [subtitleStatus, setSubtitleStatus] = useState(""); const [thumbnailTime, setThumbnailTime] = useState(0);
   const duration = meta?.duration || 0;
   const cropPercent = useMemo(() => ({ x: Math.round(crop.x * 100), y: Math.round(crop.y * 100), width: Math.round(crop.width * 100), height: Math.round(crop.height * 100) }), [crop]);
 
   useEffect(() => () => { [sourceUrlRef, thumbnailUrlRef, outputUrlRef].forEach((ref) => { if (ref.current) URL.revokeObjectURL(ref.current); }); }, []);
-  const reset = () => { [sourceUrlRef, thumbnailUrlRef, outputUrlRef].forEach((ref) => { if (ref.current) URL.revokeObjectURL(ref.current); ref.current = ""; }); setFile(null); setSourceUrl(""); setThumbnail(""); setOutput(null); setMeta(null); setStart(0); setEnd(0); setWidth(0); setHeight(0); setCropEnabled(false); setCrop({ x: 0, y: 0, width: 1, height: 1 }); setSubtitles([]); setSubtitleText(""); setSubtitleStatus(""); setMessage(""); setProgress(0); setOperation("آماده"); if (inputRef.current) inputRef.current.value = ""; };
-  const select = (e: ChangeEvent<HTMLInputElement>) => { const next = e.target.files?.[0]; if (!next) return; if (!next.type.startsWith("video/")) { setMessage("فقط فایل ویدیویی انتخاب کنید."); return; } reset(); const nextUrl = URL.createObjectURL(next); sourceUrlRef.current = nextUrl; setFile(next); setSourceUrl(nextUrl); setMessage("در حال آماده‌سازی ویدیو و خواندن مشخصات فایل..."); };
-  const loaded = () => { const v = videoRef.current; if (!v || !Number.isFinite(v.duration) || !v.videoWidth || !v.videoHeight) return; setMeta({ duration: v.duration, width: v.videoWidth, height: v.videoHeight, size: file?.size || 0, type: file?.type || "" }); setStart(0); setEnd(v.duration); setWidth(v.videoWidth); setHeight(v.videoHeight); setThumbnailTime(Math.min(v.duration / 2, Math.max(0, v.duration - 0.05))); setMessage("ویدیو آماده و کاملاً مرورگری است."); };
+
+  const reset = () => { metadataRequestRef.current += 1; [sourceUrlRef, thumbnailUrlRef, outputUrlRef].forEach((ref) => { if (ref.current) URL.revokeObjectURL(ref.current); ref.current = ""; }); setFile(null); setSourceUrl(""); setThumbnail(""); setOutput(null); setMeta(null); setStart(0); setEnd(0); setWidth(0); setHeight(0); setCropEnabled(false); setCrop({ x: 0, y: 0, width: 1, height: 1 }); setSubtitles([]); setSubtitleText(""); setSubtitleStatus(""); setMessage(""); setProgress(0); setOperation("آماده"); if (inputRef.current) inputRef.current.value = ""; };
+
+  const applyVideoMetadata = (video: HTMLVideoElement, selectedFile: File) => {
+    if (!Number.isFinite(video.duration) || video.duration <= 0 || !video.videoWidth || !video.videoHeight) return false;
+    setMeta({ duration: video.duration, width: video.videoWidth, height: video.videoHeight, size: selectedFile.size, type: selectedFile.type }); setStart(0); setEnd(video.duration); setWidth(video.videoWidth); setHeight(video.videoHeight); setThumbnailTime(Math.min(video.duration / 2, Math.max(0, video.duration - 0.05))); setMessage("ویدیو آماده و کاملاً مرورگری است."); return true;
+  };
+
+  const select = (e: ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.files?.[0]; if (!next) return;
+    if (!next.type.startsWith("video/")) { setMessage("فقط فایل ویدیویی انتخاب کنید."); return; }
+    reset(); const nextUrl = URL.createObjectURL(next); sourceUrlRef.current = nextUrl; setFile(next); setSourceUrl(nextUrl); setMeta(null); setMessage("در حال آماده‌سازی ویدیو و خواندن مشخصات فایل...");
+    const requestId = metadataRequestRef.current + 1; metadataRequestRef.current = requestId;
+    const probe = document.createElement("video"); probe.preload = "metadata"; probe.muted = true; probe.playsInline = true;
+    const cleanup = () => { probe.removeAttribute("src"); probe.load(); };
+    const ready = () => { if (metadataRequestRef.current === requestId) { applyVideoMetadata(probe, next); } cleanup(); };
+    const failed = () => { if (metadataRequestRef.current === requestId) setMessage("مشخصات ویدیو خوانده نشد. لطفاً یک فایل ویدیویی معتبر و قابل پخش انتخاب کنید."); cleanup(); };
+    probe.addEventListener("loadedmetadata", ready, { once: true }); probe.addEventListener("error", failed, { once: true }); probe.src = nextUrl; probe.load();
+  };
+
+  const loaded = () => { const v = videoRef.current; if (v && file) applyVideoMetadata(v, file); };
+
   useEffect(() => { if (!sourceUrl) return; const v = videoRef.current; if (!v) return; const tryLoad = () => loaded(); v.addEventListener("loadedmetadata", tryLoad); v.addEventListener("durationchange", tryLoad); v.addEventListener("loadeddata", tryLoad); if (v.readyState >= 1) tryLoad(); return () => { v.removeEventListener("loadedmetadata", tryLoad); v.removeEventListener("durationchange", tryLoad); v.removeEventListener("loadeddata", tryLoad); }; }, [sourceUrl, file]);
+
   const seek = async (time: number) => { const v = videoRef.current; if (!v || Math.abs(v.currentTime - time) < 0.02) return; await new Promise<void>((resolve) => { const done = () => { v.removeEventListener("seeked", done); resolve(); }; v.addEventListener("seeked", done); v.currentTime = time; }); };
 
   const capture = async () => { const v = videoRef.current, canvas = canvasRef.current; if (!v || !meta) return; setBusy(true); setOperation("استخراج تصویر شاخص"); setMessage("در حال استخراج فریم..."); try { await seek(Math.min(thumbnailTime, Math.max(0, duration - 0.05))); canvas.width = meta.width; canvas.height = meta.height; const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas در این مرورگر در دسترس نیست."); ctx.drawImage(v, 0, 0, meta.width, meta.height); const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => b ? resolve(b) : reject(new Error("استخراج فریم ناموفق بود.")), "image/jpeg", 0.92)); if (thumbnailUrlRef.current) URL.revokeObjectURL(thumbnailUrlRef.current); thumbnailUrlRef.current = URL.createObjectURL(blob); setThumbnail(thumbnailUrlRef.current); download(blob, "tusan-video-thumbnail.jpg"); setMessage("تصویر شاخص با موفقیت استخراج شد."); } catch (error) { setMessage(error instanceof Error ? error.message : "استخراج فریم انجام نشد."); } finally { setBusy(false); setOperation("آماده"); } };
@@ -86,6 +94,7 @@ export default function VideoManager() {
           <Section icon={<Film className="h-4 w-4" />} title="تصویر شاخص"><label className="block text-xs font-bold">زمان فریم: {formatTime(thumbnailTime)}<input className="mt-2 w-full accent-[var(--primary)]" type="range" min="0" max={Math.max(0, duration - .05)} step="0.1" value={thumbnailTime} onChange={(e) => setThumbnailTime(Number(e.target.value))} /></label><button type="button" disabled={busy} onClick={capture} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-black disabled:opacity-50"><Download className="h-4 w-4" /> استخراج و دانلود فریم</button>{thumbnail && <img src={thumbnail} alt="تصویر شاخص" className="mt-3 max-h-40 w-full rounded-xl object-contain" />}</Section>
           <button type="button" disabled={busy} onClick={processVideo} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3.5 text-sm font-black text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Film className="h-4 w-4" />} {busy ? `در حال پردازش ${progress}%` : "پردازش و ساخت خروجی"}</button>{busy && <div className="h-2 overflow-hidden rounded-full bg-black/10"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${progress}%` }} /></div>}<button type="button" onClick={reset} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2.5 text-xs font-bold"><RotateCcw className="h-4 w-4" /> پاک کردن</button>
         </>}
+        {file && !meta && <div className="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-xs font-bold text-[var(--text-muted)]">در حال خواندن مشخصات ویدیو… اگر این پیام باقی ماند، فایل احتمالاً توسط مرورگر قابل پخش نیست.</div>}
       </div>
     </div>
     {message && <div className="mt-5 rounded-xl bg-[var(--primary)]/10 px-4 py-3 text-sm font-bold text-[var(--primary)]">{operation !== "آماده" && <span className="ml-2 opacity-70">{operation}:</span>} {message}</div>}<canvas ref={canvasRef} className="hidden" />
