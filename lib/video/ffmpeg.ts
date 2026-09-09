@@ -31,8 +31,9 @@ async function runTranscode(file: File, outputName: string, args: string[], mime
     await ffmpeg.writeFile(input, await fetchFile(file));
     await ffmpeg.exec(["-i", input, ...args, outputName]);
     const data = await ffmpeg.readFile(outputName);
-    const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(data);
-    return new File([bytes], outputName, { type: mime });
+    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    return new File([buffer], outputName, { type: mime });
   } finally {
     try { await ffmpeg.deleteFile(input); } catch {}
     try { await ffmpeg.deleteFile(outputName); } catch {}
