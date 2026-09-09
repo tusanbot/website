@@ -75,6 +75,8 @@ export interface SocialOrder {
     quantity: number;
     price: number;
     provider_charge: number | null;
+    provider_start: number | null;
+    provider_remaining: number | null;
     status: SocialOrderStatus;
     provider_status: string | null;
     admin_note: string | null;
