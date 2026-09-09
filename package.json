@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@fontsource/estedad": "^5.2.5",
     "@fontsource/lalezar": "^5.2.5",
     "@fontsource/noto-naskh-arabic": "^5.2.5",
