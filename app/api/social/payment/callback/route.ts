@@ -16,23 +16,37 @@ function siteUrl(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-    const orderId = request.nextUrl.searchParams.get("orderId")?.trim() || "";
+    const orderRef = request.nextUrl.searchParams.get("orderId")?.trim() || "";
     const trackIdRaw = request.nextUrl.searchParams.get("trackId")?.trim() || "";
     const callbackStatusRaw = request.nextUrl.searchParams.get("status")?.trim() || "";
     const trackId = Number(trackIdRaw);
     const callbackStatus = Number(callbackStatusRaw);
 
-    if (!orderId || !Number.isSafeInteger(trackId) || trackId <= 0) {
+    if (!orderRef || !Number.isSafeInteger(trackId) || trackId <= 0) {
         return NextResponse.redirect(`${siteUrl(request)}/social/orders?payment=failed&reason=invalid_callback`);
     }
 
     try {
         const admin = adminClient();
-        const { data: order, error } = await admin.from("social_orders")
-            .select("id,tracking_code,user_id,service_id,link,quantity,price,status,payment_track_id,payment_provider,provider,provider_order_id,admin_approved")
-            .eq("id", orderId).maybeSingle();
+        // Zibal callback historically receives the social tracking code (e.g. SOC-...) in orderId,
+        // not the UUID primary key. Resolve by both forms so old and new payment links remain valid.
+        const baseQuery = admin
+            .from("social_orders")
+            .select("id,tracking_code,user_id,service_id,link,quantity,price,status,payment_track_id,payment_provider,provider,provider_order_id,admin_approved");
+        const { data: byId, error: idError } = await baseQuery.eq("id", orderRef).maybeSingle();
+        if (idError && !String(idError.message).toLowerCase().includes("invalid input syntax")) throw new Error(idError.message);
 
-        if (error) throw new Error(error.message);
+        let order = byId;
+        if (!order) {
+            const { data: byTracking, error: trackingError } = await admin
+                .from("social_orders")
+                .select("id,tracking_code,user_id,service_id,link,quantity,price,status,payment_track_id,payment_provider,provider,provider_order_id,admin_approved")
+                .eq("tracking_code", orderRef)
+                .maybeSingle();
+            if (trackingError) throw new Error(trackingError.message);
+            order = byTracking;
+        }
+
         if (!order || order.payment_provider !== "zibal" || String(order.payment_track_id) !== String(trackId)) {
             return NextResponse.redirect(`${siteUrl(request)}/social/orders?payment=failed&reason=payment_not_found`);
         }
@@ -79,8 +93,6 @@ export async function GET(request: NextRequest) {
 
         if (updateError) throw new Error(updateError.message);
 
-        // Important: payment success does NOT submit the order to FJPanel.
-        // An authenticated admin must explicitly approve it through the admin API.
         return NextResponse.redirect(`${siteUrl(request)}/social/orders?payment=success&order=${encodeURIComponent(order.id)}`);
     } catch (error) {
         console.error("[social/payment/callback]", error);
