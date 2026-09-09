@@ -1,6 +1,6 @@
 "use client";
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
   Download,
@@ -18,333 +18,78 @@ import {
 type Meta = { duration: number; width: number; height: number; size: number; type: string };
 type Crop = { x: number; y: number; width: number; height: number };
 type SubtitleCue = { start: number; end: number; text: string };
-
-type ProcessOptions = {
-  start: number;
-  end: number;
-  width: number;
-  height: number;
-  quality: number;
-  fps: number;
-  crop: Crop | null;
-  muted: boolean;
-  subtitles: SubtitleCue[];
-  format: "webm" | "mp4";
-};
-
+type ProcessOptions = { start: number; end: number; width: number; height: number; quality: number; fps: number; crop: Crop | null; muted: boolean; subtitles: SubtitleCue[]; format: "webm" | "mp4" };
 const MB = 1024 * 1024;
 
-function formatTime(seconds: number) {
-  if (!Number.isFinite(seconds)) return "00:00";
-  const s = Math.max(0, Math.floor(seconds));
-  return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`;
-}
-
-function download(blob: Blob, name: string) {
-  const href = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = href;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(href), 2000);
-}
-
-function parseTime(value: string) {
-  const parts = value.replace(",", ".").split(":").map(Number);
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return Number(parts[0]) || 0;
-}
-
-function parseSubtitles(text: string): SubtitleCue[] {
-  const normalized = text.replace(/\r/g, "").trim();
-  if (!normalized) return [];
-  const blocks = normalized.split(/\n\s*\n/);
-  const cues: SubtitleCue[] = [];
-  for (const block of blocks) {
-    const lines = block.split("\n").map((line) => line.trim()).filter(Boolean);
-    const timeIndex = lines.findIndex((line) => line.includes(" --> "));
-    if (timeIndex < 0) continue;
-    const [startRaw, endRaw] = lines[timeIndex].split(" --> ");
-    const start = parseTime(startRaw);
-    const end = parseTime(endRaw.split(" ")[0]);
-    const cueText = lines.slice(timeIndex + 1).join("\n");
-    if (end > start && cueText) cues.push({ start, end, text: cueText });
-  }
-  return cues;
-}
-
-function pickMime(format: ProcessOptions["format"]) {
-  const candidates = format === "mp4"
-    ? ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4"]
-    : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
-  return candidates.find((type) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) || "";
-}
+function formatTime(seconds: number) { if (!Number.isFinite(seconds)) return "00:00"; const s = Math.max(0, Math.floor(seconds)); return `${Math.floor(s / 60).toString().padStart(2, "0")}:${(s % 60).toString().padStart(2, "0")}`; }
+function download(blob: Blob, name: string) { const href = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(href), 2000); }
+function parseTime(value: string) { const parts = value.replace(",", ".").split(":").map(Number); if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2]; if (parts.length === 2) return parts[0] * 60 + parts[1]; return Number(parts[0]) || 0; }
+function parseSubtitles(text: string): SubtitleCue[] { const normalized = text.replace(/\r/g, "").trim(); if (!normalized) return []; return normalized.split(/\n\s*\n/).flatMap((block) => { const lines = block.split("\n").map((line) => line.trim()).filter(Boolean); const timeIndex = lines.findIndex((line) => line.includes(" --> ")); if (timeIndex < 0) return []; const [startRaw, endRaw] = lines[timeIndex].split(" --> "); const start = parseTime(startRaw); const end = parseTime(endRaw.split(" ")[0]); const cueText = lines.slice(timeIndex + 1).join("\n"); return end > start && cueText ? [{ start, end, text: cueText }] : []; }); }
+function pickMime(format: ProcessOptions["format"]) { const candidates = format === "mp4" ? ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4"] : ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"]; return candidates.find((type) => typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(type)) || ""; }
 
 export default function VideoManager() {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sourceUrlRef = useRef("");
-  const thumbnailUrlRef = useRef("");
-  const outputUrlRef = useRef("");
-
-  const [file, setFile] = useState<File | null>(null);
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [thumbnail, setThumbnail] = useState("");
-  const [output, setOutput] = useState<{ url: string; name: string; size: number } | null>(null);
-  const [meta, setMeta] = useState<Meta | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [message, setMessage] = useState("");
-  const [operation, setOperation] = useState("آماده");
-  const [start, setStart] = useState(0);
-  const [end, setEnd] = useState(0);
-  const [width, setWidth] = useState(0);
-  const [height, setHeight] = useState(0);
-  const [quality, setQuality] = useState(70);
-  const [fps, setFps] = useState(30);
-  const [format, setFormat] = useState<"webm" | "mp4">("webm");
-  const [muted, setMuted] = useState(false);
-  const [cropEnabled, setCropEnabled] = useState(false);
-  const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 1, height: 1 });
-  const [subtitleText, setSubtitleText] = useState("");
-  const [subtitles, setSubtitles] = useState<SubtitleCue[]>([]);
-  const [subtitleStatus, setSubtitleStatus] = useState("");
-  const [thumbnailTime, setThumbnailTime] = useState(0);
-
+  const inputRef = useRef<HTMLInputElement>(null); const videoRef = useRef<HTMLVideoElement>(null); const canvasRef = useRef<HTMLCanvasElement>(null); const sourceUrlRef = useRef(""); const thumbnailUrlRef = useRef(""); const outputUrlRef = useRef("");
+  const [file, setFile] = useState<File | null>(null); const [sourceUrl, setSourceUrl] = useState(""); const [thumbnail, setThumbnail] = useState(""); const [output, setOutput] = useState<{ url: string; name: string; size: number } | null>(null); const [meta, setMeta] = useState<Meta | null>(null); const [busy, setBusy] = useState(false); const [progress, setProgress] = useState(0); const [message, setMessage] = useState(""); const [operation, setOperation] = useState("آماده");
+  const [start, setStart] = useState(0); const [end, setEnd] = useState(0); const [width, setWidth] = useState(0); const [height, setHeight] = useState(0); const [quality, setQuality] = useState(70); const [fps, setFps] = useState(30); const [format, setFormat] = useState<"webm" | "mp4">("webm"); const [muted, setMuted] = useState(false); const [cropEnabled, setCropEnabled] = useState(false); const [crop, setCrop] = useState<Crop>({ x: 0, y: 0, width: 1, height: 1 }); const [subtitleText, setSubtitleText] = useState(""); const [subtitles, setSubtitles] = useState<SubtitleCue[]>([]); const [subtitleStatus, setSubtitleStatus] = useState(""); const [thumbnailTime, setThumbnailTime] = useState(0);
   const duration = meta?.duration || 0;
-  const cropPercent = useMemo(() => ({
-    x: Math.round(crop.x * 100),
-    y: Math.round(crop.y * 100),
-    width: Math.round(crop.width * 100),
-    height: Math.round(crop.height * 100),
-  }), [crop]);
+  const cropPercent = useMemo(() => ({ x: Math.round(crop.x * 100), y: Math.round(crop.y * 100), width: Math.round(crop.width * 100), height: Math.round(crop.height * 100) }), [crop]);
 
-  useEffect(() => () => {
-    [sourceUrlRef, thumbnailUrlRef, outputUrlRef].forEach((ref) => {
-      if (ref.current) URL.revokeObjectURL(ref.current);
-    });
-  }, []);
+  useEffect(() => () => { [sourceUrlRef, thumbnailUrlRef, outputUrlRef].forEach((ref) => { if (ref.current) URL.revokeObjectURL(ref.current); }); }, []);
+  const reset = () => { [sourceUrlRef, thumbnailUrlRef, outputUrlRef].forEach((ref) => { if (ref.current) URL.revokeObjectURL(ref.current); ref.current = ""; }); setFile(null); setSourceUrl(""); setThumbnail(""); setOutput(null); setMeta(null); setStart(0); setEnd(0); setWidth(0); setHeight(0); setCropEnabled(false); setCrop({ x: 0, y: 0, width: 1, height: 1 }); setSubtitles([]); setSubtitleText(""); setSubtitleStatus(""); setMessage(""); setProgress(0); setOperation("آماده"); if (inputRef.current) inputRef.current.value = ""; };
+  const select = (e: ChangeEvent<HTMLInputElement>) => { const next = e.target.files?.[0]; if (!next) return; if (!next.type.startsWith("video/")) { setMessage("فقط فایل ویدیویی انتخاب کنید."); return; } reset(); const nextUrl = URL.createObjectURL(next); sourceUrlRef.current = nextUrl; setFile(next); setSourceUrl(nextUrl); setMessage("ویدیو آماده و کاملاً مرورگری است."); };
+  const loaded = () => { const v = videoRef.current; if (!v) return; setMeta({ duration: v.duration, width: v.videoWidth, height: v.videoHeight, size: file?.size || 0, type: file?.type || "" }); setStart(0); setEnd(v.duration); setWidth(v.videoWidth); setHeight(v.videoHeight); setThumbnailTime(Math.min(v.duration / 2, Math.max(0, v.duration - 0.05))); };
+  const seek = async (time: number) => { const v = videoRef.current; if (!v || Math.abs(v.currentTime - time) < 0.02) return; await new Promise<void>((resolve) => { const done = () => { v.removeEventListener("seeked", done); resolve(); }; v.addEventListener("seeked", done); v.currentTime = time; }); };
 
-  const reset = () => {
-    [sourceUrlRef, thumbnailUrlRef, outputUrlRef].forEach((ref) => {
-      if (ref.current) URL.revokeObjectURL(ref.current);
-      ref.current = "";
-    });
-    setFile(null); setSourceUrl(""); setThumbnail(""); setOutput(null); setMeta(null);
-    setStart(0); setEnd(0); setWidth(0); setHeight(0); setCropEnabled(false);
-    setCrop({ x: 0, y: 0, width: 1, height: 1 }); setSubtitles([]); setSubtitleText("");
-    setSubtitleStatus(""); setMessage(""); setProgress(0); setOperation("آماده");
-    if (inputRef.current) inputRef.current.value = "";
-  };
-
-  const select = (e: ChangeEvent<HTMLInputElement>) => {
-    const next = e.target.files?.[0];
-    if (!next) return;
-    if (!next.type.startsWith("video/")) { setMessage("فقط فایل ویدیویی انتخاب کنید."); return; }
-    reset();
-    const nextUrl = URL.createObjectURL(next);
-    sourceUrlRef.current = nextUrl;
-    setFile(next); setSourceUrl(nextUrl); setMessage("ویدیو آماده و کاملاً مرورگری است.");
-  };
-
-  const loaded = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    const m = { duration: v.duration, width: v.videoWidth, height: v.videoHeight, size: file?.size || 0, type: file?.type || "" };
-    setMeta(m); setStart(0); setEnd(v.duration); setWidth(v.videoWidth); setHeight(v.videoHeight); setThumbnailTime(Math.min(v.duration / 2, Math.max(0, v.duration - 0.05)));
-  };
-
-  const seek = async (time: number) => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (Math.abs(v.currentTime - time) < 0.02) return;
-    await new Promise<void>((resolve) => {
-      const done = () => { v.removeEventListener("seeked", done); resolve(); };
-      v.addEventListener("seeked", done);
-      v.currentTime = time;
-    });
-  };
-
-  const capture = async () => {
-    const v = videoRef.current, canvas = canvasRef.current;
-    if (!v || !meta) return;
-    setBusy(true); setOperation("استخراج تصویر شاخص"); setMessage("در حال استخراج فریم...");
-    try {
-      await seek(Math.min(thumbnailTime, Math.max(0, duration - 0.05)));
-      canvas!.width = meta.width; canvas!.height = meta.height;
-      const ctx = canvas!.getContext("2d"); if (!ctx) throw new Error("Canvas در این مرورگر در دسترس نیست.");
-      ctx.drawImage(v, 0, 0, meta.width, meta.height);
-      const blob = await new Promise<Blob>((resolve, reject) => canvas!.toBlob((b) => b ? resolve(b) : reject(new Error("استخراج فریم ناموفق بود.")), "image/jpeg", 0.92));
-      if (thumbnailUrlRef.current) URL.revokeObjectURL(thumbnailUrlRef.current);
-      thumbnailUrlRef.current = URL.createObjectURL(blob); setThumbnail(thumbnailUrlRef.current); download(blob, "tusan-video-thumbnail.jpg"); setMessage("تصویر شاخص با موفقیت استخراج شد.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "استخراج فریم انجام نشد."); }
-    finally { setBusy(false); setOperation("آماده"); }
-  };
-
-  const loadSubtitleFile = (e: ChangeEvent<HTMLInputElement>) => {
-    const subtitleFile = e.target.files?.[0];
-    if (!subtitleFile) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const parsed = parseSubtitles(String(reader.result || ""));
-      setSubtitles(parsed); setSubtitleText(String(reader.result || "")); setSubtitleStatus(parsed.length ? `${parsed.length} زیرنویس شناسایی شد.` : "فرمت زیرنویس قابل شناسایی نیست.");
-    };
-    reader.readAsText(subtitleFile);
-  };
-
-  const applySubtitles = () => {
-    const parsed = parseSubtitles(subtitleText);
-    setSubtitles(parsed); setSubtitleStatus(parsed.length ? `${parsed.length} زیرنویس آماده درج روی ویدیو است.` : "هیچ زیرنویس معتبری پیدا نشد.");
-  };
+  const capture = async () => { const v = videoRef.current, canvas = canvasRef.current; if (!v || !meta) return; setBusy(true); setOperation("استخراج تصویر شاخص"); setMessage("در حال استخراج فریم..."); try { await seek(Math.min(thumbnailTime, Math.max(0, duration - 0.05))); canvas!.width = meta.width; canvas!.height = meta.height; const ctx = canvas!.getContext("2d"); if (!ctx) throw new Error("Canvas در این مرورگر در دسترس نیست."); ctx.drawImage(v, 0, 0, meta.width, meta.height); const blob = await new Promise<Blob>((resolve, reject) => canvas!.toBlob((b) => b ? resolve(b) : reject(new Error("استخراج فریم ناموفق بود.")), "image/jpeg", 0.92)); if (thumbnailUrlRef.current) URL.revokeObjectURL(thumbnailUrlRef.current); thumbnailUrlRef.current = URL.createObjectURL(blob); setThumbnail(thumbnailUrlRef.current); download(blob, "tusan-video-thumbnail.jpg"); setMessage("تصویر شاخص با موفقیت استخراج شد."); } catch (error) { setMessage(error instanceof Error ? error.message : "استخراج فریم انجام نشد."); } finally { setBusy(false); setOperation("آماده"); } };
+  const loadSubtitleFile = (e: ChangeEvent<HTMLInputElement>) => { const subtitleFile = e.target.files?.[0]; if (!subtitleFile) return; const reader = new FileReader(); reader.onload = () => { const text = String(reader.result || ""); const parsed = parseSubtitles(text); setSubtitles(parsed); setSubtitleText(text); setSubtitleStatus(parsed.length ? `${parsed.length} زیرنویس شناسایی شد.` : "فرمت زیرنویس قابل شناسایی نیست."); }; reader.readAsText(subtitleFile); };
+  const applySubtitles = () => { const parsed = parseSubtitles(subtitleText); setSubtitles(parsed); setSubtitleStatus(parsed.length ? `${parsed.length} زیرنویس آماده درج روی ویدیو است.` : "هیچ زیرنویس معتبری پیدا نشد."); };
 
   const processVideo = async () => {
-    const v = videoRef.current, canvas = canvasRef.current;
-    if (!v || !meta || !file) return;
-    const mime = pickMime(format);
-    if (!mime) {
-      setMessage(format === "mp4" ? "این مرورگر خروجی MP4 را از طریق MediaRecorder پشتیبانی نمی‌کند. WebM را انتخاب کنید." : "خروجی WebM در این مرورگر پشتیبانی نمی‌شود.");
-      return;
-    }
-    const outW = Math.max(2, Math.round(width / 2) * 2);
-    const outH = Math.max(2, Math.round(height / 2) * 2);
-    const from = Math.max(0, Math.min(start, duration));
-    const to = Math.max(from + 0.05, Math.min(end || duration, duration));
-    const options: ProcessOptions = { start: from, end: to, width: outW, height: outH, quality, fps, crop: cropEnabled ? crop : null, muted, subtitles, format };
+    const v = videoRef.current, canvas = canvasRef.current; if (!v || !meta || !file) return;
+    const mime = pickMime(format); if (!mime) { setMessage(format === "mp4" ? "این مرورگر خروجی MP4 را از طریق MediaRecorder پشتیبانی نمی‌کند. WebM را انتخاب کنید." : "خروجی WebM در این مرورگر پشتیبانی نمی‌شود."); return; }
+    const outW = Math.max(2, Math.round(width / 2) * 2); const outH = Math.max(2, Math.round(height / 2) * 2); const from = Math.max(0, Math.min(start, duration)); const to = Math.max(from + 0.05, Math.min(end || duration, duration)); const options: ProcessOptions = { start: from, end: to, width: outW, height: outH, quality, fps, crop: cropEnabled ? crop : null, muted, subtitles, format };
     setBusy(true); setProgress(0); setOperation("در حال پردازش ویدیو"); setMessage("پردازش داخل مرورگر انجام می‌شود؛ فایل به سرور ارسال نمی‌شود."); setOutput(null);
     try {
-      canvas.width = outW; canvas.height = outH;
-      const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas در این مرورگر در دسترس نیست.");
+      canvas.width = outW; canvas.height = outH; const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Canvas در این مرورگر در دسترس نیست.");
       const stream = canvas.captureStream(options.fps);
-      if (!options.muted) {
-        try {
-          const audioContext = new AudioContext();
-          const source = audioContext.createMediaElementSource(v);
-          const destination = audioContext.createMediaStreamDestination();
-          source.connect(destination); source.connect(audioContext.destination);
-          destination.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
-          await audioContext.resume();
-        } catch { /* Some browsers block routing media-element audio; video-only output remains usable. */ }
-      }
+      if (!options.muted) { const sourceStream = typeof v.captureStream === "function" ? v.captureStream() : null; sourceStream?.getAudioTracks().forEach((track) => stream.addTrack(track)); }
       const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: Math.max(250_000, Math.round(4_000_000 * (quality / 100) ** 1.7)) });
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); };
-      const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
-      recorder.start(250);
-      v.pause();
-      await seek(from);
-      const frameDelay = 1000 / options.fps;
-      let lastFrame = 0;
+      const chunks: BlobPart[] = []; recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data); }; const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
+      recorder.start(250); v.pause(); await seek(from); const frameDelay = 1000 / options.fps; let lastFrame = 0;
       const render = () => {
-        if (!busy && recorder.state !== "recording") return;
-        const now = performance.now();
-        if (now - lastFrame >= frameDelay * 0.75) {
-          lastFrame = now;
-          const sourceX = options.crop ? options.crop.x * meta.width : 0;
-          const sourceY = options.crop ? options.crop.y * meta.height : 0;
-          const sourceW = options.crop ? options.crop.width * meta.width : meta.width;
-          const sourceH = options.crop ? options.crop.height * meta.height : meta.height;
-          ctx.clearRect(0, 0, outW, outH);
-          ctx.drawImage(v, sourceX, sourceY, sourceW, sourceH, 0, 0, outW, outH);
-          const cue = options.subtitles.find((item) => v.currentTime >= item.start && v.currentTime <= item.end);
-          if (cue) {
-            const lines = cue.text.split("\\n");
-            ctx.font = `${Math.max(18, Math.round(outW / 38))}px Vazirmatn, sans-serif`;
-            ctx.textAlign = "center"; ctx.textBaseline = "bottom";
-            lines.forEach((line, index) => {
-              const y = outH - 35 - (lines.length - 1 - index) * Math.max(28, outH / 22);
-              const metrics = ctx.measureText(line);
-              ctx.fillStyle = "rgba(0,0,0,.72)"; ctx.fillRect((outW - metrics.width) / 2 - 14, y - Math.max(28, outH / 22) + 4, metrics.width + 28, Math.max(32, outH / 20));
-              ctx.fillStyle = "#fff"; ctx.fillText(line, outW / 2, y);
-            });
-          }
+        if (recorder.state !== "recording") return; const now = performance.now();
+        if (now - lastFrame >= frameDelay * 0.75) { lastFrame = now; const sourceX = options.crop ? options.crop.x * meta.width : 0; const sourceY = options.crop ? options.crop.y * meta.height : 0; const sourceW = options.crop ? options.crop.width * meta.width : meta.width; const sourceH = options.crop ? options.crop.height * meta.height : meta.height; ctx.clearRect(0, 0, outW, outH); ctx.drawImage(v, sourceX, sourceY, sourceW, sourceH, 0, 0, outW, outH);
+          const cue = options.subtitles.find((item) => v.currentTime >= item.start && v.currentTime <= item.end); if (cue) { const lines = cue.text.split("\\n"); ctx.font = `${Math.max(18, Math.round(outW / 38))}px Vazirmatn, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "bottom"; lines.forEach((line, index) => { const y = outH - 35 - (lines.length - 1 - index) * Math.max(28, outH / 22); const metrics = ctx.measureText(line); ctx.fillStyle = "rgba(0,0,0,.72)"; ctx.fillRect((outW - metrics.width) / 2 - 14, y - Math.max(28, outH / 22) + 4, metrics.width + 28, Math.max(32, outH / 20)); ctx.fillStyle = "#fff"; ctx.fillText(line, outW / 2, y); }); }
         }
-        const elapsed = Math.max(0, v.currentTime - from);
-        setProgress(Math.min(99, Math.round((elapsed / (to - from)) * 100)));
-        if (v.currentTime >= to - 0.03) {
-          v.pause(); recorder.stop(); return;
-        }
-        requestAnimationFrame(render);
+        const elapsed = Math.max(0, v.currentTime - from); setProgress(Math.min(99, Math.round((elapsed / (to - from)) * 100))); if (v.currentTime >= to - 0.03) { v.pause(); recorder.stop(); return; } requestAnimationFrame(render);
       };
-      requestAnimationFrame(render);
-      await new Promise<void>((resolve) => {
-        const timer = window.setInterval(() => {
-          if (recorder.state === "inactive") { clearInterval(timer); resolve(); }
-        }, 100);
-      });
-      await stopped;
-      const blob = new Blob(chunks, { type: mime });
-      if (outputUrlRef.current) URL.revokeObjectURL(outputUrlRef.current);
-      outputUrlRef.current = URL.createObjectURL(blob);
-      const extension = mime.startsWith("video/mp4") ? "mp4" : "webm";
-      setOutput({ url: outputUrlRef.current, name: `tusan-video-${Date.now()}.${extension}`, size: blob.size });
-      setProgress(100); setOperation("تمام شد"); setMessage(`ویدیو آماده است؛ حجم خروجی ${(blob.size / MB).toFixed(2)} MB است.`);
-    } catch (error) { setMessage(error instanceof Error ? error.message : "پردازش ویدیو ناموفق بود."); setOperation("خطا"); }
-    finally { setBusy(false); }
+      await v.play(); requestAnimationFrame(render);
+      await new Promise<void>((resolve) => { const timer = window.setInterval(() => { if (recorder.state === "inactive") { clearInterval(timer); resolve(); } }, 100); }); await stopped;
+      const blob = new Blob(chunks, { type: mime }); if (outputUrlRef.current) URL.revokeObjectURL(outputUrlRef.current); outputUrlRef.current = URL.createObjectURL(blob); const extension = mime.startsWith("video/mp4") ? "mp4" : "webm"; setOutput({ url: outputUrlRef.current, name: `tusan-video-${Date.now()}.${extension}`, size: blob.size }); setProgress(100); setOperation("تمام شد"); setMessage(`ویدیو آماده است؛ حجم خروجی ${(blob.size / MB).toFixed(2)} MB است.`);
+    } catch (error) { setMessage(error instanceof Error ? error.message : "پردازش ویدیو ناموفق بود."); setOperation("خطا"); } finally { setBusy(false); }
   };
 
-  return (
-    <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-7" dir="rtl">
-      <input ref={inputRef} type="file" accept="video/*" onChange={select} className="hidden" />
-      <input id="subtitle-file" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={loadSubtitleFile} className="hidden" />
-
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
-        <div className="space-y-4">
-          <div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-black">
-            {sourceUrl ? <video ref={videoRef} src={sourceUrl} controls onLoadedMetadata={loaded} className="aspect-video w-full" /> : <button type="button" onClick={() => inputRef.current?.click()} className="flex aspect-video w-full flex-col items-center justify-center text-white"><Upload className="h-12 w-12 text-[var(--primary)]" /><span className="mt-3 font-black">انتخاب ویدیو</span><span className="mt-1 text-xs text-white/60">پردازش مستقیم روی دستگاه شما</span></button>}
-          </div>
-          {meta && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><Info label="حجم" value={`${(meta.size / MB).toFixed(2)} MB`} /><Info label="ابعاد" value={`${meta.width}×${meta.height}`} /><Info label="مدت" value={formatTime(meta.duration)} /><Info label="فرمت" value={meta.type.replace("video/", "").toUpperCase() || "—"} /></div>}
-          {output && <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-4"><div className="flex items-center gap-2 font-black text-[var(--primary)]"><CheckCircle2 className="h-5 w-5" /> خروجی آماده است</div><div className="mt-2 text-xs">{(output.size / MB).toFixed(2)} MB</div><button type="button" onClick={() => downloadFromUrl(output.url, output.name)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white"><Download className="h-4 w-4" /> دانلود ویدیو</button></div>}
-        </div>
-
-        <div className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] p-4">
-          <button type="button" onClick={() => inputRef.current?.click()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white"><Upload className="h-4 w-4" /> انتخاب / تغییر ویدیو</button>
-          {meta && <>
-            <Section icon={<Scissors className="h-4 w-4" />} title="برش زمانی">
-              <div className="grid grid-cols-2 gap-2"><Field label="شروع (ثانیه)"><input type="number" min="0" max={duration} step="0.1" value={start} onChange={(e) => setStart(Math.min(Number(e.target.value), Math.max(0, end - .1)))} /></Field><Field label="پایان (ثانیه)"><input type="number" min="0.1" max={duration} step="0.1" value={end} onChange={(e) => setEnd(Math.max(start + .1, Math.min(Number(e.target.value), duration)))} /></Field></div>
-              <input className="mt-3 w-full accent-[var(--primary)]" type="range" min="0" max={duration} step="0.1" value={start} onChange={(e) => setStart(Math.min(Number(e.target.value), end - .1))} />
-            </Section>
-            <Section icon={<Maximize2 className="h-4 w-4" />} title="اندازه، رزولوشن و کراپ">
-              <div className="grid grid-cols-2 gap-2"><Field label="عرض"><input type="number" min="2" value={width} onChange={(e) => setWidth(Number(e.target.value))} /></Field><Field label="ارتفاع"><input type="number" min="2" value={height} onChange={(e) => setHeight(Number(e.target.value))} /></Field></div>
-              <div className="mt-2 flex flex-wrap gap-2">{[[1920,1080],[1280,720],[1080,1920],[1080,1080],[720,1280]].map(([w,h]) => <button key={`${w}x${h}`} type="button" onClick={() => { setWidth(w); setHeight(h); }} className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-bold">{w}×{h}</button>)}</div>
-              <label className="mt-3 flex items-center justify-between rounded-xl border border-[var(--border)] p-3 text-xs font-bold"><span>فعال‌سازی کراپ</span><input type="checkbox" checked={cropEnabled} onChange={(e) => setCropEnabled(e.target.checked)} /></label>
-              {cropEnabled && <div className="mt-2 grid grid-cols-2 gap-2"><Field label={`X: ${cropPercent.x}%`}><input type="range" min="0" max="90" value={cropPercent.x} onChange={(e) => setCrop({ ...crop, x: Number(e.target.value) / 100, width: Math.min(crop.width, 1 - Number(e.target.value) / 100) })} /></Field><Field label={`Y: ${cropPercent.y}%`}><input type="range" min="0" max="90" value={cropPercent.y} onChange={(e) => setCrop({ ...crop, y: Number(e.target.value) / 100, height: Math.min(crop.height, 1 - Number(e.target.value) / 100) })} /></Field><Field label={`عرض برش: ${cropPercent.width}%`}><input type="range" min="10" max={100 - cropPercent.x} value={cropPercent.width} onChange={(e) => setCrop({ ...crop, width: Number(e.target.value) / 100 })} /></Field><Field label={`ارتفاع برش: ${cropPercent.height}%`}><input type="range" min="10" max={100 - cropPercent.y} value={cropPercent.height} onChange={(e) => setCrop({ ...crop, height: Number(e.target.value) / 100 })} /></Field></div>}
-            </Section>
-            <Section icon={<Film className="h-4 w-4" />} title="حجم، کیفیت و فرمت">
-              <label className="block text-xs font-bold">کیفیت خروجی: {quality}%<input className="mt-2 w-full accent-[var(--primary)]" type="range" min="20" max="100" value={quality} onChange={(e) => setQuality(Number(e.target.value))} /></label>
-              <label className="mt-3 block text-xs font-bold">نرخ فریم: {fps} FPS<select value={fps} onChange={(e) => setFps(Number(e.target.value))} className="mt-2"><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="60">60</option></select></label>
-              <label className="mt-3 block text-xs font-bold">فرمت خروجی<select value={format} onChange={(e) => setFormat(e.target.value as "webm" | "mp4")} className="mt-2"><option value="webm">WebM — سازگارتر با پردازش مرورگری</option><option value="mp4">MP4 — فقط در مرورگرهای پشتیبان</option></select></label>
-              <button type="button" onClick={() => setMuted((value) => !value)} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />} {muted ? "حذف صدا" : "حفظ صدا"}</button>
-            </Section>
-            <Section icon={<Subtitles className="h-4 w-4" />} title="زیرنویس">
-              <div className="flex gap-2"><label htmlFor="subtitle-file" className="flex-1 cursor-pointer rounded-xl border border-[var(--border)] px-3 py-2 text-center text-xs font-bold">انتخاب SRT / VTT</label><button type="button" onClick={applySubtitles} className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">اعمال متن</button></div>
-              <textarea value={subtitleText} onChange={(e) => setSubtitleText(e.target.value)} placeholder="متن SRT یا VTT را اینجا قرار دهید..." className="mt-2 min-h-24 w-full resize-y" />
-              {subtitleStatus && <div className="text-[11px] font-bold text-[var(--text-muted)]">{subtitleStatus}</div>}
-            </Section>
-            <Section icon={<Film className="h-4 w-4" />} title="تصویر شاخص">
-              <label className="block text-xs font-bold">زمان فریم: {formatTime(thumbnailTime)}<input className="mt-2 w-full accent-[var(--primary)]" type="range" min="0" max={Math.max(0, duration - .05)} step="0.1" value={thumbnailTime} onChange={(e) => setThumbnailTime(Number(e.target.value))} /></label>
-              <button type="button" disabled={busy} onClick={capture} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-black disabled:opacity-50"><Download className="h-4 w-4" /> استخراج و دانلود فریم</button>
-              {thumbnail && <img src={thumbnail} alt="تصویر شاخص" className="mt-3 max-h-40 w-full rounded-xl object-contain" />}
-            </Section>
-            <button type="button" disabled={busy} onClick={processVideo} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3.5 text-sm font-black text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Film className="h-4 w-4" />} {busy ? `در حال پردازش ${progress}%` : "پردازش و ساخت خروجی"}</button>
-            {busy && <div className="h-2 overflow-hidden rounded-full bg-black/10"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${progress}%` }} /></div>}
-            <button type="button" onClick={reset} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2.5 text-xs font-bold"><RotateCcw className="h-4 w-4" /> پاک کردن</button>
-          </>}
-        </div>
+  return <div className="rounded-[2rem] border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm sm:p-7" dir="rtl">
+    <input ref={inputRef} type="file" accept="video/*" onChange={select} className="hidden" /><input id="subtitle-file" type="file" accept=".srt,.vtt,text/vtt,application/x-subrip" onChange={loadSubtitleFile} className="hidden" />
+    <div className="grid gap-6 xl:grid-cols-[1.1fr_.9fr]">
+      <div className="space-y-4"><div className="overflow-hidden rounded-2xl border border-[var(--border)] bg-black">{sourceUrl ? <video ref={videoRef} src={sourceUrl} controls onLoadedMetadata={loaded} className="aspect-video w-full" /> : <button type="button" onClick={() => inputRef.current?.click()} className="flex aspect-video w-full flex-col items-center justify-center text-white"><Upload className="h-12 w-12 text-[var(--primary)]" /><span className="mt-3 font-black">انتخاب ویدیو</span><span className="mt-1 text-xs text-white/60">پردازش مستقیم روی دستگاه شما</span></button>}</div>
+        {meta && <div className="grid grid-cols-2 gap-2 sm:grid-cols-4"><Info label="حجم" value={`${(meta.size / MB).toFixed(2)} MB`} /><Info label="ابعاد" value={`${meta.width}×${meta.height}`} /><Info label="مدت" value={formatTime(meta.duration)} /><Info label="فرمت" value={meta.type.replace("video/", "").toUpperCase() || "—"} /></div>}
+        {output && <div className="rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 p-4"><div className="flex items-center gap-2 font-black text-[var(--primary)]"><CheckCircle2 className="h-5 w-5" /> خروجی آماده است</div><div className="mt-2 text-xs">{(output.size / MB).toFixed(2)} MB</div><button type="button" onClick={() => downloadFromUrl(output.url, output.name)} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white"><Download className="h-4 w-4" /> دانلود ویدیو</button></div>}</div>
+      <div className="space-y-4 rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] p-4"><button type="button" onClick={() => inputRef.current?.click()} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white"><Upload className="h-4 w-4" /> انتخاب / تغییر ویدیو</button>
+        {meta && <>
+          <Section icon={<Scissors className="h-4 w-4" />} title="برش زمانی"><div className="grid grid-cols-2 gap-2"><Field label="شروع (ثانیه)"><input type="number" min="0" max={duration} step="0.1" value={start} onChange={(e) => setStart(Math.min(Number(e.target.value), Math.max(0, end - .1)))} /></Field><Field label="پایان (ثانیه)"><input type="number" min="0.1" max={duration} step="0.1" value={end} onChange={(e) => setEnd(Math.max(start + .1, Math.min(Number(e.target.value), duration)))} /></Field></div><input className="mt-3 w-full accent-[var(--primary)]" type="range" min="0" max={duration} step="0.1" value={start} onChange={(e) => setStart(Math.min(Number(e.target.value), end - .1))} /></Section>
+          <Section icon={<Maximize2 className="h-4 w-4" />} title="اندازه، رزولوشن و کراپ"><div className="grid grid-cols-2 gap-2"><Field label="عرض"><input type="number" min="2" value={width} onChange={(e) => setWidth(Number(e.target.value))} /></Field><Field label="ارتفاع"><input type="number" min="2" value={height} onChange={(e) => setHeight(Number(e.target.value))} /></Field></div><div className="mt-2 flex flex-wrap gap-2">{[[1920,1080],[1280,720],[1080,1920],[1080,1080],[720,1280]].map(([w,h]) => <button key={`${w}x${h}`} type="button" onClick={() => { setWidth(w); setHeight(h); }} className="rounded-lg border border-[var(--border)] px-2 py-1 text-[11px] font-bold">{w}×{h}</button>)}</div><label className="mt-3 flex items-center justify-between rounded-xl border border-[var(--border)] p-3 text-xs font-bold"><span>فعال‌سازی کراپ</span><input type="checkbox" checked={cropEnabled} onChange={(e) => setCropEnabled(e.target.checked)} /></label>{cropEnabled && <div className="mt-2 grid grid-cols-2 gap-2"><Field label={`X: ${cropPercent.x}%`}><input type="range" min="0" max="90" value={cropPercent.x} onChange={(e) => setCrop({ ...crop, x: Number(e.target.value) / 100, width: Math.min(crop.width, 1 - Number(e.target.value) / 100) })} /></Field><Field label={`Y: ${cropPercent.y}%`}><input type="range" min="0" max="90" value={cropPercent.y} onChange={(e) => setCrop({ ...crop, y: Number(e.target.value) / 100, height: Math.min(crop.height, 1 - Number(e.target.value) / 100) })} /></Field><Field label={`عرض برش: ${cropPercent.width}%`}><input type="range" min="10" max={100 - cropPercent.x} value={cropPercent.width} onChange={(e) => setCrop({ ...crop, width: Number(e.target.value) / 100 })} /></Field><Field label={`ارتفاع برش: ${cropPercent.height}%`}><input type="range" min="10" max={100 - cropPercent.y} value={cropPercent.height} onChange={(e) => setCrop({ ...crop, height: Number(e.target.value) / 100 })} /></Field></div>}</Section>
+          <Section icon={<Film className="h-4 w-4" />} title="حجم، کیفیت و فرمت"><label className="block text-xs font-bold">کیفیت خروجی: {quality}%<input className="mt-2 w-full accent-[var(--primary)]" type="range" min="20" max="100" value={quality} onChange={(e) => setQuality(Number(e.target.value))} /></label><label className="mt-3 block text-xs font-bold">نرخ فریم: {fps} FPS<select value={fps} onChange={(e) => setFps(Number(e.target.value))} className="mt-2"><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="60">60</option></select></label><label className="mt-3 block text-xs font-bold">فرمت خروجی<select value={format} onChange={(e) => setFormat(e.target.value as "webm" | "mp4")} className="mt-2"><option value="webm">WebM — سازگارتر با پردازش مرورگری</option><option value="mp4">MP4 — فقط در مرورگرهای پشتیبان</option></select></label><button type="button" onClick={() => setMuted((value) => !value)} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">{muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />} {muted ? "حذف صدا" : "حفظ صدا"}</button></Section>
+          <Section icon={<Subtitles className="h-4 w-4" />} title="زیرنویس"><div className="flex gap-2"><label htmlFor="subtitle-file" className="flex-1 cursor-pointer rounded-xl border border-[var(--border)] px-3 py-2 text-center text-xs font-bold">انتخاب SRT / VTT</label><button type="button" onClick={applySubtitles} className="rounded-xl border border-[var(--border)] px-3 py-2 text-xs font-bold">اعمال متن</button></div><textarea value={subtitleText} onChange={(e) => setSubtitleText(e.target.value)} placeholder="متن SRT یا VTT را اینجا قرار دهید..." className="mt-2 min-h-24 w-full resize-y" />{subtitleStatus && <div className="text-[11px] font-bold text-[var(--text-muted)]">{subtitleStatus}</div>}</Section>
+          <Section icon={<Film className="h-4 w-4" />} title="تصویر شاخص"><label className="block text-xs font-bold">زمان فریم: {formatTime(thumbnailTime)}<input className="mt-2 w-full accent-[var(--primary)]" type="range" min="0" max={Math.max(0, duration - .05)} step="0.1" value={thumbnailTime} onChange={(e) => setThumbnailTime(Number(e.target.value))} /></label><button type="button" disabled={busy} onClick={capture} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-3 text-sm font-black disabled:opacity-50"><Download className="h-4 w-4" /> استخراج و دانلود فریم</button>{thumbnail && <img src={thumbnail} alt="تصویر شاخص" className="mt-3 max-h-40 w-full rounded-xl object-contain" />}</Section>
+          <button type="button" disabled={busy} onClick={processVideo} className="flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3.5 text-sm font-black text-white disabled:opacity-50">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Film className="h-4 w-4" />} {busy ? `در حال پردازش ${progress}%` : "پردازش و ساخت خروجی"}</button>{busy && <div className="h-2 overflow-hidden rounded-full bg-black/10"><div className="h-full rounded-full bg-[var(--primary)] transition-all" style={{ width: `${progress}%` }} /></div>}<button type="button" onClick={reset} className="flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2.5 text-xs font-bold"><RotateCcw className="h-4 w-4" /> پاک کردن</button>
+        </>}
       </div>
-      {message && <div className="mt-5 rounded-xl bg-[var(--primary)]/10 px-4 py-3 text-sm font-bold text-[var(--primary)]">{operation !== "آماده" && <span className="ml-2 opacity-70">{operation}:</span>} {message}</div>}
-      <canvas ref={canvasRef} className="hidden" />
     </div>
-  );
+    {message && <div className="mt-5 rounded-xl bg-[var(--primary)]/10 px-4 py-3 text-sm font-bold text-[var(--primary)]">{operation !== "آماده" && <span className="ml-2 opacity-70">{operation}:</span>} {message}</div>}<canvas ref={canvasRef} className="hidden" />
+  </div>;
 }
-
-function downloadFromUrl(url: string, name: string) {
-  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-}
-
+function downloadFromUrl(url: string, name: string) { const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
 function Info({ label, value }: { label: string; value: string }) { return <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3"><div className="text-[10px] text-[var(--text-muted)]">{label}</div><div className="mt-1 text-xs font-black">{value}</div></div>; }
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) { return <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"><div className="flex items-center gap-2 text-sm font-black">{icon}{title}</div><div className="mt-3">{children}</div></div>; }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="text-[10px] font-bold text-[var(--text-muted)]">{label}{children}</label>; }
+function Section({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) { return <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-3"><div className="flex items-center gap-2 text-sm font-black">{icon}{title}</div><div className="mt-3">{children}</div></div>; }
+function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="text-[10px] font-bold text-[var(--text-muted)]">{label}{children}</label>; }
