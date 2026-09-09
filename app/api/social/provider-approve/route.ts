@@ -35,8 +35,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true, provider_order_id: String(provider.order), status: "processing" });
         } catch (providerError) {
             console.error("[social/provider-approve] provider submission failed", providerError);
-            await admin.from("social_orders").update({ status: "paid", admin_note: "تأیید انجام شد اما ارسال به FJPanel ناموفق بود." }).eq("id", order.id).eq("status", "processing").is("provider_order_id", null);
-            return NextResponse.json({ error: "تأیید انجام شد اما ارسال به FJPanel ناموفق بود." }, { status: 502 });
+            await admin.from("social_orders").update({ admin_approved: false, admin_approved_at: null, admin_approved_by: null, status: "paid", admin_note: "تأیید انجام شد اما ارسال به FJPanel ناموفق بود؛ سفارش دوباره در صف تأیید مدیر قرار گرفت." }).eq("id", order.id).eq("status", "processing").is("provider_order_id", null);
+            return NextResponse.json({ error: "تأیید انجام شد اما ارسال به FJPanel ناموفق بود. سفارش دوباره قابل تأیید است." }, { status: 502 });
         }
     } catch (error) {
         console.error("[social/provider-approve] unexpected error", error);
