@@ -47,8 +47,17 @@ export default function SocialOrdersPage() {
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
-        setPaymentResult(params.get("payment"));
-        load();
+        const requestedResult = params.get("payment");
+        const requestedOrder = params.get("order");
+        setPaymentResult(requestedResult);
+        load().then(() => {
+            if (!requestedOrder) return;
+            void supabase.from("social_orders").select("id,status,paid_at,payment_reference").eq("id", requestedOrder).maybeSingle().then(({ data }) => {
+                if (data && ["paid", "processing", "partial", "completed"].includes(data.status) && data.paid_at) {
+                    setPaymentResult("success");
+                }
+            });
+        });
     }, []);
 
     async function authHeaders() {
@@ -81,7 +90,7 @@ export default function SocialOrdersPage() {
     }
 
     const paymentMessage = paymentResult === "success"
-        ? { text: "پرداخت با موفقیت تأیید شد.", className: "border-emerald-200 bg-emerald-50 text-emerald-800" }
+        ? { text: "پرداخت با موفقیت تأیید شد و سفارش در انتظار تأیید مدیر است.", className: "border-emerald-200 bg-emerald-50 text-emerald-800" }
         : paymentResult === "cancelled"
             ? { text: "پرداخت لغو شد. سفارش شما در وضعیت در انتظار پرداخت باقی مانده و می‌توانید دوباره پرداخت کنید.", className: "border-amber-200 bg-amber-50 text-amber-800" }
             : paymentResult === "failed"
@@ -115,7 +124,7 @@ export default function SocialOrdersPage() {
                             </div>
                             <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm"><div><span className="text-[var(--text-muted)]">تعداد</span><strong className="block mt-1">{order.quantity.toLocaleString("fa-IR")}</strong></div><div><span className="text-[var(--text-muted)]">مبلغ</span><strong className="block mt-1">{order.price.toLocaleString("fa-IR")} تومان</strong></div><div><span className="text-[var(--text-muted)]">سرویس‌دهنده</span><strong className="block mt-1">{order.provider}</strong></div><div><span className="text-[var(--text-muted)]">تاریخ</span><strong className="block mt-1">{new Date(order.created_at).toLocaleDateString("fa-IR")}</strong></div></div>
                             <div className="mt-5 flex flex-wrap gap-2">
-                                {canPay && <button onClick={() => pay(order)} disabled={busyId === order.id} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] text-white px-4 py-2.5 font-bold disabled:opacity-50">{busyId === order.id ? <RefreshCw size={17} className="animate-spin" /> : order.status === "awaiting_payment" ? <CreditCard size={17} /> : <CreditCard size={17} />} {order.status === "awaiting_payment" ? "ادامه پرداخت" : "پرداخت سفارش"}</button>}
+                                {canPay && <button onClick={() => pay(order)} disabled={busyId === order.id} className="inline-flex items-center gap-2 rounded-xl bg-[var(--primary)] text-white px-4 py-2.5 font-bold disabled:opacity-50">{busyId === order.id ? <RefreshCw size={17} className="animate-spin" /> : <CreditCard size={17} />} {order.status === "awaiting_payment" ? "ادامه پرداخت" : "پرداخت سفارش"}</button>}
                                 {canCancel && <button onClick={() => cancel(order)} disabled={busyId === order.id} className="inline-flex items-center gap-2 rounded-xl border border-red-200 text-red-700 px-4 py-2.5 font-bold disabled:opacity-50"><XCircle size={17} /> لغو سفارش</button>}
                                 <button onClick={() => setOpenId(isOpen ? null : order.id)} className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] px-4 py-2.5 font-bold"><Eye size={17} /> {isOpen ? "بستن جزئیات" : "جزئیات و مراحل"}</button>
                             </div>
