@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { FileText, Search, Car, Home, GraduationCap, ShieldCheck, Landmark, CreditCard, BriefcaseBusiness, Printer, FileSpreadsheet, Palette, Globe2, BookOpen, Plane, HeartPulse, BadgeCheck, Bot, LockKeyhole, UserRoundCheck, Presentation, Building2, ReceiptText, WalletCards, Gavel, MapPin, UserRoundSearch, type LucideIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { FileText, Search, Car, Home, GraduationCap, ShieldCheck, Landmark, CreditCard, BriefcaseBusiness, Printer, FileSpreadsheet, Palette, Globe2, BookOpen, Plane, HeartPulse, BadgeCheck, Bot, LockKeyhole, UserRoundCheck, Presentation, Building2, ReceiptText, WalletCards, Gavel, MapPin, UserRoundSearch, ChevronDown, type LucideIcon } from "lucide-react";
 import { GlassPanel } from "@/components/ui";
 import { getTaxonomySlug } from "@/lib/serviceTaxonomy";
 import PriceInquiryDialog from "@/components/services/PriceInquiryDialog";
@@ -17,31 +18,76 @@ const iconRules: Array<[RegExp, LucideIcon]> = [
 const categoryRules: Array<[RegExp, LucideIcon]> = [
   [/tax|مالیات/i, ReceiptText], [/social-security|تامین اجتماعی|تأمین اجتماعی|بیمه/i, ShieldCheck], [/vehicle|خودرو/i, Car], [/real-estate|املاک|مسکن/i, Home], [/education|آموزش|دانشگاه|دانشجویی/i, GraduationCap], [/legal|قضایی|حقوقی/i, Gavel], [/banking|بانکی|مالی/i, CreditCard], [/business|کسب.?وکار|اصناف/i, BriefcaseBusiness], [/documents|مدارک|چاپ/i, Printer], [/office|آفیس|داده/i, FileSpreadsheet], [/graphic|گرافیک|طراحی/i, Palette], [/web|وب|فنی/i, Globe2], [/research|پژوهش|مقاله/i, BookOpen], [/travel|سفر|کنسولی/i, Plane], [/insurance|بیمه/i, ShieldCheck], [/welfare|یارانه|رفاهی/i, WalletCards], [/ai|هوش مصنوعی/i, Bot], [/security-accounts|امنیت|حساب/i, LockKeyhole], [/career|رزومه|استخدام/i, UserRoundCheck], [/presentation|پاورپوینت/i, Presentation], [/health|درمانی|نوبت/i, HeartPulse], [/government|دولتی|انتظامی/i, Landmark],
 ];
+
+const priorityRules: RegExp[] = [
+  /ثبت.?نام|انتخاب.?رشته|دانشگاه|کنکور|دانشجویی/i,
+  /مالیات|اظهارنامه/i,
+  /بیمه|تامین اجتماعی|تأمین اجتماعی/i,
+  /خودرو|تعویض پلاک|گواهینامه|خلافی/i,
+  /چاپ|پرینت|اسکن/i,
+  /پاورپوینت|ورد|excel|اکسل/i,
+];
+
 function resolveServiceIcon(service: Service): LucideIcon { const haystack = `${service.title} ${service.category || ""} ${service.description || ""}`; const byTitle = iconRules.find(([pattern]) => pattern.test(haystack)); if (byTitle) return byTitle[1]; const byCategory = categoryRules.find(([pattern]) => pattern.test(`${service.category || ""} ${getTaxonomySlug(service.category)}`)); return byCategory?.[1] || FileText; }
 function ServiceIcon({ service, className = "h-6 w-6" }: { service: Service; className?: string }) { const Icon = resolveServiceIcon(service); return <Icon aria-hidden="true" className={className} strokeWidth={2.1} />; }
 function ServiceBadges({ service }: { service: Service }) { return <div className="flex flex-wrap items-center gap-1.5">{service.local_only && <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800"><MapPin className="h-3 w-3" />فقط در مراغه</span>}{service.identity_verification_required && <span className="inline-flex items-center gap-1 rounded-full border border-sky-300/70 bg-sky-50 px-2 py-1 text-[11px] font-black text-sky-800"><UserRoundSearch className="h-3 w-3" />احراز هویت حضوری</span>}{service.delivery_mode === "in_person" && !service.local_only && !service.identity_verification_required && <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/70 bg-amber-50 px-2 py-1 text-[11px] font-black text-amber-800"><MapPin className="h-3 w-3" />حضوری</span>}</div>; }
 function ServicePrice({ service }: { service: Service }) { return service.price > 0 ? <span className="font-black text-[var(--primary)]">{service.price.toLocaleString("fa-IR")} تومان</span> : <PriceInquiryDialog serviceTitle={service.title} />; }
 
 export default function ServicesCatalog({ services, initialCategory = "all", initialSearch = "" }: Props) {
-  const search = initialSearch.trim(); const q = search.toLocaleLowerCase("fa-IR");
-  const parents = services.filter(s => !s.parent_service_id); const childrenByParent = new Map<string, Service[]>();
+  const search = initialSearch.trim();
+  const q = search.toLocaleLowerCase("fa-IR");
+  const parents = services.filter(s => !s.parent_service_id);
+  const childrenByParent = new Map<string, Service[]>();
   services.filter(s => s.parent_service_id).forEach(s => childrenByParent.set(s.parent_service_id!, [...(childrenByParent.get(s.parent_service_id!) || []), s]));
   const categoryMatches = (s: Service) => initialCategory === "all" || !initialCategory || s.id === initialCategory || s.category === initialCategory || getTaxonomySlug(s.category) === initialCategory;
   const textMatches = (s: Service) => !q || `${s.title} ${s.category || ""} ${s.description || ""}`.toLocaleLowerCase("fa-IR").includes(q);
-  const visibleParents = parents.filter(parent => { const kids = childrenByParent.get(parent.id) || []; return (categoryMatches(parent) || kids.some(categoryMatches)) && (textMatches(parent) || kids.some(textMatches)); });
-  const standalone = parents.filter(s => !childrenByParent.has(s.id) && categoryMatches(s) && textMatches(s));
+  const parentHasChildren = (s: Service) => childrenByParent.has(s.id);
+  const visibleParents = parents.filter(parent => { const kids = childrenByParent.get(parent.id) || []; return parentHasChildren(parent) && (categoryMatches(parent) || kids.some(categoryMatches)) && (textMatches(parent) || kids.some(textMatches)); });
+  const standalone = parents.filter(s => !parentHasChildren(s) && categoryMatches(s) && textMatches(s));
+  const prioritized = useMemo(() => {
+    return [...parents].filter(parent => categoryMatches(parent) && !parentHasChildren(parent)).sort((a, b) => {
+      const aScore = priorityRules.reduce((score, rule) => score + (rule.test(`${a.title} ${a.category || ""}`) ? 1 : 0), 0);
+      const bScore = priorityRules.reduce((score, rule) => score + (rule.test(`${b.title} ${b.category || ""}`) ? 1 : 0), 0);
+      return bScore - aScore;
+    }).slice(0, 6);
+  }, [parents, initialCategory, childrenByParent]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  function toggleParent(id: string) { setExpanded(current => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; }); }
 
   return <>
-    <ServiceAnnouncementsSlider />
-    <GlassPanel className="p-4 sm:p-5">
-      <form method="get" className="flex flex-col lg:flex-row gap-3"><div className="flex-1"><label htmlFor="service-search" className="sr-only">جستجوی خدمت</label><div className="flex items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2"><Search aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--text-muted)]" /><input id="service-search" name="q" defaultValue={search} placeholder="جستجوی خدمت یا دسته‌بندی..." className="w-full bg-transparent py-2 text-sm outline-none" /></div></div><button type="submit" className="rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-bold text-white">جستجو</button>{initialCategory !== "all" && <input type="hidden" name="category" value={initialCategory} />}</form>
-      <p className="mt-3 text-xs text-[var(--text-muted)]">خدمات حضوری با برچسب «فقط در مراغه» مشخص شده‌اند، خدمات نیازمند احراز هویت با برچسب «احراز هویت حضوری» و خدمات بدون قیمت دارای گزینه «استعلام قیمت» هستند.</p>
+    <div className="hidden sm:block"><ServiceAnnouncementsSlider /></div>
+    <GlassPanel className="p-3 sm:p-5">
+      <form method="get" className="flex gap-2 lg:gap-3">
+        <div className="flex-1"><label htmlFor="service-search" className="sr-only">جستجوی خدمت</label><div className="flex h-12 items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 sm:px-4"><Search aria-hidden="true" className="h-4 w-4 shrink-0 text-[var(--text-muted)]" /><input id="service-search" name="q" defaultValue={search} placeholder="جستجوی خدمت یا دسته‌بندی..." className="w-full bg-transparent text-sm outline-none" /></div></div>
+        <button type="submit" className="shrink-0 rounded-2xl bg-[var(--primary)] px-4 sm:px-5 text-sm font-bold text-white">جستجو</button>
+        {initialCategory !== "all" && <input type="hidden" name="category" value={initialCategory} />}
+      </form>
+      <p className="mt-3 hidden sm:block text-xs leading-6 text-[var(--text-muted)]">خدمات حضوری با برچسب «فقط در مراغه» مشخص شده‌اند، خدمات نیازمند احراز هویت با برچسب «احراز هویت حضوری» و خدمات بدون قیمت دارای گزینه «استعلام قیمت» هستند.</p>
     </GlassPanel>
+
+    {prioritized.length > 0 && !search && initialCategory === "all" && <section aria-labelledby="priority-services-title" className="space-y-2">
+      <div className="flex items-center justify-between"><div><p className="text-xs font-bold text-[var(--primary)]">شروع سریع</p><h2 id="priority-services-title" className="text-lg font-black">خدمات مهم و پرکاربرد</h2></div><span className="text-xs text-[var(--text-muted)]">انتخاب سریع</span></div>
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {prioritized.map(service => <Link key={service.id} href={service.slug ? `/services/${encodeURIComponent(service.slug)}` : "#service-hierarchy-title"} className="flex min-w-max items-center gap-2 rounded-2xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm font-bold shadow-sm hover:border-[var(--primary)] hover:text-[var(--primary)] transition"><ServiceIcon service={service} className="h-4 w-4 text-[var(--primary)]" />{service.title}</Link>)}
+      </div>
+    </section>}
+
     <section className="space-y-4" aria-labelledby="service-hierarchy-title">
-      <div className="flex items-end justify-between gap-3"><div><h2 id="service-hierarchy-title" className="text-xl sm:text-2xl font-black">دسته‌بندی و خدمات</h2><p className="mt-1 text-sm text-[var(--text-muted)]">ساختار یکپارچه خدمت مادر ← خدمات زیرمجموعه</p></div><span className="text-sm text-[var(--text-muted)]">{services.length.toLocaleString("fa-IR")} خدمت</span></div>
-      {visibleParents.length === 0 && standalone.length === 0 ? <GlassPanel className="p-8 text-center"><div className="flex justify-center text-[var(--primary)]"><Search aria-hidden="true" className="h-8 w-8" /></div><h2 className="font-black text-lg mt-3">خدمتی پیدا نشد</h2><p className="text-sm text-[var(--muted)] mt-1">عبارت جستجو یا دسته‌بندی را تغییر دهید.</p><Link href="/services" className="inline-block mt-4 font-bold text-[var(--primary)]">نمایش همه خدمات</Link></GlassPanel> : <div className="grid gap-4 lg:grid-cols-2">
-        {visibleParents.map(parent => { const kids = (childrenByParent.get(parent.id) || []).filter(s => textMatches(s) && (initialCategory === "all" || categoryMatches(s) || categoryMatches(parent))); return <article key={parent.id} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm"><div className="flex items-start gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]"><ServiceIcon service={parent} /></div><div className="min-w-0 flex-1"><div className="text-xs font-bold text-[var(--primary)]">دسته‌بندی / خدمت مادر</div><h3 className="mt-1 text-lg font-black">{parent.slug ? <Link href={`/services/${encodeURIComponent(parent.slug)}`} className="hover:text-[var(--primary)]">{parent.title}</Link> : parent.title}</h3><div className="mt-2"><ServiceBadges service={parent} /></div></div></div>{kids.length > 0 && <div className="mt-4 border-t border-[var(--border)] pt-4"><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">خدمات زیرمجموعه ({kids.length.toLocaleString("fa-IR")})</div><div className="grid gap-2 sm:grid-cols-2">{kids.map(child => <div key={child.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3"><div className="flex items-center gap-2 text-sm font-bold">{child.slug ? <Link href={`/services/${encodeURIComponent(child.slug)}`} className="flex min-w-0 flex-1 items-center gap-2 hover:text-[var(--primary)]"><ServiceIcon service={child} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{child.title}</Link> : <div className="flex min-w-0 flex-1 items-center gap-2"><ServiceIcon service={child} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{child.title}</div>}</div><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><ServiceBadges service={child} /><ServicePrice service={child} /></div></div>)}</div></div>}</article>; })}
-        {standalone.length > 0 && <article className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm lg:col-span-2"><h3 className="text-lg font-black">خدمات مستقل</h3><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{standalone.map(s => <div key={s.id} className="rounded-xl border border-[var(--border)] p-3"><div className="flex items-center gap-2 text-sm font-bold">{s.slug ? <Link href={`/services/${encodeURIComponent(s.slug)}`} className="flex min-w-0 flex-1 items-center gap-2 hover:text-[var(--primary)]"><ServiceIcon service={s} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{s.title}</Link> : <div className="flex min-w-0 flex-1 items-center gap-2"><ServiceIcon service={s} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{s.title}</div>}</div><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><ServiceBadges service={s} /><ServicePrice service={s} /></div></div>)}</div></article>}
+      <div className="flex items-end justify-between gap-3"><div><h2 id="service-hierarchy-title" className="text-xl sm:text-2xl font-black">دسته‌بندی و خدمات</h2><p className="mt-1 text-sm text-[var(--text-muted)]">خدمات اصلی را ببینید و زیرمجموعه‌ها را فقط در صورت نیاز باز کنید.</p></div><span className="text-sm text-[var(--text-muted)]">{services.length.toLocaleString("fa-IR")} خدمت</span></div>
+      {visibleParents.length === 0 && standalone.length === 0 ? <GlassPanel className="p-8 text-center"><div className="flex justify-center text-[var(--primary)]"><Search aria-hidden="true" className="h-8 w-8" /></div><h2 className="font-black text-lg mt-3">خدمتی پیدا نشد</h2><p className="text-sm text-[var(--muted)] mt-1">عبارت جستجو یا دسته‌بندی را تغییر دهید.</p><Link href="/services" className="inline-block mt-4 font-bold text-[var(--primary)]">نمایش همه خدمات</Link></GlassPanel> : <div className="grid gap-3 lg:grid-cols-2">
+        {visibleParents.map(parent => {
+          const kids = (childrenByParent.get(parent.id) || []).filter(s => textMatches(s) && (initialCategory === "all" || categoryMatches(s) || categoryMatches(parent)));
+          const isExpanded = expanded.has(parent.id) || Boolean(search);
+          return <article key={parent.id} className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[var(--primary)]/10 text-[var(--primary)]"><ServiceIcon service={parent} /></div>
+              <div className="min-w-0 flex-1"><div className="text-xs font-bold text-[var(--text-muted)]">دسته‌بندی خدمات</div><h3 className="mt-1 text-base sm:text-lg font-black">{parent.title}</h3><div className="mt-2"><ServiceBadges service={parent} /></div></div>
+              <button type="button" onClick={() => toggleParent(parent.id)} aria-expanded={isExpanded} aria-controls={`children-${parent.id}`} className={`flex shrink-0 items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-black transition ${isExpanded ? "border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]" : "border-[var(--border)] text-[var(--text-muted)] hover:border-[var(--primary)] hover:text-[var(--primary)]"}`}><span>دارای {kids.length.toLocaleString("fa-IR")} زیرمجموعه</span><ChevronDown className={`h-4 w-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} /></button>
+            </div>
+            {isExpanded && <div id={`children-${parent.id}`} className="mt-4 border-t border-[var(--border)] pt-4"><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">برای ثبت سفارش، یکی از زیرمجموعه‌ها را انتخاب کنید.</div><div className="grid gap-2 sm:grid-cols-2">{kids.map(child => <div key={child.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] p-3"><div className="flex items-center gap-2 text-sm font-bold">{child.slug ? <Link href={`/services/${encodeURIComponent(child.slug)}`} className="flex min-w-0 flex-1 items-center gap-2 hover:text-[var(--primary)]"><ServiceIcon service={child} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{child.title}</Link> : <div className="flex min-w-0 flex-1 items-center gap-2"><ServiceIcon service={child} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{child.title}</div>}</div><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><ServiceBadges service={child} /><ServicePrice service={child} /></div></div>)}</div></div>}
+          </article>;
+        })}
+        {standalone.length > 0 && <article className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5 shadow-sm lg:col-span-2"><h3 className="text-lg font-black">خدمات مستقل</h3><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{standalone.map(s => <div key={s.id} className="rounded-xl border border-[var(--border)] p-3"><div className="flex items-center gap-2 text-sm font-bold">{s.slug ? <Link href={`/services/${encodeURIComponent(s.slug)}`} className="flex min-w-0 flex-1 items-center gap-2 hover:text-[var(--primary)]"><ServiceIcon service={s} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{s.title}</Link> : <div className="flex min-w-0 flex-1 items-center gap-2"><ServiceIcon service={s} className="h-4 w-4 shrink-0 text-[var(--primary)]" />{s.title}</div>}</div><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><ServiceBadges service={s} /><ServicePrice service={s} /></div></div>)}</div></article>}
       </div>}
     </section>
   </>;
