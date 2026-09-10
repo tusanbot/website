@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 const STORAGE_KEY = "tusan-admin-drafts-v1";
+const STUDIO_PATHS = new Set(["/admin/content-studio", "/content-studio"]);
 
 type Draft = Record<string, string | boolean>;
 
@@ -20,6 +21,9 @@ function readDrafts(): Record<string, Draft> {
 function writeDraft(pathname: string, draft: Draft) {
   try {
     const drafts = readDrafts();
+    // Store the studio draft under its canonical route so moving from the
+    // legacy /admin URL does not create a second empty project.
+    drafts["/content-studio"] = draft;
     drafts[pathname] = draft;
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
   } catch {
@@ -33,14 +37,16 @@ function controlKey(element: HTMLInputElement | HTMLTextAreaElement | HTMLSelect
 
 export default function AdminDraftPersistence() {
   const pathname = usePathname();
+  const isStudio = STUDIO_PATHS.has(pathname);
   const restoredRef = useRef(false);
 
   useEffect(() => {
-    if (pathname !== "/admin/content-studio" || restoredRef.current) return;
+    if (!isStudio || restoredRef.current) return;
     restoredRef.current = true;
 
     const restore = () => {
-      const draft = readDrafts()[pathname];
+      const drafts = readDrafts();
+      const draft = drafts[pathname] || drafts["/content-studio"] || drafts["/admin/content-studio"];
       if (!draft) return;
 
       const textarea = document.querySelector("textarea") as HTMLTextAreaElement | null;
@@ -71,10 +77,10 @@ export default function AdminDraftPersistence() {
 
     const timer = window.setTimeout(restore, 150);
     return () => window.clearTimeout(timer);
-  }, [pathname]);
+  }, [isStudio, pathname]);
 
   useEffect(() => {
-    if (pathname !== "/admin/content-studio") return;
+    if (!isStudio) return;
 
     const save = () => {
       const draft: Draft = {};
@@ -105,7 +111,7 @@ export default function AdminDraftPersistence() {
       document.removeEventListener("change", onInput, true);
       window.removeEventListener("pagehide", save);
     };
-  }, [pathname]);
+  }, [isStudio, pathname]);
 
   return null;
 }
