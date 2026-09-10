@@ -30,12 +30,28 @@ async function getFFmpeg(onProgress?: (value: number) => void) {
   return loading;
 }
 
+function errorText(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  if (error && typeof error === "object") {
+    try {
+      const text = JSON.stringify(error);
+      if (text && text !== "{}") return text;
+    } catch {}
+  }
+  const log = lastFfmpegLog.trim();
+  return log ? `${fallback} ${log}` : fallback;
+}
+
 async function execChecked(ffmpeg: FFmpeg, args: string[], label: string) {
   lastFfmpegLog = "";
-  const code = await ffmpeg.exec(args);
-  if (typeof code === "number" && code !== 0) {
-    const detail = lastFfmpegLog.trim();
-    throw new Error(detail ? `${label} کد خطا ${code}: ${detail}` : `${label} کد خطا ${code}.`);
+  try {
+    const code = await ffmpeg.exec(args);
+    if (typeof code === "number" && code !== 0) {
+      throw new Error(lastFfmpegLog.trim() ? `${label} کد خطا ${code}: ${lastFfmpegLog.trim()}` : `${label} کد خطا ${code}.`);
+    }
+  } catch (error) {
+    throw new Error(errorText(error, `${label} ${lastFfmpegLog.trim()}`.trim()));
   }
 }
 
@@ -103,16 +119,15 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
           "-map", "0:v:0", "-map", "1:a:0",
           "-t", segmentDuration.toFixed(3),
           "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p",
-          "-af", "aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,apad",
           "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
           "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
           "-threads", "1", "-y", clipName,
         );
       } else {
         clipArgs.push(
-          "-t", duration.toFixed(3),
           "-f", "lavfi", "-i", `anullsrc=r=48000:cl=stereo:d=${duration.toFixed(3)}`,
           "-map", "0:v:0", "-map", "1:a:0",
+          "-t", duration.toFixed(3),
           "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p",
           "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
           "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
@@ -120,11 +135,7 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
         );
       }
 
-      try {
-        await execChecked(ffmpeg, clipArgs, `رمزگذاری اسلاید ${i + 1} ناموفق بود.`);
-      } catch (error) {
-        throw error instanceof Error ? error : new Error(`رمزگذاری اسلاید ${i + 1} ناموفق بود.`);
-      }
+      await execChecked(ffmpeg, clipArgs, `رمزگذاری اسلاید ${i + 1} ناموفق بود.`);
       clipNames.push(clipName);
       onProgress?.(55 + Math.round(((i + 1) / slides.length) * 35));
     }
@@ -139,6 +150,8 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
     if (buffer.byteLength === 0) throw new Error("فایل MP4 خروجی خالی است.");
     onProgress?.(1);
     return new File([buffer], output, { type: "video/mp4" });
+  } catch (error) {
+    throw new Error(errorText(error, "ساخت ویدیو ناموفق بود."));
   } finally {
     for (const name of imageNames) try { await ffmpeg.deleteFile(name); } catch {}
     for (const name of audioNames) try { await ffmpeg.deleteFile(name); } catch {}
