@@ -11,7 +11,7 @@ import {
 
 const ADMIN_ACCESS_HEADER = "x-tusan-admin-access";
 
-type PendingCookie = {
+ type PendingCookie = {
     name: string;
     value: string;
     options?: Parameters<NextResponse["cookies"]["set"]>[2];
@@ -19,6 +19,14 @@ type PendingCookie = {
 
 export async function proxy(request: NextRequest) {
     const pendingCookies: PendingCookie[] = [];
+    const pathname = request.nextUrl.pathname;
+
+    // Content Studio is intentionally outside the /admin route tree.
+    // Keep the old URL working, but redirect before the /admin layout can
+    // perform its access lookup or participate in the navigation lifecycle.
+    if (pathname === "/admin/content-studio" || pathname.startsWith("/admin/content-studio/")) {
+        return NextResponse.redirect(new URL("/content-studio", request.url));
+    }
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -42,7 +50,6 @@ export async function proxy(request: NextRequest) {
     const claims = claimsData?.claims as Record<string, unknown> | undefined;
     const userId = typeof claims?.sub === "string" ? claims.sub : null;
     const sessionId = typeof claims?.session_id === "string" ? claims.session_id : "";
-    const pathname = request.nextUrl.pathname;
     const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
     const isAuthRoute = pathname === "/auth" || pathname.startsWith("/auth/");
     const isMaintenanceRoute = pathname === "/maintenance";
