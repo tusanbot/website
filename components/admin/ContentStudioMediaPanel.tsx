@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Download, Film, Mic2, Music2, Trash2, Upload } from "lucide-react";
 import html2canvas from "html2canvas";
 import { encodeSlideSequence } from "@/lib/video/ffmpeg";
@@ -68,7 +68,7 @@ function canvasToFile(canvas: HTMLCanvasElement, name: string) {
   return new Promise<File>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(new File([blob], name, { type: "image/png" })) : reject(new Error("ساخت تصویر اسلاید ناموفق بود.")), "image/png");
 }
 
-export default function ContentStudioMediaPanel({ children }: { children: React.ReactNode }) {
+export default function ContentStudioMediaPanel({ children }: { children: ReactNode }) {
   const [slideCount, setSlideCount] = useState(1);
   const [current, setCurrent] = useState(0);
   const [enabled, setEnabled] = useState<boolean[]>([true]);
