@@ -46,7 +46,7 @@ export async function convertVideoFormat(file: File, format: "mp4" | "webm", onP
   return runTranscode(file, `tusan-converted-${Date.now()}.mp4`, ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"], "video/mp4", onProgress);
 }
 
-type SlideInput = { file: File; duration: number; audio?: File };
+type SlideInput = { file: File; duration: number; audio?: File; audioStart?: number; audioEnd?: number };
 
 export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (percent: number) => void) {
   const ffmpeg = await getFFmpeg(progress => onProgress?.(55 + Math.round(progress * 45)));
@@ -70,20 +70,21 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
 
     const inputs: string[] = [];
     const filters: string[] = [];
-    const audioInputIndex: number[] = [];
     let inputIndex = 0;
     slides.forEach((slide, i) => {
-      inputs.push("-loop", "1", "-t", String(Math.max(0.5, slide.duration)), "-i", imageNames[i]);
+      const duration = Math.max(0.5, slide.duration);
+      inputs.push("-loop", "1", "-t", String(duration), "-i", imageNames[i]);
       const videoIndex = inputIndex++;
       filters.push(`[${videoIndex}:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setpts=PTS-STARTPTS[v${i}]`);
       const audioName = audioNames[i];
       if (audioName) {
         inputs.push("-i", audioName);
-        const currentAudioIndex = inputIndex++;
-        audioInputIndex[i] = currentAudioIndex;
-        filters.push(`[${currentAudioIndex}:a]atrim=0:${Math.max(0.5, slide.duration)},asetpts=PTS-STARTPTS[a${i}]`);
+        const audioIndex = inputIndex++;
+        const start = Math.max(0, slide.audioStart ?? 0);
+        const end = Math.max(start + 0.05, slide.audioEnd ?? start + duration);
+        filters.push(`[${audioIndex}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS,apad=pad_dur=${duration},atrim=0:${duration}[a${i}]`);
       } else {
-        filters.push(`anullsrc=r=48000:cl=stereo,atrim=0:${Math.max(0.5, slide.duration)},asetpts=PTS-STARTPTS[a${i}]`);
+        filters.push(`anullsrc=r=48000:cl=stereo,atrim=0:${duration},asetpts=PTS-STARTPTS[a${i}]`);
       }
     });
     const concatInputs = slides.map((_, i) => `[v${i}][a${i}]`).join("");
