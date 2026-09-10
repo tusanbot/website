@@ -21,6 +21,8 @@ const contentSecurityPolicy = [
         "'self'",
         "https://*.supabase.co",
         "https://*.supabase.in",
+        "wss://*.supabase.co",
+        "wss://*.supabase.in",
         "https://fjpanel.com",
         "https://*.fjpanel.com",
         "https://vercel.live",
