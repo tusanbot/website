@@ -1,5 +1,6 @@
 import ContentStudio from "./ContentStudio";
+import ContentStudioMediaPanel from "@/components/admin/ContentStudioMediaPanel";
 
 export default function ContentStudioPage() {
-  return <ContentStudio />;
+  return <ContentStudioMediaPanel><ContentStudio /></ContentStudioMediaPanel>;
 }
