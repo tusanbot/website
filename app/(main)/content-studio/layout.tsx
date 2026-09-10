@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import AdminDraftPersistence from "@/components/admin/AdminDraftPersistence";
 
 export default async function ContentStudioLayout({ children }: { children: ReactNode }) {
   const supabase = await createSupabaseServerClient();
@@ -18,5 +19,10 @@ export default async function ContentStudioLayout({ children }: { children: Reac
 
   if (error || profile?.role !== "admin") redirect("/");
 
-  return children;
+  return (
+    <>
+      <AdminDraftPersistence />
+      {children}
+    </>
+  );
 }
