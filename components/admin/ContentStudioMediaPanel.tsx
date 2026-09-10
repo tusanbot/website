@@ -33,7 +33,8 @@ function wait(ms: number) { return new Promise(resolve => setTimeout(resolve, ms
 
 function findPreview(): HTMLElement | null {
   const nodes = Array.from(document.querySelectorAll<HTMLElement>("body *"));
-  let best: HTMLElement | null = null; let bestArea = 0;
+  let best: HTMLElement | null = null;
+  let bestArea = 0;
   for (const el of nodes) {
     const r = el.getBoundingClientRect();
     if (r.width < 220 || r.height < 320 || r.height > 1300) continue;
@@ -65,7 +66,14 @@ async function goToSlide(index: number) {
 }
 
 function canvasToFile(canvas: HTMLCanvasElement, name: string) {
-  return new Promise<File>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(new File([blob], name, { type: "image/png" })) : reject(new Error("ساخت تصویر اسلاید ناموفق بود.")), "image/png");
+  return new Promise<File>((resolve, reject) => {
+    canvas.toBlob(
+      blob => blob
+        ? resolve(new File([blob], name, { type: "image/png" }))
+        : reject(new Error("ساخت تصویر اسلاید ناموفق بود.")),
+      "image/png",
+    );
+  });
 }
 
 export default function ContentStudioMediaPanel({ children }: { children: ReactNode }) {
@@ -81,7 +89,8 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
   useEffect(() => {
     const sync = () => {
       const state = readSlideState();
-      setSlideCount(state.count); setCurrent(state.index);
+      setSlideCount(state.count);
+      setCurrent(state.index);
       setEnabled(prev => Array.from({ length: state.count }, (_, i) => prev[i] ?? true));
     };
     sync();
@@ -96,17 +105,22 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
       const item = await readLatestStudioAudio();
       if (!item) { setMessage("هنوز صوتی از ابزار تبدیل متن به صوت ارسال نشده است."); return; }
       const file = new File([item.blob], "تولید-شده-از-تبدیل-متن-به-صوت.wav", { type: item.blob.type || "audio/wav" });
-      const audio = document.createElement("audio"); audio.preload = "metadata"; audio.src = URL.createObjectURL(file);
+      const audio = document.createElement("audio");
+      audio.preload = "metadata";
+      audio.src = URL.createObjectURL(file);
       audio.onloadedmetadata = () => {
         setAudios(prev => ({ ...prev, [current]: { file, duration: Number.isFinite(audio.duration) ? audio.duration : 3, name: file.name } }));
-        URL.revokeObjectURL(audio.src); setMessage(`صوت آخر ابزار TTS به اسلاید ${current + 1} متصل شد.`);
+        URL.revokeObjectURL(audio.src);
+        setMessage(`صوت آخر ابزار TTS به اسلاید ${current + 1} متصل شد.`);
       };
     } catch { setMessage("خواندن صوت ذخیره‌شده ناموفق بود."); }
   }
 
   function attachAudio(index: number, file?: File) {
     if (!file) return;
-    const audio = document.createElement("audio"); audio.preload = "metadata"; audio.src = URL.createObjectURL(file);
+    const audio = document.createElement("audio");
+    audio.preload = "metadata";
+    audio.src = URL.createObjectURL(file);
     audio.onloadedmetadata = () => {
       setAudios(prev => ({ ...prev, [index]: { file, duration: Number.isFinite(audio.duration) ? audio.duration : 3, name: file.name } }));
       URL.revokeObjectURL(audio.src);
@@ -129,17 +143,22 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
         const file = await canvasToFile(canvas, `slide-${String(i + 1).padStart(3, "0")}.png`);
         const audio = audios[i];
         captures.push({ file, duration: audio?.duration || state.duration || 3, audio: audio?.file });
-        captured++; setProgress(Math.round((captured / Math.max(enabledCount, 1)) * 55));
+        captured++;
+        setProgress(Math.round((captured / Math.max(enabledCount, 1)) * 55));
       }
       if (!captures.length) throw new Error("حداقل یک اسلاید فعال لازم است.");
       setMessage("در حال ساخت ویدیوی MP4 با صوت و زمان‌بندی اسلایدها...");
       const output = await encodeSlideSequence(captures, setProgress);
       const url = URL.createObjectURL(output);
-      const a = document.createElement("a"); a.href = url; a.download = `tusan-reel-${Date.now()}.mp4`; a.click();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tusan-reel-${Date.now()}.mp4`;
+      a.click();
       setTimeout(() => URL.revokeObjectURL(url), 30000);
       setProgress(100); setMessage("ویدیو آماده شد.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "ساخت ویدیو ناموفق بود."); }
-    finally { setExporting(false); }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "ساخت ویدیو ناموفق بود.");
+    } finally { setExporting(false); }
   }
 
   return <div className="space-y-4">
