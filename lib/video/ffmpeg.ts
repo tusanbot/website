@@ -13,13 +13,10 @@ async function getFFmpeg(onProgress?: (value: number) => void) {
       const ffmpeg = new FFmpeg();
       if (onProgress) ffmpeg.on("progress", ({ progress }) => onProgress(Math.max(0, Math.min(1, progress))));
       const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm"),
-      });
+      await ffmpeg.load({ coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"), wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm") });
       instance = ffmpeg;
       return ffmpeg;
-    })().catch((error) => { loading = null; instance = null; throw error; });
+    })().catch(error => { loading = null; instance = null; throw error; });
   }
   return loading;
 }
@@ -47,4 +44,54 @@ export async function makeBrowserPlayable(file: File, onProgress?: (value: numbe
 export async function convertVideoFormat(file: File, format: "mp4" | "webm", onProgress?: (value: number) => void) {
   if (format === "webm") return runTranscode(file, `tusan-converted-${Date.now()}.webm`, ["-c:v", "libvpx-vp9", "-crf", "32", "-b:v", "0", "-c:a", "libopus", "-b:a", "96k"], "video/webm", onProgress);
   return runTranscode(file, `tusan-converted-${Date.now()}.mp4`, ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart"], "video/mp4", onProgress);
+}
+
+type SlideInput = { file: File; duration: number; audio?: File };
+
+export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (percent: number) => void) {
+  const ffmpeg = await getFFmpeg(progress => onProgress?.(55 + Math.round(progress * 45)));
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const imageNames: string[] = [];
+  const audioNames: string[] = [];
+  try {
+    for (let i = 0; i < slides.length; i++) {
+      const imageName = `studio-${token}-${i}.png`;
+      await ffmpeg.writeFile(imageName, await fetchFile(slides[i].file));
+      imageNames.push(imageName);
+      if (slides[i].audio) {
+        const audioName = `studio-${token}-${i}.${slides[i].audio.name.split(".").pop() || "wav"}`;
+        await ffmpeg.writeFile(audioName, await fetchFile(slides[i].audio));
+        audioNames.push(audioName);
+      } else audioNames.push("");
+    }
+
+    const inputs: string[] = [];
+    const filters: string[] = [];
+    const audioInputIndex: number[] = [];
+    let inputIndex = 0;
+    slides.forEach((slide, i) => {
+      inputs.push("-loop", "1", "-t", String(Math.max(0.5, slide.duration)), "-i", imageNames[i]);
+      const videoIndex = inputIndex++;
+      filters.push(`[${videoIndex}:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setpts=PTS-STARTPTS[v${i}]`);
+      if (audioNames[i]) {
+        inputs.push("-i", audioNames[i]);
+        audioInputIndex[i] = inputIndex++;
+        filters.push(`[${audioInputIndex[i]}:a]atrim=0:${Math.max(0.5, slide.duration)},asetpts=PTS-STARTPTS[a${i}]`);
+      } else {
+        filters.push(`anullsrc=r=48000:cl=stereo,atrim=0:${Math.max(0.5, slide.duration)},asetpts=PTS-STARTPTS[a${i}]`);
+      }
+    });
+    const concatInputs = slides.map((_, i) => `[v${i}][a${i}]`).join("");
+    filters.push(`${concatInputs}concat=n=${slides.length}:v=1:a=1[v][a]`);
+    const output = `tusan-studio-${token}.mp4`;
+    await ffmpeg.exec([...inputs, "-filter_complex", filters.join(";"), "-map", "[v]", "-map", "[a]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-y", output]);
+    const data = await ffmpeg.readFile(output);
+    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    return new File([buffer], output, { type: "video/mp4" });
+  } finally {
+    for (const name of imageNames) try { await ffmpeg.deleteFile(name); } catch {}
+    for (const name of audioNames) if (name) try { await ffmpeg.deleteFile(name); } catch {}
+    try { await ffmpeg.deleteFile(`tusan-studio-${token}.mp4`); } catch {}
+  }
 }
