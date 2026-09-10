@@ -2,12 +2,7 @@
   "name": "tusan-cyber",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
+  "scripts": {"dev": "next dev", "build": "next build", "start": "next start", "lint": "eslint"},
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
@@ -21,7 +16,7 @@
     "axios": "^1.11.0",
     "docx": "^8.5.0",
     "framer-motion": "^13.1.0",
-    "html2canvas": "^1.4.1",
+    "html2canvas-pro": "^1.6.3",
     "jspdf": "^4.0.0",
     "lucide-react": "^1.31.0",
     "motion": "^13.1.0",
@@ -33,14 +28,5 @@
     "recharts": "^3.10.1",
     "xlsx": "^0.18.5"
   },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.3",
-    "tailwindcss": "^4"
-  }
+  "devDependencies": {"@tailwindcss/postcss": "^4", "@types/node": "^20", "@types/qrcode": "^1.5.6", "@types/react": "^19", "@types/react-dom": "^19", "eslint": "^9", "eslint-config-next": "16.3.3", "tailwindcss": "^4"}
 }
