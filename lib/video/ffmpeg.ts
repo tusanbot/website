@@ -1,7 +1,7 @@
 "use client";
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import { fetchFile } from "@ffmpeg/util";
 
 let instance: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
@@ -15,7 +15,12 @@ async function getFFmpeg(onProgress?: (value: number) => void) {
       ffmpeg.on("log", ({ message }) => { lastFfmpegLog = message; });
       if (onProgress) ffmpeg.on("progress", ({ progress }) => onProgress(Math.max(0, Math.min(1, progress))));
       const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
-      await ffmpeg.load({ coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"), wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, "application/wasm") });
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      await ffmpeg.load({
+        coreURL: `${base}/ffmpeg-core.js`,
+        wasmURL: `${base}/ffmpeg-core.wasm`,
+        classWorkerURL: `${origin}/ffmpeg/worker.js`,
+      });
       instance = ffmpeg;
       return ffmpeg;
     })().catch(error => { loading = null; instance = null; throw error; });
