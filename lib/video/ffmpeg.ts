@@ -55,12 +55,15 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
   const audioNames: string[] = [];
   try {
     for (let i = 0; i < slides.length; i++) {
+      const slide = slides[i];
+      if (!slide) throw new Error(`اسلاید شماره ${i + 1} پیدا نشد.`);
       const imageName = `studio-${token}-${i}.png`;
-      await ffmpeg.writeFile(imageName, await fetchFile(slides[i].file));
+      await ffmpeg.writeFile(imageName, await fetchFile(slide.file));
       imageNames.push(imageName);
-      if (slides[i].audio) {
-        const audioName = `studio-${token}-${i}.${slides[i].audio.name.split(".").pop() || "wav"}`;
-        await ffmpeg.writeFile(audioName, await fetchFile(slides[i].audio));
+      const audio = slide.audio;
+      if (audio) {
+        const audioName = `studio-${token}-${i}.${audio.name.split(".").pop() || "wav"}`;
+        await ffmpeg.writeFile(audioName, await fetchFile(audio));
         audioNames.push(audioName);
       } else audioNames.push("");
     }
@@ -73,10 +76,12 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
       inputs.push("-loop", "1", "-t", String(Math.max(0.5, slide.duration)), "-i", imageNames[i]);
       const videoIndex = inputIndex++;
       filters.push(`[${videoIndex}:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setpts=PTS-STARTPTS[v${i}]`);
-      if (audioNames[i]) {
-        inputs.push("-i", audioNames[i]);
-        audioInputIndex[i] = inputIndex++;
-        filters.push(`[${audioInputIndex[i]}:a]atrim=0:${Math.max(0.5, slide.duration)},asetpts=PTS-STARTPTS[a${i}]`);
+      const audioName = audioNames[i];
+      if (audioName) {
+        inputs.push("-i", audioName);
+        const currentAudioIndex = inputIndex++;
+        audioInputIndex[i] = currentAudioIndex;
+        filters.push(`[${currentAudioIndex}:a]atrim=0:${Math.max(0.5, slide.duration)},asetpts=PTS-STARTPTS[a${i}]`);
       } else {
         filters.push(`anullsrc=r=48000:cl=stereo,atrim=0:${Math.max(0.5, slide.duration)},asetpts=PTS-STARTPTS[a${i}]`);
       }
