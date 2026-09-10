@@ -14,7 +14,6 @@ async function getFFmpeg(onProgress?: (value: number) => void) {
       const ffmpeg = new FFmpeg();
       ffmpeg.on("log", ({ message }) => { lastFfmpegLog = message; });
       if (onProgress) ffmpeg.on("progress", ({ progress }) => onProgress(Math.max(0, Math.min(1, progress))));
-      // Keep the browser core aligned with the current @ffmpeg/ffmpeg 0.12.x API.
       const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd";
       await ffmpeg.load({
         coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, "text/javascript"),
@@ -31,15 +30,25 @@ async function getFFmpeg(onProgress?: (value: number) => void) {
   return loading;
 }
 
+async function execChecked(ffmpeg: FFmpeg, args: string[], label: string) {
+  lastFfmpegLog = "";
+  const code = await ffmpeg.exec(args);
+  if (typeof code === "number" && code !== 0) {
+    const detail = lastFfmpegLog.trim();
+    throw new Error(detail ? `${label} کد خطا ${code}: ${detail}` : `${label} کد خطا ${code}.`);
+  }
+}
+
 async function runTranscode(file: File, outputName: string, args: string[], mime: string, onProgress?: (value: number) => void) {
   const ffmpeg = await getFFmpeg(onProgress);
   const input = `input-${Date.now()}-${Math.random().toString(36).slice(2)}.${file.name.split(".").pop() || "bin"}`;
   try {
     await ffmpeg.writeFile(input, await fetchFile(file));
-    await ffmpeg.exec(["-i", input, ...args, outputName]);
+    await execChecked(ffmpeg, ["-i", input, ...args, outputName], "تبدیل ویدیو ناموفق بود.");
     const data = await ffmpeg.readFile(outputName);
     const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    if (buffer.byteLength === 0) throw new Error("فایل خروجی خالی است.");
     return new File([buffer], outputName, { type: mime });
   } finally {
     try { await ffmpeg.deleteFile(input); } catch {}
@@ -58,11 +67,6 @@ export async function convertVideoFormat(file: File, format: "mp4" | "webm", onP
 
 type SlideInput = { file: File; duration: number; audio?: File; audioStart?: number; audioEnd?: number };
 
-function ffmpegError(prefix: string) {
-  const detail = lastFfmpegLog.trim();
-  return new Error(detail ? `${prefix} ${detail}` : prefix);
-}
-
 export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (percent: number) => void) {
   const ffmpeg = await getFFmpeg(progress => onProgress?.(55 + Math.round(progress * 45)));
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -78,100 +82,56 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
     for (let i = 0; i < slides.length; i++) {
       const slide = slides[i];
       if (!slide) throw new Error(`اسلاید شماره ${i + 1} پیدا نشد.`);
-
       const duration = Math.max(0.5, Number(slide.duration) || 0.5);
       const imageName = `studio-${token}-${i}.png`;
       const clipName = `studio-${token}-${i}.mp4`;
       await ffmpeg.writeFile(imageName, await fetchFile(slide.file));
       imageNames.push(imageName);
 
-      const clipArgs: string[] = [
-        "-loop", "1",
-        "-framerate", "30",
-        "-i", imageName,
-      ];
+      const clipArgs: string[] = ["-loop", "1", "-framerate", "30", "-i", imageName];
 
       if (slide.audio) {
         const extension = slide.audio.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "") || "wav";
         const audioName = `studio-${token}-${i}.${extension}`;
         await ffmpeg.writeFile(audioName, await fetchFile(slide.audio));
         audioNames.push(audioName);
-
         const start = Math.max(0, Number(slide.audioStart) || 0);
         const end = Math.max(start + 0.05, Number(slide.audioEnd) || start + duration);
         const segmentDuration = Math.max(0.5, Math.min(duration, end - start));
-
-        // -ss is deliberately attached to the audio input. The image input starts
-        // at zero, while each slide receives only its own audio segment.
         clipArgs.push(
-          "-ss", start.toFixed(3),
-          "-i", audioName,
-          "-map", "0:v:0",
-          "-map", "1:a:0",
+          "-ss", start.toFixed(3), "-i", audioName,
+          "-map", "0:v:0", "-map", "1:a:0",
           "-t", segmentDuration.toFixed(3),
           "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p",
           "-af", "aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,apad",
-          "-c:v", "libx264",
-          "-preset", "veryfast",
-          "-crf", "23",
-          "-pix_fmt", "yuv420p",
-          "-c:a", "aac",
-          "-b:a", "128k",
-          "-ar", "48000",
-          "-ac", "2",
-          "-shortest",
-          "-threads", "1",
-          "-y", clipName,
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+          "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+          "-threads", "1", "-y", clipName,
         );
       } else {
         clipArgs.push(
           "-t", duration.toFixed(3),
-          "-f", "lavfi",
-          "-i", `anullsrc=r=48000:cl=stereo:d=${duration.toFixed(3)}`,
-          "-map", "0:v:0",
-          "-map", "1:a:0",
+          "-f", "lavfi", "-i", `anullsrc=r=48000:cl=stereo:d=${duration.toFixed(3)}`,
+          "-map", "0:v:0", "-map", "1:a:0",
           "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,format=yuv420p",
-          "-c:v", "libx264",
-          "-preset", "veryfast",
-          "-crf", "23",
-          "-pix_fmt", "yuv420p",
-          "-c:a", "aac",
-          "-b:a", "128k",
-          "-ar", "48000",
-          "-ac", "2",
-          "-shortest",
-          "-threads", "1",
-          "-y", clipName,
+          "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+          "-c:a", "aac", "-b:a", "128k", "-ar", "48000", "-ac", "2",
+          "-threads", "1", "-y", clipName,
         );
       }
 
-      lastFfmpegLog = "";
       try {
-        await ffmpeg.exec(clipArgs);
-      } catch {
-        throw ffmpegError(`ساخت اسلاید ${i + 1} در مرحله رمزگذاری ناموفق بود.`);
+        await execChecked(ffmpeg, clipArgs, `رمزگذاری اسلاید ${i + 1} ناموفق بود.`);
+      } catch (error) {
+        throw error instanceof Error ? error : new Error(`رمزگذاری اسلاید ${i + 1} ناموفق بود.`);
       }
-
       clipNames.push(clipName);
       onProgress?.(55 + Math.round(((i + 1) / slides.length) * 35));
     }
 
     const concatFile = clipNames.map(name => `file '${name}'`).join("\n");
     await ffmpeg.writeFile(concatName, new TextEncoder().encode(concatFile));
-
-    lastFfmpegLog = "";
-    try {
-      await ffmpeg.exec([
-        "-f", "concat",
-        "-safe", "0",
-        "-i", concatName,
-        "-c", "copy",
-        "-movflags", "+faststart",
-        "-y", output,
-      ]);
-    } catch {
-      throw ffmpegError("اتصال اسلایدها برای ساخت MP4 ناموفق بود.");
-    }
+    await execChecked(ffmpeg, ["-f", "concat", "-safe", "0", "-i", concatName, "-c", "copy", "-movflags", "+faststart", "-y", output], "اتصال اسلایدها برای ساخت MP4 ناموفق بود.");
 
     const data = await ffmpeg.readFile(output);
     const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
