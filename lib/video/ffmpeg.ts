@@ -12,9 +12,7 @@ async function getFFmpeg(onProgress?: (value: number) => void) {
   if (!loading) {
     loading = (async () => {
       const ffmpeg = new FFmpeg();
-      ffmpeg.on("log", ({ message }) => {
-        lastFfmpegLog = message;
-      });
+      ffmpeg.on("log", ({ message }) => { lastFfmpegLog = message; });
       if (onProgress) ffmpeg.on("progress", ({ progress }) => onProgress(Math.max(0, Math.min(1, progress))));
       const base = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
       await ffmpeg.load({
@@ -64,82 +62,123 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
   const token = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const imageNames: string[] = [];
   const audioNames: string[] = [];
+  const clipNames: string[] = [];
+  const concatName = `tusan-studio-${token}.txt`;
+  const output = `tusan-studio-${token}.mp4`;
+
   try {
     if (!slides.length) throw new Error("هیچ اسلایدی برای خروجی وجود ندارد.");
 
+    // Encode each slide independently. This is deliberately less clever than one
+    // giant filter graph: it avoids browser-WASM failures caused by concatting
+    // multiple image/audio streams with different timestamps/codecs in one pass.
     for (let i = 0; i < slides.length; i++) {
       const slide = slides[i];
       if (!slide) throw new Error(`اسلاید شماره ${i + 1} پیدا نشد.`);
+
+      const duration = Math.max(0.5, Number(slide.duration) || 0.5);
       const imageName = `studio-${token}-${i}.png`;
+      const clipName = `studio-${token}-${i}.mp4`;
       await ffmpeg.writeFile(imageName, await fetchFile(slide.file));
       imageNames.push(imageName);
-      const audio = slide.audio;
-      if (audio) {
-        const extension = audio.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "") || "wav";
+
+      const clipArgs: string[] = [
+        "-loop", "1",
+        "-framerate", "30",
+        "-t", duration.toFixed(3),
+        "-i", imageName,
+      ];
+
+      if (slide.audio) {
+        const extension = slide.audio.name.split(".").pop()?.replace(/[^a-z0-9]/gi, "") || "bin";
         const audioName = `studio-${token}-${i}.${extension}`;
-        await ffmpeg.writeFile(audioName, await fetchFile(audio));
+        await ffmpeg.writeFile(audioName, await fetchFile(slide.audio));
         audioNames.push(audioName);
-      } else {
-        audioNames.push("");
-      }
-    }
 
-    const inputs: string[] = [];
-    const filters: string[] = [];
-    let inputIndex = 0;
-
-    slides.forEach((slide, i) => {
-      const duration = Math.max(0.5, Number(slide.duration) || 0.5);
-      inputs.push("-loop", "1", "-t", String(duration), "-i", imageNames[i]);
-      const videoIndex = inputIndex++;
-      filters.push(`[${videoIndex}:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p,setpts=PTS-STARTPTS[v${i}]`);
-
-      const audioName = audioNames[i];
-      if (audioName) {
-        inputs.push("-i", audioName);
-        const audioIndex = inputIndex++;
         const start = Math.max(0, Number(slide.audioStart) || 0);
         const end = Math.max(start + 0.05, Number(slide.audioEnd) || start + duration);
-        filters.push(`[${audioIndex}:a]atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS,aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,apad=pad_dur=${duration},atrim=0:${duration},asetpts=PTS-STARTPTS[a${i}]`);
+        const segmentDuration = Math.max(0.5, Math.min(duration, end - start));
+
+        clipArgs.push(
+          "-ss", start.toFixed(3),
+          "-t", segmentDuration.toFixed(3),
+          "-i", audioName,
+          "-map", "0:v:0",
+          "-map", "1:a:0",
+          "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+          "-af", "aresample=48000,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo,apad",
+          "-c:v", "libx264",
+          "-preset", "veryfast",
+          "-crf", "23",
+          "-pix_fmt", "yuv420p",
+          "-c:a", "aac",
+          "-b:a", "128k",
+          "-ar", "48000",
+          "-ac", "2",
+          "-t", duration.toFixed(3),
+          "-threads", "1",
+          "-y", clipName,
+        );
       } else {
-        filters.push(`anullsrc=r=48000:cl=stereo,atrim=0:${duration},asetpts=PTS-STARTPTS,aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[a${i}]`);
+        clipArgs.push(
+          "-f", "lavfi",
+          "-i", `anullsrc=r=48000:cl=stereo:d=${duration.toFixed(3)}`,
+          "-map", "0:v:0",
+          "-map", "1:a:0",
+          "-vf", "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,format=yuv420p",
+          "-c:v", "libx264",
+          "-preset", "veryfast",
+          "-crf", "23",
+          "-pix_fmt", "yuv420p",
+          "-c:a", "aac",
+          "-b:a", "128k",
+          "-ar", "48000",
+          "-ac", "2",
+          "-t", duration.toFixed(3),
+          "-threads", "1",
+          "-y", clipName,
+        );
       }
-    });
 
-    const concatInputs = slides.map((_, i) => `[v${i}][a${i}]`).join("");
-    filters.push(`${concatInputs}concat=n=${slides.length}:v=1:a=1[v][a]`);
+      lastFfmpegLog = "";
+      try {
+        await ffmpeg.exec(clipArgs);
+      } catch {
+        const detail = lastFfmpegLog ? ` ${lastFfmpegLog}` : "";
+        throw new Error(`ساخت اسلاید ${i + 1} در مرحله رمزگذاری ناموفق بود.${detail}`);
+      }
+      clipNames.push(clipName);
+      onProgress?.(55 + Math.round(((i + 1) / slides.length) * 35));
+    }
 
-    const output = `tusan-studio-${token}.mp4`;
+    const concatFile = clipNames.map(name => `file '${name}'`).join("\n");
+    await ffmpeg.writeFile(concatName, new TextEncoder().encode(concatFile));
+
     lastFfmpegLog = "";
     try {
       await ffmpeg.exec([
-        ...inputs,
-        "-filter_complex", filters.join(";"),
-        "-map", "[v]",
-        "-map", "[a]",
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "23",
-        "-pix_fmt", "yuv420p",
-        "-c:a", "aac",
-        "-ar", "48000",
-        "-ac", "2",
-        "-b:a", "128k",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", concatName,
+        "-c", "copy",
         "-movflags", "+faststart",
         "-y", output,
       ]);
-    } catch (error) {
+    } catch {
       const detail = lastFfmpegLog ? ` ${lastFfmpegLog}` : "";
-      throw new Error(`ساخت MP4 در مرحله رمزگذاری ناموفق بود.${detail}`);
+      throw new Error(`اتصال اسلایدها برای ساخت MP4 ناموفق بود.${detail}`);
     }
 
     const data = await ffmpeg.readFile(output);
     const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
     const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    onProgress?.(1);
     return new File([buffer], output, { type: "video/mp4" });
   } finally {
     for (const name of imageNames) try { await ffmpeg.deleteFile(name); } catch {}
-    for (const name of audioNames) if (name) try { await ffmpeg.deleteFile(name); } catch {}
-    try { await ffmpeg.deleteFile(`tusan-studio-${token}.mp4`); } catch {}
+    for (const name of audioNames) try { await ffmpeg.deleteFile(name); } catch {}
+    for (const name of clipNames) try { await ffmpeg.deleteFile(name); } catch {}
+    try { await ffmpeg.deleteFile(concatName); } catch {}
+    try { await ffmpeg.deleteFile(output); } catch {}
   }
 }
