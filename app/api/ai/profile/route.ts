@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createAiSession, destroyAiSession, getAiProfile } from "@/lib/ai/server";
 import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
@@ -10,7 +10,7 @@ export async function GET() {
   return NextResponse.json({ profile: session.profile });
 }
 
-export async function PUT(request: Request) {
+export async function PUT(request: NextRequest) {
   try {
     const bodySizeError = rejectOversizedJsonBody(request, 4 * 1024);
     if (bodySizeError) return bodySizeError;
