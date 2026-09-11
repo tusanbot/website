@@ -18,7 +18,7 @@ export default function AiTextWorkspace({ title, description, placeholder, syste
       let prompt = `${systemPrompt}\n\nدرخواست کاربر:\n${input.trim()}`;
       let fileData: { mimeType: string; data: string } | undefined;
       if (file) {
-        if (file.size > 12 * 1024 * 1024) throw new Error("حجم فایل نباید بیشتر از ۱۲ مگابایت باشد.");
+        if (file.size > 3 * 1024 * 1024) throw new Error("حجم فایل نباید بیشتر از ۳ مگابایت باشد.");
         const dataUrl = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error("خواندن فایل ناموفق بود.")); r.readAsDataURL(file); });
         const comma = dataUrl.indexOf(",");
         fileData = { mimeType: file.type || "application/octet-stream", data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl };
@@ -36,7 +36,7 @@ export default function AiTextWorkspace({ title, description, placeholder, syste
     <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
       <h1 className="text-xl font-black sm:text-2xl">{title}</h1><p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">{description}</p>
       <textarea value={input} onChange={(e) => setInput(e.target.value)} rows={9} placeholder={placeholder} className="mt-4 w-full resize-y rounded-2xl border border-[var(--border)] bg-[var(--surface-secondary)] px-4 py-3 text-sm leading-7 outline-none focus:border-[var(--primary)]" />
-      {fileMode && <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] p-4"><label className="block cursor-pointer text-sm font-bold">فایل یا PDF (اختیاری)<input type="file" accept=".pdf,.txt,.md,.csv,.json,.doc,.docx" onChange={(e) => setFile(e.target.files?.[0] || null)} className="mt-2 block w-full text-xs" /></label>{file && <div className="mt-2 text-xs text-[var(--text-muted)]">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</div>}</div>}
+      {fileMode && <div className="mt-3 rounded-2xl border border-dashed border-[var(--border)] p-4"><label className="block cursor-pointer text-sm font-bold">فایل یا PDF (اختیاری)<input type="file" accept=".pdf,.txt,.md,.csv,.json" onChange={(e) => setFile(e.target.files?.[0] || null)} className="mt-2 block w-full text-xs" /></label>{file && <div className="mt-2 text-xs text-[var(--text-muted)]">{file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB</div>}</div>}
       {error && <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-xs leading-6 text-red-600">{error}</div>}
       <button type="button" onClick={run} disabled={loading || (!input.trim() && !file)} className="mt-4 w-full rounded-2xl bg-[var(--primary)] px-5 py-3 text-sm font-black text-white disabled:opacity-50">{loading ? "در حال پردازش..." : "اجرا با هوش مصنوعی"}</button>
     </div>
