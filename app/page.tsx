@@ -4,6 +4,7 @@ import HomeAnnouncementsRail from "@/components/home/HomeAnnouncementsRail";
 import PopularServices from "@/components/home/PopularServices";
 import SocialServicesRail from "@/components/home/SocialServicesRail";
 import ToolsPreview from "@/components/home/ToolsPreview";
+import AiToolsPreview from "@/components/home/AiToolsPreview";
 import ProcessTimeline from "@/components/home/ProcessTimeline";
 import FaqSection from "@/components/home/FaqSection";
 import RulesSection from "@/components/home/RulesSection";
@@ -19,6 +20,7 @@ export default function HomePage() {
     <PopularServices />
     <SocialServicesRail />
     <ToolsPreview />
+    <AiToolsPreview />
     <ProcessTimeline />
     <FaqSection />
     <RulesSection />
