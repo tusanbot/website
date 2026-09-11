@@ -21,9 +21,17 @@ export default function AiMediaWorkspace({ mode, title, description }: Props) {
     const poll = async () => {
       try {
         const response = await fetch(`/api/ai/video?operation=${encodeURIComponent(operation)}`, { cache: "no-store" });
+        const contentType = response.headers.get("content-type") || "";
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "خطا در وضعیت تولید ویدیو");
+        }
+        if (contentType.startsWith("video/")) {
+          const blob = await response.blob();
+          if (!stopped) { setResult({ url: URL.createObjectURL(blob) }); setOperation(null); setLoading(false); setStatus("ویدیو آماده شد."); }
+          return;
+        }
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "خطا در وضعیت تولید ویدیو");
-        if (data.done && data.url) { if (!stopped) { setResult({ url: data.url }); setOperation(null); setLoading(false); setStatus("ویدیو آماده شد."); } return; }
         if (data.done && data.error) throw new Error(data.error);
         if (!stopped) setStatus("در حال تولید ویدیو... این فرایند ممکن است چند دقیقه زمان ببرد.");
         if (!stopped) setTimeout(poll, 7000);
@@ -43,8 +51,7 @@ export default function AiMediaWorkspace({ mode, title, description }: Props) {
         const dataUrl = await new Promise<string>((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = () => reject(new Error("خواندن تصویر ناموفق بود.")); r.readAsDataURL(reference); });
         const comma = dataUrl.indexOf(","); file = { mimeType: reference.type || "image/jpeg", data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl };
       }
-      const endpoint = `/api/ai/${mode}`;
-      const response = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt.trim(), aspectRatio, image: file }) });
+      const response = await fetch(`/api/ai/${mode}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt: prompt.trim(), aspectRatio, image: file }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "تولید محتوا ناموفق بود.");
       if (mode === "video") { setOperation(data.operation); setStatus("درخواست ثبت شد؛ در حال تولید ویدیو..."); }
@@ -52,7 +59,7 @@ export default function AiMediaWorkspace({ mode, title, description }: Props) {
     } catch (e) { setError(e instanceof Error ? e.message : "خطای ناشناخته"); setLoading(false); }
   }
 
-  const accept = mode === "music" ? "image/*" : "image/*";
+  const accept = "image/*";
   return <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(300px,0.85fr)]" dir="rtl">
     <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-4 sm:p-5">
       <h1 className="text-xl font-black sm:text-2xl">{title}</h1><p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">{description}</p>
