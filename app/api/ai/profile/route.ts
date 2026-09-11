@@ -1,55 +1,38 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
-import { deleteUserAiProfile, getUserAiProfile, upsertUserAiProfile } from "@/lib/ai/profile";
+import { createAiSession, destroyAiSession, getAiProfile } from "@/lib/ai/server";
+import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
 
-async function getUserId() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id ?? null;
-}
-
 export async function GET() {
-  try {
-    const userId = await getUserId();
-    if (!userId) return NextResponse.json({ error: "احراز هویت لازم است." }, { status: 401 });
-    const profile = await getUserAiProfile(userId);
-    return NextResponse.json({ profile });
-  } catch (error) {
-    console.error("AI profile GET failed", error);
-    return NextResponse.json({ error: "دریافت تنظیمات هوش مصنوعی ناموفق بود." }, { status: 500 });
-  }
+  const session = await getAiProfile();
+  if (!session) return NextResponse.json({ profile: null });
+  return NextResponse.json({ profile: session.profile });
 }
 
 export async function PUT(request: Request) {
   try {
-    const userId = await getUserId();
-    if (!userId) return NextResponse.json({ error: "احراز هویت لازم است." }, { status: 401 });
-    const body = await request.json();
-    const provider = String(body.provider ?? "");
-    const model = String(body.model ?? "");
-    const apiKey = String(body.apiKey ?? "");
-    if (!provider || !model || !apiKey) return NextResponse.json({ error: "ارائه‌دهنده، مدل و API Key الزامی است." }, { status: 400 });
-    const profile = await upsertUserAiProfile(userId, provider, model, apiKey);
-    return NextResponse.json({ profile });
+    const bodySizeError = rejectOversizedJsonBody(request, 4 * 1024);
+    if (bodySizeError) return bodySizeError;
+    const rateLimitResponse = await checkRateLimit({ scope: "ai:session", request, limit: 5, windowSeconds: 600 });
+    if (rateLimitResponse) return rateLimitResponse;
+    const body = await request.json() as { apiKey?: unknown };
+    if (typeof body.apiKey !== "string" || body.apiKey.trim().length < 20) return NextResponse.json({ error: "کلید API معتبر وارد کنید." }, { status: 400 });
+    const result = await createAiSession(body.apiKey);
+    if (!result.ok) return NextResponse.json({ error: result.message }, { status: 401 });
+    return NextResponse.json({ profile: result.profile });
   } catch (error) {
-    console.error("AI profile PUT failed", error);
-    const message = error instanceof Error && error.message.includes("AI_PROFILE_ENCRYPTION_KEY")
-      ? "تنظیمات امنیتی سرور برای ذخیره امن API Key کامل نشده است."
-      : "ذخیره تنظیمات هوش مصنوعی ناموفق بود.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("AI profile update error", error);
+    return NextResponse.json({ error: "ذخیره پروفایل هوش مصنوعی انجام نشد." }, { status: 500 });
   }
 }
 
 export async function DELETE() {
   try {
-    const userId = await getUserId();
-    if (!userId) return NextResponse.json({ error: "احراز هویت لازم است." }, { status: 401 });
-    await deleteUserAiProfile(userId);
-    return NextResponse.json({ ok: true });
+    await destroyAiSession();
+    return NextResponse.json({ profile: null });
   } catch (error) {
-    console.error("AI profile DELETE failed", error);
-    return NextResponse.json({ error: "حذف تنظیمات هوش مصنوعی ناموفق بود." }, { status: 500 });
+    console.error("AI profile delete error", error);
+    return NextResponse.json({ error: "حذف پروفایل هوش مصنوعی انجام نشد." }, { status: 500 });
   }
 }
