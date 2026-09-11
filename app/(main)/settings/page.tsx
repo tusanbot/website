@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Settings, UserRound, Bell, ShieldCheck } from "lucide-react";
+import { Settings, UserRound, Bell, ShieldCheck, Bot } from "lucide-react";
 
 const items = [
     { href: "/profile", title: "حساب کاربری", description: "اطلاعات و مشخصات حساب", icon: UserRound },
+    { href: "/profile/ai", title: "پروفایل هوش مصنوعی", description: "مدیریت API شخصی و مدل هوش مصنوعی", icon: Bot },
     { href: "/notifications", title: "اعلان‌ها", description: "مشاهده اعلان‌های حساب", icon: Bell },
     { href: "/profile", title: "امنیت حساب", description: "مدیریت تنظیمات حساب و ورود", icon: ShieldCheck },
 ];
@@ -16,7 +17,7 @@ export default function SettingsPage() {
                     <span className="text-sm font-bold">تنظیمات</span>
                 </div>
                 <h1 className="text-2xl font-black">تنظیمات توسن</h1>
-                <p className="mt-2 text-sm text-[var(--text-muted)]">دسترسی سریع به تنظیمات حساب و اعلان‌ها</p>
+                <p className="mt-2 text-sm text-[var(--text-muted)]">دسترسی سریع به تنظیمات حساب، هوش مصنوعی و اعلان‌ها</p>
             </div>
 
             <div className="grid gap-3">
