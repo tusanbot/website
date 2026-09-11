@@ -34,8 +34,7 @@ export async function GET(request: Request) {
     const uri = data?.response?.generateVideoResponse?.generatedSamples?.[0]?.video?.uri;
     if (!uri) return NextResponse.json({ done: true, error: "آدرس فایل ویدیو دریافت نشد." }, { status: 502 });
     const video = await fetch(uri, { headers: { "x-goog-api-key": key }, cache: "no-store" });
-    if (!video.ok) return NextResponse.json({ done: true, error: "دریافت فایل ویدیو ناموفق بود." }, { status: 502 });
-    const bytes = Buffer.from(await video.arrayBuffer());
-    return new NextResponse(bytes, { status: 200, headers: { "Content-Type": "video/mp4", "Cache-Control": "private, max-age=60" } });
+    if (!video.ok || !video.body) return NextResponse.json({ done: true, error: "دریافت فایل ویدیو ناموفق بود." }, { status: 502 });
+    return new Response(video.body, { status: 200, headers: { "Content-Type": video.headers.get("content-type") || "video/mp4", "Cache-Control": "private, max-age=60" } });
   } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "خطای ناشناخته" }, { status: 500 }); }
 }
