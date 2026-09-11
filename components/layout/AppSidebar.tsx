@@ -80,6 +80,6 @@ export default function AppSidebar({ mobile = false, onClose }: { mobile?: boole
             {staffItems.length > 0 && <div><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">پنل کاری</div><div className="space-y-1">{staffItems.map((item) => <Item key={item.href} {...item} />)}</div></div>}
             {role === "admin" && <div><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">مدیریت</div><div className="space-y-1">{adminItems.map((item) => <Item key={item.href} {...item} />)}</div></div>}
         </div>
-        {role !== "guest" && <div className="p-4 border-t border-[var(--border)]"><TusanButton variant="secondary" className="w-full" onClick={handleLogout}>خروج از حساب</TusanButton></div>}
+        {role !== "guest" && <div className={`${mobile ? "mb-20" : ""} p-4 border-t border-[var(--border)]`}><TusanButton variant="secondary" className="w-full" onClick={handleLogout}>خروج از حساب</TusanButton></div>}
     </GlassPanel>;
 }
