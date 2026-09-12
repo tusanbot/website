@@ -23,10 +23,9 @@ export const viewport: Viewport = {
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
-  const assets = settings.config?.assets || {};
   const title = settings.site_name || "کافی نت توسن";
   const description = settings.site_description || "خدمات آنلاین کافی‌نت توسن";
-  const icon = assets.faviconUrl || assets.iconUrl || "/favicon.ico";
+
   return {
     metadataBase: new URL(siteUrl),
     title: { default: title, template: `%s | ${title}` },
@@ -35,13 +34,19 @@ export async function generateMetadata(): Promise<Metadata> {
     manifest: "/manifest.webmanifest",
     keywords: [title, "کافی نت", "کافی نت مراغه", "خدمات اینترنتی", "ثبت نام آنلاین", "خدمات اداری آنلاین"],
     alternates: { canonical: siteUrl },
-    icons: { icon, shortcut: icon, apple: assets.iconUrl || icon },
+    // Keep the browser favicon tied to the repository asset so a stale or
+    // misconfigured site_settings asset can never replace it with another icon.
+    icons: {
+      icon: "/favicon.ico",
+      shortcut: "/favicon.ico",
+      apple: "/pwa-icon.svg",
+    },
     openGraph: { type: "website", locale: "fa_IR", url: siteUrl, siteName: title, title, description },
     robots: { index: true, follow: true },
   };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const localBusinessJsonLd = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
