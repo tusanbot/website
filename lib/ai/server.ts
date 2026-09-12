@@ -5,7 +5,9 @@ import { createSessionToken, decryptApiKey, encryptApiKey, hashApiKey, hashSessi
 
 export const AI_SESSION_COOKIE = "tusan_ai_session";
 const SESSION_DAYS = 30;
-const PREFERRED_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+const DEFAULT_TEXT_MODEL = "gemini-3.6-flash";
+const PREFERRED_MODELS = [DEFAULT_TEXT_MODEL, "gemini-3.6-flash-preview", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+const DEPRECATED_TEXT_MODELS = new Set(["gemini-2.5-flash"]);
 
 type GeminiModel = { name?: string; supportedGenerationMethods?: string[] };
 
@@ -86,6 +88,14 @@ export async function getAiProfile() {
   const siteUserId = await getSiteUserId();
   if (profile.user_id && profile.user_id !== siteUserId) return null;
   if (!profile.user_id && siteUserId) return null;
+
+  // Existing sessions may still contain the retired default model. Normalize it
+  // at read time so users do not need to reconnect their API key just to migrate.
+  if (profile.provider === "gemini" && DEPRECATED_TEXT_MODELS.has(profile.model)) {
+    profile.model = DEFAULT_TEXT_MODEL;
+    await db.from("ai_profiles").update({ model: DEFAULT_TEXT_MODEL, last_used_at: new Date().toISOString() }).eq("id", profile.id);
+  }
+
   return { sessionId: data.id, profile };
 }
 
