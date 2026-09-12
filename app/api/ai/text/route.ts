@@ -4,6 +4,7 @@ import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimi
 
 export const runtime = "nodejs";
 const MAX_PROMPT = 50000;
+const TEXT_MODEL = "gemini-3.6-flash";
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     const parts: Array<Record<string, unknown>> = [{ text: prompt }];
     if (file) parts.push({ inline_data: { mime_type: String(file.mimeType || "application/octet-stream"), data: file.data } });
     const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-    const response = await fetch(`${base}/models/gemini-2.5-flash:generateContent`, {
+    const response = await fetch(`${base}/models/${TEXT_MODEL}:generateContent`, {
       method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
       body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { temperature: 0.4 } }), cache: "no-store", signal: AbortSignal.timeout(120000),
     });
