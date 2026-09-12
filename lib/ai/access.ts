@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getAiProfile, getProfileApiKey } from "@/lib/ai/server";
+import { getAiProfile, getAiCapabilityModel, getProfileApiKey } from "@/lib/ai/server";
 
 type AiAccess = {
   apiKey: string;
@@ -20,9 +20,12 @@ export async function getAiAccess(): Promise<AiAccess | null> {
   const personal = await getAiProfile();
   if (!personal) return null;
 
+  const apiKey = await getProfileApiKey(personal.profile.id);
+  const model = await getAiCapabilityModel(personal.profile.id, "text", apiKey, personal.profile.model_config);
+
   return {
-    apiKey: await getProfileApiKey(personal.profile.id),
-    model: personal.profile.model || "gemini-2.5-flash",
+    apiKey,
+    model,
     rateLimitUserId: user?.id || personal.profile.id,
     source: "personal",
   };
