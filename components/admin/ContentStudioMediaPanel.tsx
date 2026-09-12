@@ -165,7 +165,6 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
           backgroundColor: null,
           useCORS: true,
           logging: false,
-          normalizeDom: true,
           onclone: clonedDocument => {
             const style = clonedDocument.createElement("style");
             style.textContent = "*,*::before,*::after{animation:none!important;transition:none!important;transform:none!important;filter:none!important;caret-color:transparent!important;}";
