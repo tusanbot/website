@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAiCapabilityModel } from "@/lib/ai/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { generateSpeechWithGeminiApiKey } from "@/lib/ai/gemini";
 import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
@@ -34,7 +35,8 @@ export async function POST(req: NextRequest) {
     if (!text) return NextResponse.json({ error: "متنی برای تبدیل به صوت وارد نشده است." }, { status: 400 });
     if (text.length > MAX_CHARS) return NextResponse.json({ error: `متن نمی‌تواند بیشتر از ${MAX_CHARS.toLocaleString("fa-IR")} کاراکتر باشد.` }, { status: 400 });
     if (speed < 0.5 || speed > 2) return NextResponse.json({ error: "سرعت باید بین ۰٫۵ تا ۲ باشد." }, { status: 400 });
-    const result = await generateSpeechWithGeminiApiKey(access.apiKey, text, voice, speed, style);
+    const model = await getAiCapabilityModel(access.profileId, "tts", access.apiKey, access.modelConfig);
+    const result = await generateSpeechWithGeminiApiKey(access.apiKey, text, voice, speed, style, model);
     return NextResponse.json({ audioBase64: result.audioBase64, mimeType: result.mimeType, model: result.model, source: access.source });
   } catch (error) {
     const status = typeof error === "object" && error && "status" in error ? Number((error as { status?: number }).status) : 500;
@@ -43,6 +45,6 @@ export async function POST(req: NextRequest) {
     if (status === 429) return NextResponse.json({ error: "سهمیه Gemini پر شده است. کمی بعد دوباره تلاش کنید." }, { status: 429 });
     if (status === 504) return NextResponse.json({ error: "زمان پردازش تمام شد. دوباره تلاش کنید." }, { status: 504 });
     console.error("text-to-speech:", error);
-    return NextResponse.json({ error: "تبدیل متن به صوت انجام نشد." }, { status: 502 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "تبدیل متن به صوت انجام نشد." }, { status: 502 });
   }
 }
