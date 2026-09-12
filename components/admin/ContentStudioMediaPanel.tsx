@@ -9,6 +9,7 @@ type Slot = { id: string; sourceIndex: number; enabled: boolean };
 type Segment = { start: number; end: number };
 type SlideCapture = { file: File; duration: number; audio?: File; audioStart?: number; audioEnd?: number };
 type TimelineItem = { slotIndex: number; slot: Slot; segment: Segment; start: number; end: number };
+type StudioTransition = "zoom" | "slide" | "blur" | "pop";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const voices = [["Kore", "Kore"], ["Puck", "Puck"], ["Charon", "Charon"], ["Fenrir", "Fenrir"], ["Aoede", "Aoede"]] as const;
@@ -16,6 +17,7 @@ const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
 function wait(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function findPreview(): HTMLElement | null { let best: HTMLElement | null = null; let bestArea = 0; for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *"))) { const r = el.getBoundingClientRect(); if (r.width < 220 || r.height < 320 || r.height > 1300) continue; const ratio = r.width / r.height; if (ratio < 0.50 || ratio > 0.66) continue; const area = r.width * r.height; if (area > bestArea) { best = el; bestArea = area; } } return best; }
 function readSlideState() { const text = document.body.innerText; const m = text.match(/(?:در حال پخش\s*·\s*)?(\d+)\s*\/\s*(\d+)/); const d = text.match(/(\d+(?:[.,]\d+)?)\s*ثانیه/); return { index: m ? Number(m[1]) - 1 : 0, count: m ? Number(m[2]) : 1, duration: d ? Number(d[1].replace(",", ".")) : 3 }; }
+function readTransition(): StudioTransition { const select = document.querySelector<HTMLElement>("main select"); const value = select instanceof HTMLSelectElement ? select.value : "zoom"; return value === "slide" || value === "blur" || value === "pop" || value === "zoom" ? value : "zoom"; }
 function stageButtons() { const root = document.querySelector<HTMLElement>(".stage-controls"); return root ? Array.from(root.querySelectorAll<HTMLButtonElement>("button")) : []; }
 async function goToSlide(index: number) {
   const buttons = stageButtons(); const previous = buttons[0]; const next = buttons[2];
@@ -180,7 +182,8 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
         setProgress(Math.round((n + 1) / Math.max(active.length, 1) * 50));
       }
       if (!captures.length) throw new Error("حداقل یک اسلاید فعال لازم است.");
-      stage = "ffmpeg"; setMessage("در حال ساخت MP4... ممکن است چند لحظه طول بکشد."); const output = await encodeSlideSequence(captures, setProgress);
+      const transition = readTransition();
+      stage = "ffmpeg"; setMessage("در حال ساخت MP4... ممکن است چند لحظه طول بکشد."); const output = await encodeSlideSequence(captures, setProgress, transition);
       stage = "download"; const url = URL.createObjectURL(output); const a = document.createElement("a"); a.href = url; a.download = `tusan-reel-${Date.now()}.mp4`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 30000); setProgress(100); setMessage("ویدیو آماده شد.");
     } catch (e) { setMessage(`مرحله ${stage}: ${errorText(e, "ساخت ویدیو ناموفق بود.")}`); } finally { setExporting(false); }
   }
