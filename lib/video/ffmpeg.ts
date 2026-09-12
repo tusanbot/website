@@ -81,9 +81,8 @@ export async function encodeSlideSequence(slides: SlideInput[], onProgress?: (pe
   const output = `tusan-studio-${token}.mp4`;
   try {
     if (!slides.length) throw new Error("هیچ اسلایدی برای خروجی وجود ندارد.");
-    const transitionDuration = slides.length > 1
-      ? Math.min(0.5, ...slides.map(slide => Math.max(0.1, Number(slide.duration) || 0.1)) / 2)
-      : 0;
+    const minimumDuration = Math.min(...slides.map(slide => Math.max(0.1, Number(slide.duration) || 0.1)));
+    const transitionDuration = slides.length > 1 ? Math.min(0.5, minimumDuration / 2) : 0;
     const xfadeTransition = transitionMap[transition] || "zoomin";
 
     for (let i = 0; i < slides.length; i++) {
