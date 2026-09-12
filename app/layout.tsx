@@ -28,7 +28,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = settings.site_description || "خدمات آنلاین کافی‌نت توسن";
   const icon = assets.faviconUrl || assets.iconUrl || "/favicon.ico";
   return {
-    metadataBase: new URL(siteUrl), title: { default: title, template: `%s | ${title}` }, description,
+    metadataBase: new URL(siteUrl),
+    title: { default: title, template: `%s | ${title}` },
+    description,
     applicationName: title,
     manifest: "/manifest.webmanifest",
     keywords: [title, "کافی نت", "کافی نت مراغه", "خدمات اینترنتی", "ثبت نام آنلاین", "خدمات اداری آنلاین"],
@@ -47,7 +49,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     name: "کافی نت توسن",
     url: siteUrl,
     telephone: "+989940838154",
-    email: "info@tusan.ir",
     description: "خدمات آنلاین کافی نت توسن؛ ثبت نام، امور اداری، اینترنتی و کامپیوتری.",
     address: {
       "@type": "PostalAddress",
