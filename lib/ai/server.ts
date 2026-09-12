@@ -65,7 +65,12 @@ export async function getAiCapabilityModel(profileId: string, capability: AiCapa
 }
 export async function requireAiProfile() { const session = await getAiProfile(); if (!session) throw new Error("AI_PROFILE_REQUIRED"); return session; }
 export async function getProfileApiKey(profileId: string, capability: AiCapability = "text") {
-  const db = supabaseAdmin(); const { data, error } = await db.from("ai_profiles").select("encrypted_api_key,text_encrypted_api_key,image_encrypted_api_key,video_encrypted_api_key,music_encrypted_api_key,tts_encrypted_api_key").eq("id", profileId).single(); if (error || !data) throw new Error("AI profile not found");
-  const encrypted = data[keyColumn[capability] as keyof typeof data] || data.encrypted_api_key; return decryptApiKey(encrypted);
+  const db = supabaseAdmin();
+  const { data, error } = await db.from("ai_profiles").select("*").eq("id", profileId).single();
+  if (error || !data) throw new Error("AI profile not found");
+  const record = data as unknown as Record<string, string | null | undefined>;
+  const encrypted = record[keyColumn[capability]] || record.encrypted_api_key;
+  if (!encrypted) throw new Error("AI API key not configured");
+  return decryptApiKey(encrypted);
 }
 export async function destroyAiSession() { const jar = await cookies(); const token = jar.get(AI_SESSION_COOKIE)?.value; if (token) await supabaseAdmin().from("ai_sessions").delete().eq("token_hash", hashSessionToken(token)); jar.set(AI_SESSION_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 }); }
