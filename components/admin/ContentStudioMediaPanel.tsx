@@ -16,7 +16,18 @@ const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
 function wait(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
 function findPreview(): HTMLElement | null { let best: HTMLElement | null = null; let bestArea = 0; for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *"))) { const r = el.getBoundingClientRect(); if (r.width < 220 || r.height < 320 || r.height > 1300) continue; const ratio = r.width / r.height; if (ratio < 0.50 || ratio > 0.66) continue; const area = r.width * r.height; if (area > bestArea) { best = el; bestArea = area; } } return best; }
 function readSlideState() { const text = document.body.innerText; const m = text.match(/(?:در حال پخش\s*·\s*)?(\d+)\s*\/\s*(\d+)/); const d = text.match(/(\d+(?:[.,]\d+)?)\s*ثانیه/); return { index: m ? Number(m[1]) - 1 : 0, count: m ? Number(m[2]) : 1, duration: d ? Number(d[1].replace(",", ".")) : 3 }; }
-async function goToSlide(index: number) { for (let i = 0; i < 40; i++) { window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })); await wait(12); } for (let i = 0; i < index; i++) { window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })); await wait(55); } await wait(140); }
+function stageButtons() { const root = document.querySelector<HTMLElement>(".stage-controls"); return root ? Array.from(root.querySelectorAll<HTMLButtonElement>("button")) : []; }
+async function goToSlide(index: number) {
+  const buttons = stageButtons(); const previous = buttons[0]; const next = buttons[2];
+  if (!previous || !next) throw new Error("کنترل اسلاید برای خروجی پیدا نشد.");
+  for (let i = 0; i < 40; i++) { previous.click(); await wait(18); }
+  for (let i = 0; i < index; i++) { next.click(); await wait(90); }
+  await wait(180);
+}
+async function waitForStableRender() {
+  try { await document.fonts?.ready; } catch {}
+  await wait(220);
+}
 function canvasToFile(canvas: HTMLCanvasElement, name: string) { return new Promise<File>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(new File([blob], name, { type: "image/png" })) : reject(new Error("ساخت تصویر اسلاید ناموفق بود.")), "image/png")); }
 function equalSegments(count: number, total: number): Segment[] { const safe = Math.max(0.1, total); return Array.from({ length: count }, (_, i) => ({ start: safe * i / count, end: safe * (i + 1) / count })); }
 function formatTime(value: number) { return value < 60 ? `${value.toFixed(2)} ثانیه` : `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
@@ -142,9 +153,30 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
       const captures: SlideCapture[] = [];
       const active = timelineItems;
       for (let n = 0; n < active.length; n++) {
-        const item = active[n]; const source = Math.max(0, Math.min(editorCount - 1, item.slot.sourceIndex)); await goToSlide(source); const state = readSlideState();
-        const canvas = await html2canvas(findPreview() || preview, { scale: 1, backgroundColor: null, useCORS: true, logging: false }); const file = await canvasToFile(canvas, `slide-${String(n + 1).padStart(3, "0")}.png`);
-        const rawDuration = Math.max(0.5, item.segment.end - item.segment.start); captures.push(audio ? { file, duration: rawDuration, audio, audioStart: item.segment.start, audioEnd: item.segment.end } : { file, duration: rawDuration || state.duration || 3 });
+        const item = active[n];
+        const source = Math.max(0, Math.min(editorCount - 1, item.slot.sourceIndex));
+        await goToSlide(source);
+        await waitForStableRender();
+        const state = readSlideState();
+        const canvas = await html2canvas(findPreview() || preview, {
+          scale: 2,
+          backgroundColor: null,
+          useCORS: true,
+          logging: false,
+          normalizeDom: true,
+          onclone: clonedDocument => {
+            const style = clonedDocument.createElement("style");
+            style.textContent = "*,*::before,*::after{animation:none!important;transition:none!important;transform:none!important;filter:none!important;caret-color:transparent!important;}";
+            clonedDocument.head.appendChild(style);
+          },
+        });
+        const file = await canvasToFile(canvas, `slide-${String(n + 1).padStart(3, "0")}.png`);
+        const rawDuration = audio
+          ? Math.max(0.5, item.segment.end - item.segment.start)
+          : Math.max(0.5, state.duration);
+        captures.push(audio
+          ? { file, duration: rawDuration, audio, audioStart: item.segment.start, audioEnd: item.segment.end }
+          : { file, duration: rawDuration });
         setProgress(Math.round((n + 1) / Math.max(active.length, 1) * 50));
       }
       if (!captures.length) throw new Error("حداقل یک اسلاید فعال لازم است.");
