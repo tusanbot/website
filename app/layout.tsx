@@ -9,7 +9,7 @@ import AnalyticsTracker from "@/components/analytics/AnalyticsTracker";
 import PwaInstallPrompt from "@/components/pwa/PwaInstallPrompt";
 import { getSiteSettings } from "@/lib/siteSettings";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir";
+const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
 const GA_MEASUREMENT_ID = "G-08SPYBX3MG";
 const vazirmatn = Vazirmatn({ subsets: ["arabic"], variable: "--font-vazirmatn", display: "swap" });
 
@@ -31,7 +31,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(siteUrl), title: { default: title, template: `%s | ${title}` }, description,
     applicationName: title,
     manifest: "/manifest.webmanifest",
-    keywords: [title, "کافی نت", "خدمات اینترنتی", "ثبت نام آنلاین", "خدمات اداری آنلاین"],
+    keywords: [title, "کافی نت", "کافی نت مراغه", "خدمات اینترنتی", "ثبت نام آنلاین", "خدمات اداری آنلاین"],
     alternates: { canonical: siteUrl },
     icons: { icon, shortcut: icon, apple: assets.iconUrl || icon },
     openGraph: { type: "website", locale: "fa_IR", url: siteUrl, siteName: title, title, description },
@@ -41,14 +41,47 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const localBusinessJsonLd = {
-    "@context": "https://schema.org", "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl,
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "@id": `${siteUrl}/#localbusiness`,
+    name: "کافی نت توسن",
+    url: siteUrl,
+    telephone: "+989940838154",
+    email: "info@tusan.ir",
     description: "خدمات آنلاین کافی نت توسن؛ ثبت نام، امور اداری، اینترنتی و کامپیوتری.",
-    areaServed: { "@type": "Country", name: "ایران" }, serviceType: ["خدمات کافی نت", "خدمات اینترنتی", "خدمات اداری آنلاین", "ثبت نام آنلاین"],
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "مراغه",
+      addressRegion: "آذربایجان شرقی",
+      addressCountry: "IR",
+      streetAddress: "خیابان ساسان (شهید مدرس)",
+    },
+    areaServed: [
+      { "@type": "City", name: "مراغه" },
+      { "@type": "AdministrativeArea", name: "آذربایجان شرقی" },
+    ],
+    serviceType: ["خدمات کافی نت", "خدمات اینترنتی", "خدمات اداری آنلاین", "ثبت نام آنلاین"],
+    sameAs: [
+      "https://t.me/Tusan_admin",
+      "https://eitaa.com/tusan_c",
+      "https://rubika.ir/tusan_c",
+    ],
+  };
+  const webSiteJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${siteUrl}/#website`,
+    url: siteUrl,
+    name: "کافی نت توسن",
+    description: "خدمات آنلاین کافی نت توسن",
+    publisher: { "@id": `${siteUrl}/#localbusiness` },
+    inLanguage: "fa-IR",
   };
   return (
     <html lang="fa" dir="rtl">
       <body className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }} />
         <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
         <Script id="google-analytics" strategy="afterInteractive">
           {`window.dataLayer = window.dataLayer || [];
