@@ -3,6 +3,7 @@ import { getProfileApiKey, requireAiProfile } from "@/lib/ai/server";
 import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
+const MUSIC_MODEL = "lyria-3.5";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +20,9 @@ export async function POST(request: NextRequest) {
     const parts: Array<Record<string, unknown>> = [{ text: prompt }];
     if (body?.image?.data) parts.push({ inline_data: { mime_type: String(body.image.mimeType || "image/jpeg"), data: body.image.data } });
     const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-    const response = await fetch(`${base}/models/lyria-3.5:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ["AUDIO", "TEXT"], responseFormat: { audio: { mimeType: "audio/mp3" } } } }), cache: "no-store", signal: AbortSignal.timeout(180000) });
+    // Lyria 3.5 returns MP3 by default. Omitting responseFormat avoids the
+    // response_format enum mismatch seen on some v1beta gateway versions.
+    const response = await fetch(`${base}/models/${MUSIC_MODEL}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ["AUDIO", "TEXT"] } }), cache: "no-store", signal: AbortSignal.timeout(180000) });
     const data = await response.json();
     if (!response.ok) return NextResponse.json({ error: data?.error?.message || "خطا از مدل موسیقی." }, { status: 502 });
     const output = data?.candidates?.[0]?.content?.parts || [];
