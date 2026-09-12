@@ -27,7 +27,6 @@ export async function generateMetadata(): Promise<Metadata> {
   const description = settings.site_description || "خدمات آنلاین کافی‌نت توسن";
   const assets = settings.config?.assets || {};
   const favicon = assets.faviconUrl || assets.iconUrl || "/favicon.ico";
-  const appleIcon = assets.appleTouchIconUrl || assets.iconUrl || assets.faviconUrl || "/pwa-icon.svg";
 
   return {
     metadataBase: new URL(siteUrl),
@@ -40,7 +39,7 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: {
       icon: favicon,
       shortcut: favicon,
-      apple: appleIcon,
+      apple: favicon,
     },
     openGraph: { type: "website", locale: "fa_IR", url: siteUrl, siteName: title, title, description },
     robots: { index: true, follow: true },
@@ -58,54 +57,3 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     description: "خدمات آنلاین کافی نت توسن؛ ثبت نام، امور اداری، اینترنتی و کامپیوتری.",
     address: {
       "@type": "PostalAddress",
-      addressLocality: "مراغه",
-      addressRegion: "آذربایجان شرقی",
-      addressCountry: "IR",
-      streetAddress: "خیابان ساسان (شهید مدرس)",
-    },
-    areaServed: [
-      { "@type": "City", name: "مراغه" },
-      { "@type": "AdministrativeArea", name: "آذربایجان شرقی" },
-    ],
-    serviceType: ["خدمات کافی نت", "خدمات اینترنتی", "خدمات اداری آنلاین", "ثبت نام آنلاین"],
-    sameAs: [
-      "https://t.me/Tusan_admin",
-      "https://eitaa.com/tusan_c",
-      "https://rubika.ir/tusan_c",
-    ],
-  };
-  const webSiteJsonLd = {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "@id": `${siteUrl}/#website`,
-    url: siteUrl,
-    name: "کافی نت توسن",
-    description: "خدمات آنلاین کافی نت توسن",
-    publisher: { "@id": `${siteUrl}/#localbusiness` },
-    inLanguage: "fa-IR",
-  };
-  return (
-    <html lang="fa" dir="rtl">
-      <body className={`${vazirmatn.className} ${vazirmatn.variable} antialiased bg-[var(--background)] text-[var(--text)] transition-colors duration-300`}>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessJsonLd) }} />
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(webSiteJsonLd) }} />
-        <Script src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`} strategy="afterInteractive" />
-        <Script id="google-analytics" strategy="afterInteractive">
-          {`window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-window.gtag = gtag;
-gtag('js', new Date());
-gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: false });`}
-        </Script>
-        <Script id="pwa-register" strategy="afterInteractive">
-          {`if ('serviceWorker' in navigator) { window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {})); }`}
-        </Script>
-        <ThemeProvider>
-          <AnalyticsTracker />
-          {children}
-          <PwaInstallPrompt />
-        </ThemeProvider>
-      </body>
-    </html>
-  );
-}
