@@ -6,31 +6,89 @@ import { createSessionToken, decryptApiKey, encryptApiKey, hashApiKey, hashSessi
 export const AI_SESSION_COOKIE = "tusan_ai_session";
 const SESSION_DAYS = 30;
 const DEFAULT_TEXT_MODEL = "gemini-3.6-flash";
-const PREFERRED_MODELS = [DEFAULT_TEXT_MODEL, "gemini-3.6-flash-preview", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 const DEPRECATED_TEXT_MODELS = new Set(["gemini-2.5-flash"]);
 
-type GeminiModel = { name?: string; supportedGenerationMethods?: string[] };
+export type AiCapability = "text" | "image" | "video" | "music" | "tts";
+export type GeminiModel = { name?: string; supportedGenerationMethods?: string[] };
+export type AiModelConfig = {
+  text?: string;
+  image?: string;
+  video?: string;
+  music?: string;
+  tts?: string;
+  available?: Array<{ name: string; methods: string[] }>;
+  checkedAt?: string;
+};
+
+const PREFERRED_TEXT_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+const PREFERRED_IMAGE_MODELS = ["gemini-3.1-flash-image", "gemini-3-pro-image-preview", "gemini-2.5-flash-image"];
+const PREFERRED_VIDEO_MODELS = ["veo-3.1-generate-preview", "veo-3.1-generate"];
+const PREFERRED_MUSIC_MODELS = ["lyria-3.5", "lyria-3.0"];
+const PREFERRED_TTS_MODELS = ["gemini-2.5-flash-preview-tts", "gemini-2.5-pro-preview-tts"];
+
+function getGeminiBaseUrl() {
+  return (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
+}
+
+function normalizeModels(models: GeminiModel[]) {
+  return models
+    .map((model) => ({ name: model.name?.replace(/^models\//, ""), methods: model.supportedGenerationMethods || [] }))
+    .filter((model): model is { name: string; methods: string[] } => Boolean(model.name));
+}
+
+function pickModel(available: Array<{ name: string; methods: string[] }>, capability: AiCapability) {
+  const method = capability === "video" ? "predictLongRunning" : "generateContent";
+  const candidates = available.filter((item) => item.methods.includes(method));
+  const preferred = capability === "text" ? PREFERRED_TEXT_MODELS
+    : capability === "image" ? PREFERRED_IMAGE_MODELS
+      : capability === "video" ? PREFERRED_VIDEO_MODELS
+        : capability === "music" ? PREFERRED_MUSIC_MODELS
+          : PREFERRED_TTS_MODELS;
+  return preferred.find((name) => candidates.some((item) => item.name === name))
+    || candidates.find((item) => capability === "text" && /flash/i.test(item.name))?.name
+    || candidates[0]?.name;
+}
+
+export async function discoverGeminiModels(apiKey: string) {
+  const key = apiKey.trim();
+  const response = await fetch(`${getGeminiBaseUrl()}/models`, {
+    method: "GET",
+    headers: { "x-goog-api-key": key },
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) throw new Error("GEMINI_AUTH");
+    if (response.status === 429) throw new Error("GEMINI_RATE_LIMIT");
+    throw new Error("GEMINI_MODELS_UNAVAILABLE");
+  }
+  const data = await response.json() as { models?: GeminiModel[] };
+  const available = normalizeModels(data.models || []);
+  return {
+    available,
+    config: {
+      text: pickModel(available, "text"),
+      image: pickModel(available, "image"),
+      video: pickModel(available, "video"),
+      music: pickModel(available, "music"),
+      tts: pickModel(available, "tts"),
+      available,
+      checkedAt: new Date().toISOString(),
+    } satisfies AiModelConfig,
+  };
+}
 
 export async function validateGeminiKey(apiKey: string) {
   const key = apiKey.trim();
   if (!key) return { ok: false as const, message: "کلید API را وارد کنید." };
   try {
-    const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-    const response = await fetch(`${base}/models`, { method: "GET", headers: { "x-goog-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(10000) });
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) return { ok: false as const, message: "کلید Gemini معتبر نیست یا دسترسی لازم را ندارد." };
-      if (response.status === 429) return { ok: false as const, message: "محدودیت درخواست Gemini فعال است؛ کمی بعد دوباره تلاش کنید." };
-      return { ok: false as const, message: "اعتبارسنجی کلید Gemini انجام نشد." };
-    }
-    const data = await response.json() as { models?: GeminiModel[] };
-    const available = (data.models || [])
-      .map((model) => ({ name: model.name?.replace(/^models\//, ""), methods: model.supportedGenerationMethods || [] }))
-      .filter((model): model is { name: string; methods: string[] } => Boolean(model.name) && model.methods.includes("generateContent"));
-    const model = PREFERRED_MODELS.find((name) => available.some((item) => item.name === name)) || available.find((item) => /flash/i.test(item.name))?.name || available[0]?.name;
-    if (!model) return { ok: false as const, message: "این کلید به هیچ مدل Gemini دارای قابلیت تولید محتوا دسترسی ندارد." };
-    return { ok: true as const, model };
-  } catch {
-    return { ok: false as const, message: "اتصال به Gemini برقرار نشد؛ اتصال اینترنت یا درگاه AI را بررسی کنید." };
+    const discovered = await discoverGeminiModels(key);
+    if (!discovered.config.text) return { ok: false as const, message: "این کلید به هیچ مدل متنی Gemini دارای قابلیت تولید محتوا دسترسی ندارد." };
+    return { ok: true as const, model: discovered.config.text, modelConfig: discovered.config };
+  } catch (error) {
+    if (error instanceof Error && error.message === "GEMINI_AUTH") return { ok: false as const, message: "کلید Gemini معتبر نیست یا دسترسی لازم را ندارد." };
+    if (error instanceof Error && error.message === "GEMINI_RATE_LIMIT") return { ok: false as const, message: "محدودیت درخواست Gemini فعال است؛ کمی بعد دوباره تلاش کنید." };
+    return { ok: false as const, message: "اعتبارسنجی کلید Gemini انجام نشد." };
   }
 }
 
@@ -50,19 +108,28 @@ export async function createAiSession(apiKey: string) {
   const now = new Date().toISOString();
   let profile;
 
+  const payload = {
+    key_hash: keyHash,
+    encrypted_api_key: encrypted,
+    provider: "gemini",
+    model: validation.model,
+    model_config: validation.modelConfig,
+    last_used_at: now,
+  };
+
   if (userId) {
     const { data: existing } = await db.from("ai_profiles").select("id").eq("user_id", userId).maybeSingle();
     if (existing?.id) {
-      const { data, error } = await db.from("ai_profiles").update({ key_hash: keyHash, encrypted_api_key: encrypted, provider: "gemini", model: validation.model, last_used_at: now }).eq("id", existing.id).select("id,provider,model,created_at,last_used_at").single();
+      const { data, error } = await db.from("ai_profiles").update(payload).eq("id", existing.id).select("id,provider,model,model_config,created_at,last_used_at").single();
       if (error || !data) throw new Error("ذخیره پروفایل هوش مصنوعی انجام نشد.");
       profile = data;
     } else {
-      const { data, error } = await db.from("ai_profiles").insert({ user_id: userId, key_hash: keyHash, encrypted_api_key: encrypted, provider: "gemini", model: validation.model, last_used_at: now }).select("id,provider,model,created_at,last_used_at").single();
+      const { data, error } = await db.from("ai_profiles").insert({ user_id: userId, ...payload }).select("id,provider,model,model_config,created_at,last_used_at").single();
       if (error || !data) throw new Error("ذخیره پروفایل هوش مصنوعی انجام نشد.");
       profile = data;
     }
   } else {
-    const { data, error } = await db.from("ai_profiles").upsert({ key_hash: keyHash, encrypted_api_key: encrypted, provider: "gemini", model: validation.model, last_used_at: now }, { onConflict: "key_hash" }).select("id,provider,model,created_at,last_used_at").single();
+    const { data, error } = await db.from("ai_profiles").upsert(payload, { onConflict: "key_hash" }).select("id,provider,model,model_config,created_at,last_used_at").single();
     if (error || !data) throw new Error("ذخیره پروفایل هوش مصنوعی انجام نشد.");
     profile = data;
   }
@@ -81,7 +148,7 @@ export async function getAiProfile() {
   const token = jar.get(AI_SESSION_COOKIE)?.value;
   if (!token) return null;
   const db = supabaseAdmin();
-  const { data } = await db.from("ai_sessions").select("id,ai_profile_id,expires_at,ai_profiles(id,user_id,provider,model,created_at,last_used_at)").eq("token_hash", hashSessionToken(token)).gt("expires_at", new Date().toISOString()).maybeSingle();
+  const { data } = await db.from("ai_sessions").select("id,ai_profile_id,expires_at,ai_profiles(id,user_id,provider,model,model_config,created_at,last_used_at)").eq("token_hash", hashSessionToken(token)).gt("expires_at", new Date().toISOString()).maybeSingle();
   if (!data) return null;
   const profile = Array.isArray(data.ai_profiles) ? data.ai_profiles[0] : data.ai_profiles;
   if (!profile) return null;
@@ -89,14 +156,25 @@ export async function getAiProfile() {
   if (profile.user_id && profile.user_id !== siteUserId) return null;
   if (!profile.user_id && siteUserId) return null;
 
-  // Existing sessions may still contain the retired default model. Normalize it
-  // at read time so users do not need to reconnect their API key just to migrate.
   if (profile.provider === "gemini" && DEPRECATED_TEXT_MODELS.has(profile.model)) {
     profile.model = DEFAULT_TEXT_MODEL;
-    await db.from("ai_profiles").update({ model: DEFAULT_TEXT_MODEL, last_used_at: new Date().toISOString() }).eq("id", profile.id);
+    const currentConfig = (profile.model_config || {}) as AiModelConfig;
+    profile.model_config = { ...currentConfig, text: DEFAULT_TEXT_MODEL };
+    await db.from("ai_profiles").update({ model: DEFAULT_TEXT_MODEL, model_config: profile.model_config, last_used_at: new Date().toISOString() }).eq("id", profile.id);
   }
 
   return { sessionId: data.id, profile };
+}
+
+export async function getAiCapabilityModel(profileId: string, capability: AiCapability, apiKey: string, existingConfig?: AiModelConfig | null) {
+  const config = existingConfig || {};
+  const current = config[capability];
+  if (current) return current;
+  const discovered = await discoverGeminiModels(apiKey);
+  const model = discovered.config[capability];
+  if (!model) throw new Error(`GEMINI_${capability.toUpperCase()}_MODEL_UNAVAILABLE`);
+  await supabaseAdmin().from("ai_profiles").update({ model_config: discovered.config, last_used_at: new Date().toISOString() }).eq("id", profileId);
+  return model;
 }
 
 export async function requireAiProfile() {
