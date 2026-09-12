@@ -3,6 +3,7 @@ import { getProfileApiKey, requireAiProfile } from "@/lib/ai/server";
 import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
+const IMAGE_MODEL = "gemini-3.1-flash-image";
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     const parts: Array<Record<string, unknown>> = [{ text: prompt }];
     if (body?.image?.data) parts.push({ inline_data: { mime_type: String(body.image.mimeType || "image/jpeg"), data: body.image.data } });
     const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-    const response = await fetch(`${base}/models/gemini-2.5-flash-image:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: body?.aspectRatio || "1:1" } } }), cache: "no-store", signal: AbortSignal.timeout(120000) });
+    const response = await fetch(`${base}/models/${IMAGE_MODEL}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": key }, body: JSON.stringify({ contents: [{ parts }], generationConfig: { responseModalities: ["TEXT", "IMAGE"], imageConfig: { aspectRatio: body?.aspectRatio || "1:1" } } }), cache: "no-store", signal: AbortSignal.timeout(120000) });
     const data = await response.json();
     if (!response.ok) return NextResponse.json({ error: data?.error?.message || "خطا از مدل تصویر." }, { status: 502 });
     const output = data?.candidates?.[0]?.content?.parts || [];
