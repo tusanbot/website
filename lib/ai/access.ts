@@ -1,9 +1,11 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { getAiProfile, getAiCapabilityModel, getProfileApiKey } from "@/lib/ai/server";
+import { getAiProfile, getAiCapabilityModel, getProfileApiKey, type AiModelConfig } from "@/lib/ai/server";
 
 type AiAccess = {
+  profileId: string;
   apiKey: string;
   model: string;
+  modelConfig: AiModelConfig;
   rateLimitUserId: string;
   source: "personal";
 };
@@ -24,8 +26,10 @@ export async function getAiAccess(): Promise<AiAccess | null> {
   const model = await getAiCapabilityModel(personal.profile.id, "text", apiKey, personal.profile.model_config);
 
   return {
+    profileId: personal.profile.id,
     apiKey,
     model,
+    modelConfig: (personal.profile.model_config || {}) as AiModelConfig,
     rateLimitUserId: user?.id || personal.profile.id,
     source: "personal",
   };
