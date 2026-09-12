@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
     const session = await requireAiProfile();
     if (session.profile.provider !== "gemini") return NextResponse.json({ error: "این ابزار فعلاً برای Gemini فعال است." }, { status: 400 });
-    const key = await getProfileApiKey(session.profile.id);
+    const key = await getProfileApiKey(session.profile.id, "video");
     const model = await getAiCapabilityModel(session.profile.id, "video", key, session.profile.model_config);
     const body = await request.json();
     const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
     const session = await requireAiProfile();
     if (session.profile.provider !== "gemini") return NextResponse.json({ error: "این ابزار فعلاً برای Gemini فعال است." }, { status: 400 });
-    const key = await getProfileApiKey(session.profile.id);
+    const key = await getProfileApiKey(session.profile.id, "video");
     const operation = new URL(request.url).searchParams.get("operation");
     if (!operation || !operation.startsWith("models/")) return NextResponse.json({ error: "شناسه عملیات نامعتبر است." }, { status: 400 });
     const response = await fetch(`${(process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "")}/${operation}`, { headers: { "x-goog-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(30000) });
