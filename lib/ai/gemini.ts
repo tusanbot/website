@@ -6,6 +6,8 @@ export type GeminiSpeechResult = { audioBase64: string; mimeType: string; model:
 
 type GeminiError = Error & { status?: number; detail?: string };
 
+const DEFAULT_TEXT_MODEL = "gemini-3.6-flash";
+
 function getBaseUrl() {
   return (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
 }
@@ -32,9 +34,9 @@ function pcm16ToWavBase64(base64: string, sampleRate = 24000) {
   return Buffer.concat([header, binary]).toString("base64");
 }
 
-async function generateWithGeminiKey(apiKey: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}): Promise<GeminiResult> {
-  const requestedModel = model || "gemini-2.5-flash";
-  const models = Array.from(new Set([requestedModel, "gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"]));
+async function generateWithGeminiKey(apiKey: string, prompt: string, model = DEFAULT_TEXT_MODEL, options: GeminiOptions = {}): Promise<GeminiResult> {
+  const requestedModel = model || DEFAULT_TEXT_MODEL;
+  const models = Array.from(new Set([requestedModel, DEFAULT_TEXT_MODEL, "gemini-3.6-flash-preview", "gemini-2.5-flash-lite", "gemini-2.0-flash"]));
   let lastError: GeminiError | null = null;
 
   for (const candidate of models) {
@@ -63,11 +65,11 @@ async function generateWithGeminiKey(apiKey: string, prompt: string, model = "ge
   throw Object.assign(new Error("GEMINI_UPSTREAM"), { status: 502 });
 }
 
-export async function generateWithGemini(profileId: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}) {
+export async function generateWithGemini(profileId: string, prompt: string, model = DEFAULT_TEXT_MODEL, options: GeminiOptions = {}) {
   return generateWithGeminiKey(await getProfileApiKey(profileId), prompt, model, options);
 }
 
-export async function generateWithGeminiApiKey(apiKey: string, prompt: string, model = "gemini-2.5-flash", options: GeminiOptions = {}) {
+export async function generateWithGeminiApiKey(apiKey: string, prompt: string, model = DEFAULT_TEXT_MODEL, options: GeminiOptions = {}) {
   return generateWithGeminiKey(apiKey, prompt, model, options);
 }
 
