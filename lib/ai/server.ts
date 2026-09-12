@@ -19,6 +19,7 @@ export type AiModelConfig = {
   available?: Array<{ name: string; methods: string[] }>;
   checkedAt?: string;
 };
+export type AiCapabilityKeys = Partial<Record<AiCapability, string>>;
 
 const PREFERRED_TEXT_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 const PREFERRED_IMAGE_MODELS = ["gemini-3.1-flash-image", "gemini-3-pro-image-preview", "gemini-2.5-flash-image"];
@@ -31,32 +32,19 @@ function getGeminiBaseUrl() {
 }
 
 function normalizeModels(models: GeminiModel[]) {
-  return models
-    .map((model) => ({ name: model.name?.replace(/^models\//, ""), methods: model.supportedGenerationMethods || [] }))
-    .filter((model): model is { name: string; methods: string[] } => Boolean(model.name));
+  return models.map((model) => ({ name: model.name?.replace(/^models\//, ""), methods: model.supportedGenerationMethods || [] })).filter((model): model is { name: string; methods: string[] } => Boolean(model.name));
 }
 
 function pickModel(available: Array<{ name: string; methods: string[] }>, capability: AiCapability) {
   const method = capability === "video" ? "predictLongRunning" : "generateContent";
   const candidates = available.filter((item) => item.methods.includes(method));
-  const preferred = capability === "text" ? PREFERRED_TEXT_MODELS
-    : capability === "image" ? PREFERRED_IMAGE_MODELS
-      : capability === "video" ? PREFERRED_VIDEO_MODELS
-        : capability === "music" ? PREFERRED_MUSIC_MODELS
-          : PREFERRED_TTS_MODELS;
-  return preferred.find((name) => candidates.some((item) => item.name === name))
-    || candidates.find((item) => capability === "text" && /flash/i.test(item.name))?.name
-    || candidates[0]?.name;
+  const preferred = capability === "text" ? PREFERRED_TEXT_MODELS : capability === "image" ? PREFERRED_IMAGE_MODELS : capability === "video" ? PREFERRED_VIDEO_MODELS : capability === "music" ? PREFERRED_MUSIC_MODELS : PREFERRED_TTS_MODELS;
+  return preferred.find((name) => candidates.some((item) => item.name === name)) || candidates.find((item) => capability === "text" && /flash/i.test(item.name))?.name || candidates[0]?.name;
 }
 
 export async function discoverGeminiModels(apiKey: string) {
   const key = apiKey.trim();
-  const response = await fetch(`${getGeminiBaseUrl()}/models`, {
-    method: "GET",
-    headers: { "x-goog-api-key": key },
-    cache: "no-store",
-    signal: AbortSignal.timeout(10000),
-  });
+  const response = await fetch(`${getGeminiBaseUrl()}/models`, { method: "GET", headers: { "x-goog-api-key": key }, cache: "no-store", signal: AbortSignal.timeout(10000) });
   if (!response.ok) {
     if (response.status === 401 || response.status === 403) throw new Error("GEMINI_AUTH");
     if (response.status === 429) throw new Error("GEMINI_RATE_LIMIT");
@@ -64,18 +52,7 @@ export async function discoverGeminiModels(apiKey: string) {
   }
   const data = await response.json() as { models?: GeminiModel[] };
   const available = normalizeModels(data.models || []);
-  return {
-    available,
-    config: {
-      text: pickModel(available, "text"),
-      image: pickModel(available, "image"),
-      video: pickModel(available, "video"),
-      music: pickModel(available, "music"),
-      tts: pickModel(available, "tts"),
-      available,
-      checkedAt: new Date().toISOString(),
-    } satisfies AiModelConfig,
-  };
+  return { available, config: { text: pickModel(available, "text"), image: pickModel(available, "image"), video: pickModel(available, "video"), music: pickModel(available, "music"), tts: pickModel(available, "tts"), available, checkedAt: new Date().toISOString() } satisfies AiModelConfig };
 }
 
 export async function validateGeminiKey(apiKey: string) {
@@ -98,25 +75,36 @@ async function getSiteUserId() {
   return user?.id || null;
 }
 
-export async function createAiSession(apiKey: string) {
-  const validation = await validateGeminiKey(apiKey);
-  if (!validation.ok) return validation;
+const keyColumn: Record<AiCapability, string> = { text: "text_encrypted_api_key", image: "image_encrypted_api_key", video: "video_encrypted_api_key", music: "music_encrypted_api_key", tts: "tts_encrypted_api_key" };
+
+function capabilityPayload(keys: AiCapabilityKeys) {
+  const payload: Record<string, string | null> = {};
+  for (const capability of Object.keys(keyColumn) as AiCapability[]) {
+    const value = keys[capability]?.trim();
+    if (value) payload[keyColumn[capability]] = encryptApiKey(value);
+  }
+  return payload;
+}
+
+export async function createAiSession(input: string | AiCapabilityKeys) {
+  const keys: AiCapabilityKeys = typeof input === "string" ? { text: input, image: input, video: input, music: input, tts: input } : Object.fromEntries(Object.entries(input).filter(([, value]) => typeof value === "string" && value.trim())) as AiCapabilityKeys;
+  const validationEntries = await Promise.all(Object.entries(keys).map(async ([capability, key]) => [capability, await validateGeminiKey(key!)] as const));
+  const valid = validationEntries.filter(([, result]) => result.ok) as Array<[string, Extract<(typeof validationEntries)[number][1], { ok: true }>]>;
+  if (!valid.some(([capability, result]) => capability === "text" && result.model)) return { ok: false as const, message: "حداقل یک کلید معتبر برای قابلیت متن و چت لازم است." };
+
+  const modelConfig: AiModelConfig = {};
+  const firstText = valid.find(([capability]) => capability === "text")?.[1];
+  if (firstText?.ok) modelConfig.text = firstText.model;
+  for (const capability of ["image", "video", "music", "tts"] as AiCapability[]) {
+    const result = valid.find(([name]) => name === capability)?.[1];
+    if (result?.ok) modelConfig[capability] = result.modelConfig[capability];
+  }
+  const primaryKey = keys.text || Object.values(keys)[0]!;
   const db = supabaseAdmin();
   const userId = await getSiteUserId();
-  const keyHash = hashApiKey(apiKey);
-  const encrypted = encryptApiKey(apiKey);
   const now = new Date().toISOString();
+  const payload = { key_hash: hashApiKey(primaryKey), encrypted_api_key: encryptApiKey(primaryKey), provider: "gemini", model: modelConfig.text || DEFAULT_TEXT_MODEL, model_config: modelConfig, ...capabilityPayload(keys), last_used_at: now };
   let profile;
-
-  const payload = {
-    key_hash: keyHash,
-    encrypted_api_key: encrypted,
-    provider: "gemini",
-    model: validation.model,
-    model_config: validation.modelConfig,
-    last_used_at: now,
-  };
-
   if (userId) {
     const { data: existing } = await db.from("ai_profiles").select("id").eq("user_id", userId).maybeSingle();
     if (existing?.id) {
@@ -133,7 +121,6 @@ export async function createAiSession(apiKey: string) {
     if (error || !data) throw new Error("ذخیره پروفایل هوش مصنوعی انجام نشد.");
     profile = data;
   }
-
   const rawToken = createSessionToken();
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86400000);
   const { error: sessionError } = await db.from("ai_sessions").insert({ ai_profile_id: profile.id, token_hash: hashSessionToken(rawToken), expires_at: expiresAt.toISOString(), last_used_at: now });
@@ -148,21 +135,19 @@ export async function getAiProfile() {
   const token = jar.get(AI_SESSION_COOKIE)?.value;
   if (!token) return null;
   const db = supabaseAdmin();
-  const { data } = await db.from("ai_sessions").select("id,ai_profile_id,expires_at,ai_profiles(id,user_id,provider,model,model_config,created_at,last_used_at)").eq("token_hash", hashSessionToken(token)).gt("expires_at", new Date().toISOString()).maybeSingle();
+  const { data } = await db.from("ai_sessions").select("id,ai_profile_id,expires_at,ai_profiles(id,user_id,provider,model,model_config,created_at,last_used_at,text_encrypted_api_key,image_encrypted_api_key,video_encrypted_api_key,music_encrypted_api_key,tts_encrypted_api_key)").eq("token_hash", hashSessionToken(token)).gt("expires_at", new Date().toISOString()).maybeSingle();
   if (!data) return null;
   const profile = Array.isArray(data.ai_profiles) ? data.ai_profiles[0] : data.ai_profiles;
   if (!profile) return null;
   const siteUserId = await getSiteUserId();
   if (profile.user_id && profile.user_id !== siteUserId) return null;
   if (!profile.user_id && siteUserId) return null;
-
   if (profile.provider === "gemini" && DEPRECATED_TEXT_MODELS.has(profile.model)) {
     profile.model = DEFAULT_TEXT_MODEL;
     const currentConfig = (profile.model_config || {}) as AiModelConfig;
     profile.model_config = { ...currentConfig, text: DEFAULT_TEXT_MODEL };
     await db.from("ai_profiles").update({ model: DEFAULT_TEXT_MODEL, model_config: profile.model_config, last_used_at: new Date().toISOString() }).eq("id", profile.id);
   }
-
   return { sessionId: data.id, profile };
 }
 
@@ -173,7 +158,7 @@ export async function getAiCapabilityModel(profileId: string, capability: AiCapa
   const discovered = await discoverGeminiModels(apiKey);
   const model = discovered.config[capability];
   if (!model) throw new Error(`GEMINI_${capability.toUpperCase()}_MODEL_UNAVAILABLE`);
-  await supabaseAdmin().from("ai_profiles").update({ model_config: discovered.config, last_used_at: new Date().toISOString() }).eq("id", profileId);
+  await supabaseAdmin().from("ai_profiles").update({ model_config: { ...config, [capability]: model, available: discovered.config.available, checkedAt: discovered.config.checkedAt }, last_used_at: new Date().toISOString() }).eq("id", profileId);
   return model;
 }
 
@@ -183,11 +168,12 @@ export async function requireAiProfile() {
   return session;
 }
 
-export async function getProfileApiKey(profileId: string) {
+export async function getProfileApiKey(profileId: string, capability: AiCapability = "text") {
   const db = supabaseAdmin();
-  const { data, error } = await db.from("ai_profiles").select("encrypted_api_key").eq("id", profileId).single();
+  const { data, error } = await db.from("ai_profiles").select(`encrypted_api_key,${keyColumn[capability]}`).eq("id", profileId).single();
   if (error || !data) throw new Error("AI profile not found");
-  return decryptApiKey(data.encrypted_api_key);
+  const encrypted = (data as Record<string, string | null>)[keyColumn[capability]] || data.encrypted_api_key;
+  return decryptApiKey(encrypted);
 }
 
 export async function destroyAiSession() {
