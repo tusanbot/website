@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProfileApiKey, requireAiProfile } from "@/lib/ai/server";
+import { getProfileApiKey, getAiCapabilityModel, requireAiProfile } from "@/lib/ai/server";
 import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 export const runtime = "nodejs";
@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
 
     if (session.profile.provider !== "gemini") return NextResponse.json({ error: "این ابزار فعلاً برای Gemini فعال است." }, { status: 400 });
     const apiKey = await getProfileApiKey(session.profile.id);
+    const model = await getAiCapabilityModel(session.profile.id, "text", apiKey, session.profile.model_config);
     const body = await request.json() as { messages?: unknown };
     const messages = Array.isArray(body.messages) ? body.messages.slice(-MAX_MESSAGES) : [];
     if (!messages.length) return NextResponse.json({ error: "پیامی برای ارسال وجود ندارد." }, { status: 400 });
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     if (!contents.length) return NextResponse.json({ error: "متن پیام خالی است." }, { status: 400 });
 
     const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-    const endpoint = `${base}/models/${encodeURIComponent(session.profile.model)}:generateContent`;
+    const endpoint = `${base}/models/${encodeURIComponent(model)}:generateContent`;
     const upstream = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -44,11 +45,11 @@ export async function POST(request: NextRequest) {
     const payload = await upstream.json().catch(() => null) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; error?: { status?: string; message?: string } } | null;
     if (!upstream.ok) {
       console.error("Gemini request failed", { status: upstream.status, error: payload?.error?.status || payload?.error?.message });
-      return NextResponse.json({ error: "درخواست به Gemini ناموفق بود. API Key یا مدل انتخابی را بررسی کنید." }, { status: 502 });
+      return NextResponse.json({ error: payload?.error?.message || "درخواست به Gemini ناموفق بود. API Key یا مدل انتخابی را بررسی کنید.", model }, { status: 502 });
     }
     const text = payload?.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
     if (!text) return NextResponse.json({ error: "پاسخ متنی معتبری از مدل دریافت نشد." }, { status: 502 });
-    return NextResponse.json({ text, model: session.profile.model });
+    return NextResponse.json({ text, model });
   } catch (error) {
     console.error("AI chat failed", error);
     return NextResponse.json({ error: "خطایی هنگام پردازش درخواست هوش مصنوعی رخ داد." }, { status: 500 });
