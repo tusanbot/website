@@ -73,8 +73,7 @@ export async function generateWithGeminiApiKey(apiKey: string, prompt: string, m
   return generateWithGeminiKey(apiKey, prompt, model, options);
 }
 
-async function generateSpeechWithGeminiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = ""): Promise<GeminiSpeechResult> {
-  const model = process.env.GEMINI_TTS_MODEL || "gemini-2.5-flash-preview-tts";
+async function generateSpeechWithGeminiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = "", model = "gemini-2.5-flash-preview-tts"): Promise<GeminiSpeechResult> {
   const styleInstruction = style ? `\nDelivery style: ${style}.` : "";
   const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -92,12 +91,12 @@ async function generateSpeechWithGeminiKey(apiKey: string, text: string, voice =
   return { audioBase64: isPcm ? pcm16ToWavBase64(audio.data) : audio.data, mimeType: isPcm ? "audio/wav" : (audio.mimeType || "audio/wav"), model };
 }
 
-export async function generateSpeechWithGemini(profileId: string, text: string, voice = "Kore", speed = 1, style = "") {
-  return generateSpeechWithGeminiKey(await getProfileApiKey(profileId), text, voice, speed, style);
+export async function generateSpeechWithGemini(profileId: string, text: string, voice = "Kore", speed = 1, style = "", model?: string) {
+  return generateSpeechWithGeminiKey(await getProfileApiKey(profileId), text, voice, speed, style, model);
 }
 
-export async function generateSpeechWithGeminiApiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = "") {
-  return generateSpeechWithGeminiKey(apiKey, text, voice, speed, style);
+export async function generateSpeechWithGeminiApiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = "", model = "gemini-2.5-flash-preview-tts") {
+  return generateSpeechWithGeminiKey(apiKey, text, voice, speed, style, model);
 }
 
 export function parseGeminiJson<T>(text: string): T {
