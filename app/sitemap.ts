@@ -16,18 +16,55 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const toolPages = tools
     .filter((tool) => tool.enabled && tool.indexable && tool.href)
-    .map((tool) => ({ url: `${siteUrl}${tool.href}`, changeFrequency: "monthly" as const, priority: tool.featured ? 0.75 : 0.65 }));
+    .map((tool) => ({
+      url: `${siteUrl}${tool.href}`,
+      changeFrequency: "monthly" as const,
+      priority: tool.featured ? 0.75 : 0.65,
+    }));
 
-  const aiPages = aiTools.map((tool) => ({ url: `${siteUrl}${tool.href}`, changeFrequency: "monthly" as const, priority: tool.featured ? 0.78 : 0.65 }));
+  const aiPages = aiTools
+    .filter((tool) => tool.href)
+    .map((tool) => ({
+      url: `${siteUrl}${tool.href}`,
+      changeFrequency: "monthly" as const,
+      priority: tool.featured ? 0.78 : 0.65,
+    }));
 
-  const supabase = createSupabaseServerClient();
-  const [{ data: services }, { data: posts }] = await Promise.all([
-    supabase.from("services").select("id,slug,created_at,updated_at").eq("is_active", true).not("slug", "is", null),
-    supabase.from("blog_posts").select("id,slug,published_at,updated_at").eq("status", "published"),
-  ]);
+  // Sitemap generation must remain available even if the content database has a
+  // transient error. Static/tool URLs are still valuable discovery signals.
+  let servicePages: MetadataRoute.Sitemap = [];
+  let blogPages: MetadataRoute.Sitemap = [];
 
-  const servicePages = (services || []).map((service: any) => ({ url: `${siteUrl}/services/${encodeURIComponent(service.slug)}`, lastModified: service.updated_at || service.created_at || undefined, changeFrequency: "weekly" as const, priority: 0.8 }));
-  const blogPages = (posts || []).map((post: any) => ({ url: `${siteUrl}/blog/${encodeURIComponent(post.slug)}`, lastModified: post.updated_at || post.published_at || undefined, changeFrequency: "monthly" as const, priority: 0.7 }));
+  try {
+    const supabase = createSupabaseServerClient();
+    const [{ data: services }, { data: posts }] = await Promise.all([
+      supabase
+        .from("services")
+        .select("id,slug,created_at,updated_at")
+        .eq("is_active", true)
+        .not("slug", "is", null),
+      supabase
+        .from("blog_posts")
+        .select("id,slug,published_at,updated_at")
+        .eq("status", "published"),
+    ]);
+
+    servicePages = (services || []).map((service: any) => ({
+      url: `${siteUrl}/services/${encodeURIComponent(service.slug)}`,
+      lastModified: service.updated_at || service.created_at || undefined,
+      changeFrequency: "weekly" as const,
+      priority: 0.8,
+    }));
+
+    blogPages = (posts || []).map((post: any) => ({
+      url: `${siteUrl}/blog/${encodeURIComponent(post.slug)}`,
+      lastModified: post.updated_at || post.published_at || undefined,
+      changeFrequency: "monthly" as const,
+      priority: 0.7,
+    }));
+  } catch (error) {
+    console.error("sitemap dynamic data load failed", error);
+  }
 
   return [...staticPages, ...toolPages, ...aiPages, ...servicePages, ...blogPages];
 }
