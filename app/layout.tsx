@@ -25,6 +25,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSiteSettings();
   const title = settings.site_name || "کافی نت توسن";
   const description = settings.site_description || "خدمات آنلاین کافی‌نت توسن";
+  const assets = settings.config?.assets || {};
+  const favicon = assets.faviconUrl || assets.iconUrl || "/favicon.ico";
+  const appleIcon = assets.appleTouchIconUrl || assets.iconUrl || assets.faviconUrl || "/pwa-icon.svg";
 
   return {
     metadataBase: new URL(siteUrl),
@@ -34,12 +37,10 @@ export async function generateMetadata(): Promise<Metadata> {
     manifest: "/manifest.webmanifest",
     keywords: [title, "کافی نت", "کافی نت مراغه", "خدمات اینترنتی", "ثبت نام آنلاین", "خدمات اداری آنلاین"],
     alternates: { canonical: siteUrl },
-    // Keep the browser favicon tied to the repository asset so a stale or
-    // misconfigured site_settings asset can never replace it with another icon.
     icons: {
-      icon: "/favicon.ico",
-      shortcut: "/favicon.ico",
-      apple: "/pwa-icon.svg",
+      icon: favicon,
+      shortcut: favicon,
+      apple: appleIcon,
     },
     openGraph: { type: "website", locale: "fa_IR", url: siteUrl, siteName: title, title, description },
     robots: { index: true, follow: true },
