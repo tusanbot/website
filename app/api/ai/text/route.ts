@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
     const session = await requireAiProfile();
     if (session.profile.provider !== "gemini") return NextResponse.json({ error: "این ابزار فعلاً برای Gemini فعال است." }, { status: 400 });
-    const apiKey = await getProfileApiKey(session.profile.id);
+    const apiKey = await getProfileApiKey(session.profile.id, "text");
     const model = await getAiCapabilityModel(session.profile.id, "text", apiKey, session.profile.model_config);
     const body = await request.json();
     const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
@@ -22,10 +22,7 @@ export async function POST(request: NextRequest) {
     const parts: Array<Record<string, unknown>> = [{ text: prompt }];
     if (file) parts.push({ inline_data: { mime_type: String(file.mimeType || "application/octet-stream"), data: file.data } });
     const base = (process.env.GEMINI_API_BASE_URL || "https://generativelanguage.googleapis.com/v1beta").replace(/\/$/, "");
-    const response = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { temperature: 0.4 } }), cache: "no-store", signal: AbortSignal.timeout(120000),
-    });
+    const response = await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`, { method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey }, body: JSON.stringify({ contents: [{ role: "user", parts }], generationConfig: { temperature: 0.4 } }), cache: "no-store", signal: AbortSignal.timeout(120000) });
     const data = await response.json();
     if (!response.ok) return NextResponse.json({ error: data?.error?.message || "درخواست به Gemini ناموفق بود.", model }, { status: 502 });
     const text = data?.candidates?.[0]?.content?.parts?.filter((part: { text?: string }) => part.text).map((part: { text: string }) => part.text).join("\n") || "";
