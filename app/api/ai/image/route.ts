@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
     if (rateLimitResponse) return rateLimitResponse;
     const session = await requireAiProfile();
     if (session.profile.provider !== "gemini") return NextResponse.json({ error: "این ابزار فعلاً برای Gemini فعال است." }, { status: 400 });
-    const key = await getProfileApiKey(session.profile.id);
+    const key = await getProfileApiKey(session.profile.id, "image");
     const model = await getAiCapabilityModel(session.profile.id, "image", key, session.profile.model_config);
     const body = await request.json();
     const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
