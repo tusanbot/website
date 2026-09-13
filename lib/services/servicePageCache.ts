@@ -19,17 +19,25 @@ function isUuid(value: string) { return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{
 export function normalizeServicePath(value: string) { return decodeURIComponent(value).normalize("NFC").replace(/\u200c/g, "").replace(/\u200d/g, "").trim(); }
 function rawServicePath(value: string) { return decodeURIComponent(value).normalize("NFC").trim(); }
 function normalizeService(data: any): ServicePageService { return { ...data, price: Number(data.price || 0), delivery_mode: data.delivery_mode || "online", local_only: Boolean(data.local_only), identity_verification_required: Boolean(data.identity_verification_required), form_schema: normalizeSchema(data.form_schema), pricing_rules: normalizeRules(data.pricing_rules), seo_keywords: normalizeKeywords(data.seo_keywords), seo_content: normalizeSeoContent(data.seo_content) }; }
+function getExplicitRelatedIds(service: ServicePageService): string[] {
+  const value = service.seo_content?.related_service_ids;
+  if (!Array.isArray(value)) return [];
+  return value.map(String).filter(isUuid).filter((id) => id !== service.id);
+}
 async function loadServicePageData(path: string): Promise<ServicePageData> {
   const supabase = createSupabaseServerClient(); const requestedRaw = rawServicePath(path); const requested = normalizeServicePath(path); let service: ServicePageService | null = null;
   if (isUuid(requested)) { const { data, error } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("id", requested).maybeSingle(); if (!error && data) service = normalizeService(data); }
   else { const exactSlug = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("slug", requestedRaw).maybeSingle(); if (!exactSlug.error && exactSlug.data) service = normalizeService(exactSlug.data); if (!service && requested !== requestedRaw) { const normalizedSlug = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).eq("slug", requested).maybeSingle(); if (!normalizedSlug.error && normalizedSlug.data) service = normalizeService(normalizedSlug.data); } }
   if (!service && !isUuid(requested)) { const { data: candidates } = await supabase.from("services").select(SERVICE_SELECT).eq("is_active", true).ilike("slug", `%${requested}%`).limit(20); const match = (candidates || []).find((item: any) => normalizeServicePath(String(item.slug || "")) === requested); if (match) service = normalizeService(match); }
   if (!service) return { service: null, related: [], children: [], parent: null };
-  const [{ data: related }, { data: children }, { data: parent }] = await Promise.all([
+  const explicitRelatedIds = getExplicitRelatedIds(service);
+  const [{ data: categoryRelated }, { data: explicitRelated }, { data: children }, { data: parent }] = await Promise.all([
     service.category ? supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("category", service.category).neq("id", service.id).limit(4) : Promise.resolve({ data: [] }),
+    explicitRelatedIds.length ? supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).in("id", explicitRelatedIds) : Promise.resolve({ data: [] }),
     supabase.from("services").select("id,title,slug,icon,description").eq("is_active", true).eq("parent_service_id", service.id).order("created_at", { ascending: false }),
     service.parent_service_id ? supabase.from("services").select("id,title,slug,icon").eq("is_active", true).eq("id", service.parent_service_id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
-  return { service, related: (related || []) as ServicePageLink[], children: (children || []) as ServicePageLink[], parent: (parent || null) as ServicePageData["parent"] };
+  const combinedRelated = [...(explicitRelated || []), ...(categoryRelated || [])].filter((item, index, items) => items.findIndex((candidate) => candidate.id === item.id) === index).slice(0, 6);
+  return { service, related: combinedRelated as ServicePageLink[], children: (children || []) as ServicePageLink[], parent: (parent || null) as ServicePageData["parent"] };
 }
-export async function getCachedServicePageData(path: string): Promise<ServicePageData> { const normalized = normalizeServicePath(path); const cached = unstable_cache(() => loadServicePageData(path), ["service-page-data-v4", normalized], { revalidate: 60, tags: ["services", `service:${normalized}`] }); return cached(); }
+export async function getCachedServicePageData(path: string): Promise<ServicePageData> { const normalized = normalizeServicePath(path); const cached = unstable_cache(() => loadServicePageData(path), ["service-page-data-v5", normalized], { revalidate: 60, tags: ["services", `service:${normalized}`] }); return cached(); }
