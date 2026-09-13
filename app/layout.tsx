@@ -9,6 +9,8 @@ import AnalyticsTracker from "@/components/analytics/AnalyticsTracker";
 import PwaInstallPrompt from "@/components/pwa/PwaInstallPrompt";
 import { getSiteSettings } from "@/lib/siteSettings";
 
+export const dynamic = "force-dynamic";
+
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
 const GA_MEASUREMENT_ID = "G-08SPYBX3MG";
 const vazirmatn = Vazirmatn({ subsets: ["arabic"], variable: "--font-vazirmatn", display: "swap" });
@@ -37,9 +39,9 @@ export async function generateMetadata(): Promise<Metadata> {
     keywords: [title, "کافی نت", "کافی نت مراغه", "خدمات اینترنتی", "ثبت نام آنلاین", "خدمات اداری آنلاین"],
     alternates: { canonical: siteUrl },
     icons: {
-      icon: favicon,
-      shortcut: favicon,
-      apple: favicon,
+      icon: [{ url: favicon }],
+      shortcut: [{ url: favicon }],
+      apple: [{ url: favicon }],
     },
     openGraph: { type: "website", locale: "fa_IR", url: siteUrl, siteName: title, title, description },
     robots: { index: true, follow: true },
