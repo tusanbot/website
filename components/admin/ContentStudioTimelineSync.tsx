@@ -10,10 +10,7 @@ const DIGIT_MAP: Record<string, string> = {
 };
 
 function toNumber(value: string) {
-  const normalized = value
-    .replace(/[۰-۹٠-٩]/g, char => DIGIT_MAP[char] || char)
-    .replace(",", ".")
-    .trim();
+  const normalized = value.replace(/[۰-۹٠-٩]/g, char => DIGIT_MAP[char] || char).replace(",", ".").trim();
   const number = Number(normalized);
   return Number.isFinite(number) ? number : 0;
 }
@@ -42,7 +39,9 @@ function getStageButtons() {
 function getTimelineCards(section: HTMLElement) {
   return Array.from(section.querySelectorAll<HTMLElement>("div")).filter(card => {
     const text = card.innerText.trim();
-    return /^اسلاید\s+\d+/.test(text) && /\d+(?:[.,]\d+)?\s*ثانیه/.test(text) && card.querySelector("select");
+    return /^اسلاید\s+\d+/.test(text)
+      && /\d+(?:[.,]\d+)?\s*ثانیه/.test(text)
+      && card.querySelectorAll("select").length === 1;
   });
 }
 
@@ -67,8 +66,7 @@ function activateEditorIndex(target: number) {
   const next = buttons[2];
   if (!previous || !next) return;
   const direction = target > current ? next : previous;
-  const count = Math.abs(target - current);
-  for (let i = 0; i < count; i += 1) direction.click();
+  for (let i = 0; i < Math.abs(target - current); i += 1) direction.click();
 }
 
 function setEditorDuration(value: number) {
@@ -133,18 +131,10 @@ function setTimelineDuration(value: number) {
 }
 
 /**
- * Bridges the editor and the timeline without polling the DOM.
- *
- * The previous implementation sampled the whole document every 250–500ms and
- * copied whichever "ثانیه" text it happened to find into the editor. That was
- * the reason values such as 12.49 could overwrite manual duration edits.
- *
- * This version is event-driven:
- * - editor duration changes update the selected timeline boundary;
- * - timeline changes update the matching editor duration;
- * - clicking a timeline slide also activates the same editor slide;
- * - a short MutationObserver is used only to detect an actual timeline change,
- *   not as a timer/polling loop.
+ * Bridges the editor and timeline without polling the DOM.
+ * The old implementation sampled the whole document every 250–500ms and
+ * copied whichever "ثانیه" text it found into the editor. That could make
+ * values such as 12.49 overwrite manual duration edits.
  */
 export default function ContentStudioTimelineSync() {
   const syncing = useRef(false);
@@ -159,12 +149,7 @@ export default function ContentStudioTimelineSync() {
       if (releaseTimer.current) window.clearTimeout(releaseTimer.current);
       releaseTimer.current = window.setTimeout(() => { syncing.current = false; }, 120);
     };
-
-    const readSignature = () => {
-      const durations = getTimelineDurations(section);
-      return durations.map(value => value.toFixed(2)).join("|");
-    };
-
+    const readSignature = () => getTimelineDurations(section).map(value => value.toFixed(2)).join("|");
     lastTimelineSignature.current = readSignature();
 
     const onEditorInput = (event: Event) => {
