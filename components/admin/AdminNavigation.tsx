@@ -3,11 +3,12 @@
 import Link from "next/link";
 import NotificationBell from "@/components/notifications/NotificationBell";
 
-export type AdminTab = "dashboard" | "orders" | "services" | "social" | "users" | "staff" | "settlements" | "messages" | "reports" | "settings";
+export type AdminTab = "dashboard" | "seo" | "orders" | "services" | "social" | "users" | "staff" | "settlements" | "messages" | "reports" | "settings";
 type Props = { activeTab: AdminTab; unreadMessages: number; onTabChange: (tab: AdminTab) => void };
 type MenuItem = { id: AdminTab; label: string; icon: string; href?: string };
 const menuItems: MenuItem[] = [
     { id: "dashboard", label: "داشبورد", icon: "📊" },
+    { id: "seo", label: "سئو و گوگل", icon: "🔎", href: "/admin/seo" },
     { id: "orders", label: "سفارش‌ها", icon: "📋", href: "/admin/orders" },
     { id: "services", label: "خدمات", icon: "⚙️" },
     { id: "social", label: "شبکه‌های اجتماعی", icon: "📱" },
