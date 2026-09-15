@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   try {
     const session = await requireAiProfile();
     const supabase = await createSupabaseServerClient();
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.profile.id).maybeSingle();
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", session.profile.user_id || "").maybeSingle();
     if (profile?.role !== "admin") return NextResponse.json({ error: "دسترسی غیرمجاز" }, { status: 403 });
 
     const body = await request.json().catch(() => ({}));
