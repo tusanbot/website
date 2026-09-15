@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAiProfile } from "@/lib/ai/server";
 import { generateWithGemini, parseGeminiJson } from "@/lib/ai/gemini";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { getSearchConsoleConfig, querySearchConsole } from "@/lib/google-search-console";
 
 const SITE = "sc-domain:tusancn.ir";
 
@@ -14,16 +15,10 @@ function dates(daysAgo: number, length: number) {
   return { startDate: fmt(start), endDate: fmt(end) };
 }
 
-async function queryGsc(token: string, dimension: "page" | "query", range: { startDate: string; endDate: string }) {
-  const response = await fetch(`https://www.googleapis.com/webmasters/v3/sites/${encodeURIComponent(SITE)}/searchAnalytics/query`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ ...range, dimensions: [dimension], rowLimit: 250, dataState: "final" }),
-    cache: "no-store",
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error?.message || "GSC_ERROR");
-  return (data.rows || []) as GscRow[];
+async function queryGsc(dimension: "page" | "query", range: { startDate: string; endDate: string }) {
+  if (!getSearchConsoleConfig().configured) throw new Error("GSC_NOT_CONFIGURED");
+  const response = await querySearchConsole(range.startDate, range.endDate, [dimension]);
+  return (response.rows || []) as GscRow[];
 }
 
 export async function POST(request: Request) {
@@ -38,12 +33,9 @@ export async function POST(request: Request) {
     const target = typeof body.target === "string" ? body.target.trim() : "";
     if (!target) return NextResponse.json({ error: "صفحه یا عبارت برای تحلیل مشخص نشده است." }, { status: 400 });
 
-    const token = process.env.GSC_API_TOKEN;
-    if (!token) return NextResponse.json({ error: "اتصال Google Search Console پیکربندی نشده است." }, { status: 503 });
-
     const currentRange = dates(3, 28);
     const previousRange = dates(31, 28);
-    const [currentRows, previousRows] = await Promise.all([queryGsc(token, dimension, currentRange), queryGsc(token, dimension, previousRange)]);
+    const [currentRows, previousRows] = await Promise.all([queryGsc(dimension, currentRange), queryGsc(dimension, previousRange)]);
     const current = currentRows.find(r => r.keys?.[0] === target) || currentRows.find(r => r.keys?.[0]?.includes(target));
     const previous = previousRows.find(r => r.keys?.[0] === target) || previousRows.find(r => r.keys?.[0]?.includes(target));
     if (!current) return NextResponse.json({ error: "این مورد در داده ۲۸ روز اخیر Search Console پیدا نشد." }, { status: 404 });
@@ -59,6 +51,7 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.message === "AI_PROFILE_REQUIRED") return NextResponse.json({ error: "برای استفاده از مشاور SEO ابتدا پروفایل Gemini را فعال کنید." }, { status: 401 });
     if (status === 401) return NextResponse.json({ error: "کلید Gemini معتبر نیست یا دسترسی کافی ندارد." }, { status: 401 });
     if (status === 429) return NextResponse.json({ error: "سهمیه Gemini پر شده است. کمی بعد دوباره تلاش کنید." }, { status: 429 });
+    if (error instanceof Error && error.message === "GSC_NOT_CONFIGURED") return NextResponse.json({ error: "اتصال Google Search Console پیکربندی نشده است." }, { status: 503 });
     console.error("seo advisor:", error);
     return NextResponse.json({ error: error instanceof Error && error.message === "GSC_ERROR" ? "دریافت داده Search Console انجام نشد." : "تحلیل SEO با هوش مصنوعی انجام نشد." }, { status: 502 });
   }
