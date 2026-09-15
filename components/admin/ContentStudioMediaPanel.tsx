@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Download, Film, Mic2, Play, Pause, Plus, Trash2, Upload } from "lucide-react";
+import { Download, Film, Mic2, Pause, Play, Plus, Trash2, Upload } from "lucide-react";
 import html2canvas from "html2canvas-pro";
 import { encodeSlideSequence } from "@/lib/video/ffmpeg";
 
@@ -32,8 +32,7 @@ function findPreview(): HTMLElement | null {
 function readSlideState() {
   const text = document.body.innerText;
   const m = text.match(/(?:در حال پخش\s*·\s*)?(\d+)\s*\/\s*(\d+)/);
-  const d = text.match(/(\d+(?:[.,]\d+)?)\s*ثانیه/);
-  return { index: m ? Number(m[1]) - 1 : 0, count: m ? Number(m[2]) : 1, duration: d ? Number(d[1].replace(",", ".")) : 3 };
+  return { index: m ? Number(m[1]) - 1 : 0, count: m ? Number(m[2]) : 1 };
 }
 function readTransition(): StudioTransition {
   const select = document.querySelector<HTMLElement>("main select");
@@ -94,50 +93,17 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
   const audioRef = useRef<HTMLAudioElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
-  const initializedEditorCount = useRef(0);
-  const lastEditorDuration = useRef(0);
 
   useEffect(() => {
-    const sync = () => {
+    const syncEditorState = () => {
       const s = readSlideState();
-      const duration = Math.max(0.5, s.duration || 3);
-      setEditorCount(s.count);
-      setCurrent(s.index);
-      setSlots(prev => {
-        if (initializedEditorCount.current === 0) {
-          initializedEditorCount.current = s.count;
-          lastEditorDuration.current = duration;
-          setSegments(equalSegments(Math.max(1, s.count), audioDuration || duration));
-          return Array.from({ length: Math.max(1, s.count) }, (_, i) => ({ id: uid(), sourceIndex: i, enabled: true }));
-        }
-        if (s.count > initializedEditorCount.current) {
-          const oldCount = initializedEditorCount.current;
-          const added = Array.from({ length: s.count - oldCount }, (_, n) => ({ id: uid(), sourceIndex: oldCount + n, enabled: true }));
-          initializedEditorCount.current = s.count;
-          setSegments(prevSegments => {
-            if (audioDuration > 0) return equalSegments(s.count, audioDuration);
-            const result = [...prevSegments];
-            let cursor = result[result.length - 1]?.end || 0;
-            for (let i = oldCount; i < s.count; i++) { result.push({ start: cursor, end: cursor + duration }); cursor += duration; }
-            return result;
-          });
-          return [...prev, ...added];
-        }
-        initializedEditorCount.current = s.count;
-        return prev.map(slot => ({ ...slot, sourceIndex: Math.max(0, Math.min(s.count - 1, slot.sourceIndex)) }));
-      });
-      if (!audio && Math.abs(lastEditorDuration.current - duration) > 0.01 && segments.length > 0 && selected < segments.length) {
-        const delta = duration - lastEditorDuration.current;
-        setSegments(prev => prev.map((segment, index) => index < selected ? segment : index === selected ? { start: segment.start, end: Math.max(segment.start + 0.5, segment.end + delta) } : { start: segment.start + delta, end: segment.end + delta }));
-        lastEditorDuration.current = duration;
-      } else if (!audio) {
-        lastEditorDuration.current = duration;
-      }
+      setEditorCount(Math.max(1, s.count));
+      setCurrent(Math.max(0, Math.min(s.count - 1, s.index)));
     };
-    sync();
-    const timer = window.setInterval(sync, 500);
+    syncEditorState();
+    const timer = window.setInterval(syncEditorState, 500);
     return () => window.clearInterval(timer);
-  }, [audio, audioDuration, selected, segments.length]);
+  }, []);
 
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
   useEffect(() => { if (audioRef.current) audioRef.current.playbackRate = speed; }, [speed, audioUrl]);
@@ -158,7 +124,11 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
   const totalDuration = timelineDuration || audioDuration || 0;
 
   function seekTo(value: number) {
-    if (!audioRef.current) { setSelected(Math.max(0, Math.min(slots.length - 1, timelineItems.findIndex(item => value >= item.start && value <= item.end)))); return; }
+    if (!audioRef.current) {
+      const index = timelineItems.findIndex(item => value >= item.start && value <= item.end);
+      if (index >= 0) setSelected(index);
+      return;
+    }
     const next = Math.max(0, Math.min(audioDuration || timelineDuration || value, value));
     audioRef.current.currentTime = next;
     setAudioCurrentTime(next);
@@ -187,7 +157,10 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
     if (leftDuration < 0.5 || rightDuration < 0.5) return;
     setSegments(prev => prev.map((segment, index) => {
       if (index === leftItem.slotIndex) return { start: segment.start, end: segment.start + leftDuration };
-      if (index === rightItem.slotIndex) return { start: segment.start + (leftDuration - (leftItem.end - leftItem.start)), end: segment.start + (leftDuration - (leftItem.end - leftItem.start)) + rightDuration };
+      if (index === rightItem.slotIndex) {
+        const shift = leftDuration - (leftItem.end - leftItem.start);
+        return { start: segment.start + shift, end: segment.start + shift + rightDuration };
+      }
       return segment;
     }));
   }
@@ -204,7 +177,7 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
     setSlots(prev => [...prev, { id: uid(), sourceIndex, enabled: true }]);
     setSegments(prev => {
       const last = prev[prev.length - 1];
-      const duration = Math.max(0.5, last ? (last.end - last.start) : 3);
+      const duration = Math.max(0.5, last ? last.end - last.start : 3);
       if (audioDuration > 0 && last) {
         const lastDuration = last.end - last.start;
         const split = Math.max(last.start + 0.5, last.end - Math.max(0.5, Math.min(1, lastDuration / 2)));
@@ -214,7 +187,7 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
       return [...prev, { start: end, end: end + duration }];
     });
     setSelected(slots.length);
-    setMessage("اسلاید خروجی جدید اضافه شد؛ زمان آن مستقل از اسلایدهای قبلی است.");
+    setMessage("اسلاید جدید فقط در تایم‌لاین ایجاد شد؛ مدت آن مستقل است.");
   }
   function deleteSlide(index: number) {
     if (slots.length <= 1) { setMessage("حداقل یک اسلاید باید باقی بماند."); return; }
@@ -310,10 +283,10 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
 
   const colors = ["bg-emerald-500", "bg-blue-500", "bg-violet-500", "bg-orange-500", "bg-rose-500", "bg-cyan-500", "bg-amber-500", "bg-fuchsia-500"];
   return <div className="space-y-4">{children}<section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4" dir="rtl">
-    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2 font-bold"><Film className="h-5 w-5" /> تدوین ویدیو + صوت</div><p className="mt-1 text-xs text-slate-600">هر اسلاید زمان مستقل دارد و تایم‌لاین همان زمان را به خروجی منتقل می‌کند.</p></div><button onClick={exportVideo} disabled={exporting} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50"><Download className="h-4 w-4" />{exporting ? `در حال ساخت ${progress}%` : "ساخت ویدیو MP4"}</button></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2 font-bold"><Film className="h-5 w-5" /> تدوین ویدیو + صوت</div><p className="mt-1 text-xs text-slate-600">تایم‌لاین منبع اصلی اسلایدهای خروجی است؛ اسلاید جدید فقط با افزودن دستی ساخته می‌شود و زمان آن مستقل است.</p></div><button onClick={exportVideo} disabled={exporting} className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white disabled:opacity-50"><Download className="h-4 w-4" />{exporting ? `در حال ساخت ${progress}%` : "ساخت ویدیو MP4"}</button></div>
     {message && <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm">{message}</div>}
     <div className="mt-4 rounded-2xl border bg-white p-4"><div className="mb-3 flex items-center gap-2 font-bold"><Mic2 className="h-5 w-5 text-emerald-600" /> تبدیل متن به صوت</div><div className="grid gap-3 lg:grid-cols-[1fr_160px_120px_auto]"><textarea value={ttsText} onChange={e => setTtsText(e.target.value)} maxLength={8000} placeholder="متن کامل صوت این ویدیو را وارد کن..." className="min-h-24 rounded-xl border p-3" /><select value={voice} onChange={e => setVoice(e.target.value as typeof voice)} className="rounded-xl border bg-white px-3"><option value="Kore">Kore</option><option value="Puck">Puck</option><option value="Charon">Charon</option><option value="Fenrir">Fenrir</option><option value="Aoede">Aoede</option></select><select value={speed} onChange={e => setSpeed(Number(e.target.value))} className="rounded-xl border bg-white px-3">{speeds.map(v => <option key={v} value={v}>{v}×</option>)}</select><button onClick={generateTts} disabled={ttsLoading || !ttsText.trim()} className="rounded-xl bg-emerald-600 px-4 font-semibold text-white disabled:opacity-50">{ttsLoading ? "در حال ساخت..." : "تولید صوت"}</button></div><div className="mt-3 flex flex-wrap items-center gap-2"><input ref={fileRef} type="file" accept="audio/*" className="hidden" onChange={e => attachAudio(e.target.files?.[0])} /><button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm"><Upload className="h-4 w-4" /> انتخاب فایل صوتی</button>{audioUrl && <><button onClick={togglePlay} className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm">{playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />} {playing ? "توقف" : "پخش"}</button><span className="text-xs text-slate-500">مدت صوت: {formatTime(audioDuration)}</span><audio ref={audioRef} src={audioUrl} onTimeUpdate={e => setAudioCurrentTime(e.currentTarget.currentTime)} onEnded={() => setPlaying(false)} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} className="hidden" /></>}</div></div>
-    <div className="mt-4 rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-bold">نوار زمان و تقسیم زمان بین اسلایدها</div><p className="mt-1 text-xs text-slate-500">اسلایدهای غیرفعال در تایم‌لاین دیده می‌شوند اما وارد خروجی نمی‌شوند. گیره بین دو اسلاید زمان هر دو را تغییر می‌دهد.</p></div><button onClick={addSlide} className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm font-semibold"><Plus className="h-4 w-4" /> افزودن اسلاید</button></div>
+    <div className="mt-4 rounded-2xl border bg-white p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><div className="font-bold">نوار زمان و تقسیم زمان بین اسلایدها</div><p className="mt-1 text-xs text-slate-500">اسلایدهای این بخش دستی ساخته می‌شوند. اسلایدهای غیرفعال در تایم‌لاین دیده می‌شوند اما وارد خروجی نمی‌شوند. گیره بین دو اسلاید زمان هر دو را تغییر می‌دهد.</p></div><button onClick={addSlide} className="inline-flex items-center gap-1 rounded-xl border px-3 py-2 text-sm font-semibold"><Plus className="h-4 w-4" /> افزودن اسلاید</button></div>
       <div ref={timelineRef} className="relative mt-4 h-20 select-none overflow-hidden rounded-xl border bg-slate-100" onClick={e => { const visible = pointerTime(e.clientX); const item = timelineItems.find(x => visible >= x.start && visible <= x.end); if (item) { setSelected(item.slotIndex); seekTo(item.segment.start + (visible - item.start)); } }}>
         {timelineItems.map(item => { const duration = Math.max(0.1, timelineDuration); const left = Math.max(0, Math.min(100, item.start / duration * 100)); const width = Math.max(0.5, Math.min(100 - left, (item.end - item.start) / duration * 100)); return <button key={item.slot.id} onClick={e => { e.stopPropagation(); setSelected(item.slotIndex); seekTo(item.segment.start); }} className={`absolute inset-y-0 ${colors[item.slotIndex % colors.length]} ${item.slot.enabled ? "opacity-90" : "opacity-25 grayscale"} ${item.slotIndex === selected ? "ring-4 ring-white/70" : ""}`} style={{ left: `${left}%`, width: `${width}%` }}><span className="text-xs font-bold text-white drop-shadow">اسلاید {item.slotIndex + 1}</span></button>; })}
         {timelineItems.slice(0, -1).map((item, i) => { const position = Math.max(0, Math.min(100, item.end / Math.max(timelineDuration, 0.1) * 100)); return <button key={`handle-${item.slot.id}`} type="button" aria-label={`تغییر مرز اسلاید ${item.slotIndex + 1} و ${timelineItems[i + 1].slotIndex + 1}`} onPointerDown={e => startBoundaryDrag(i, e)} onClick={e => e.stopPropagation()} className="absolute left-0 top-1/2 z-20 flex h-12 w-5 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none items-center justify-center rounded-md border-2 border-white bg-slate-900 shadow-lg" style={{ left: `${position}%` }}><span className="h-7 w-1 rounded-full bg-white" /></button>; })}
