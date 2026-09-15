@@ -42,8 +42,26 @@ function getTimelineDuration(section: HTMLElement) {
   return match ? toNumber(match[1]) : 0;
 }
 
+function getEditorSection() {
+  return Array.from(document.querySelectorAll<HTMLElement>("section")).find(section =>
+    section.innerText.includes("ویرایش اسلاید فعال"),
+  ) || null;
+}
+
 function getEditorDurationInput() {
-  return document.querySelector<HTMLInputElement>('input[type="number"][min="1"][max="30"]');
+  return getEditorSection()?.querySelector<HTMLInputElement>('input[type="number"][min="1"][max="30"]') || null;
+}
+
+function openEditorIfNeeded() {
+  if (getEditorDurationInput()) return false;
+  const section = getEditorSection();
+  if (!section) return false;
+  const button = Array.from(section.querySelectorAll<HTMLButtonElement>("button")).find(button =>
+    button.textContent?.includes("ویرایش"),
+  );
+  if (!button) return false;
+  button.click();
+  return true;
 }
 
 function setControlledInput(input: HTMLInputElement, value: number) {
@@ -58,20 +76,24 @@ export default function ContentStudioApplySlideDuration() {
   const [status, setStatus] = useState("");
   const [applying, setApplying] = useState(false);
 
-  function apply() {
+  async function apply() {
     if (applying) return;
     setApplying(true);
     setStatus("");
 
     try {
-      const section = getTimelineSection();
-      if (!section) throw new Error("نوار زمان پیدا نشد.");
+      const timeline = getTimelineSection();
+      if (!timeline) throw new Error("نوار زمان پیدا نشد.");
 
-      const duration = getTimelineDuration(section);
+      const duration = getTimelineDuration(timeline);
       if (!duration) throw new Error("ابتدا یک اسلاید را در تایم‌لاین انتخاب کنید.");
 
-      const input = getEditorDurationInput();
-      if (!input) throw new Error("کنترل مدت اسلاید در ادیتور پیدا نشد.");
+      let input = getEditorDurationInput();
+      if (!input && openEditorIfNeeded()) {
+        await new Promise(resolve => window.setTimeout(resolve, 80));
+        input = getEditorDurationInput();
+      }
+      if (!input) throw new Error("کنترل مدت اسلاید در بخش «ویرایش اسلاید فعال» پیدا نشد.");
 
       const next = Math.min(30, Math.max(1, Math.round(duration * 100) / 100));
       setControlledInput(input, next);
@@ -89,7 +111,7 @@ export default function ContentStudioApplySlideDuration() {
         <div>
           <div className="font-bold">اعمال مدت اسلاید</div>
           <p className="mt-1 text-xs text-slate-500">
-            مدت اسلاید انتخاب‌شده در تایم‌لاین را مستقیماً روی اسلاید ادیتور اعمال می‌کند.
+            مدت اسلاید انتخاب‌شده در تایم‌لاین را روی اسلاید فعال ادیتور اعمال می‌کند. اگر بخش ویرایش بسته باشد، ابتدا آن را باز می‌کند.
           </p>
         </div>
         <button
