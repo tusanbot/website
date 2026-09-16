@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Download, Film, Mic2, Pause, Play, Plus, Trash2, Upload } from "lucide-react";
-import html2canvas from "html2canvas-pro";
+import html2canvas from "html2canvas";
 import { encodeSlideSequence } from "@/lib/video/ffmpeg";
 
 type Slot = { id: string; sourceIndex: number; enabled: boolean };
@@ -16,23 +16,13 @@ const voices = [["Kore", "Kore"], ["Puck", "Puck"], ["Charon", "Charon"], ["Fenr
 const speeds = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 function wait(ms: number) { return new Promise(resolve => setTimeout(resolve, ms)); }
-function findPreview(): HTMLElement | null {
-  let best: HTMLElement | null = null;
-  let bestArea = 0;
-  for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *"))) {
-    const r = el.getBoundingClientRect();
-    if (r.width < 220 || r.height < 320 || r.height > 1300) continue;
-    const ratio = r.width / r.height;
-    if (ratio < 0.50 || ratio > 0.66) continue;
-    const area = r.width * r.height;
-    if (area > bestArea) { best = el; bestArea = area; }
-  }
-  return best;
-}
-function readSlideState() {
-  const text = document.body.innerText;
-  const m = text.match(/(?:در حال پخش\s*·\s*)?(\d+)\s*\/\s*(\d+)/);
-  return { index: m ? Number(m[1]) - 1 : 0, count: m ? Number(m[2]) : 1 };
+function findStageFrame(): HTMLElement | null { return document.querySelector<HTMLElement>(".stage-frame"); }
+function getStageIndex() {
+  const root = document.querySelector<HTMLElement>(".stage-controls");
+  const match = root?.innerText.match(/(\d+)\s*\/\s*(\d+)/);
+  if (!match) return null;
+  const index = Number(match[1]) - 1;
+  return Number.isFinite(index) ? index : null;
 }
 function readTransition(): StudioTransition {
   const select = document.querySelector<HTMLElement>("main select");
@@ -48,13 +38,19 @@ async function goToSlide(index: number) {
   const previous = buttons[0];
   const next = buttons[2];
   if (!previous || !next) throw new Error("کنترل اسلاید برای خروجی پیدا نشد.");
-  for (let i = 0; i < 40; i++) { previous.click(); await wait(18); }
-  for (let i = 0; i < index; i++) { next.click(); await wait(90); }
-  await wait(180);
+  const target = Math.max(0, index);
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const current = getStageIndex();
+    if (current === target) return;
+    if (current == null || current > target) previous.click();
+    else next.click();
+    await wait(90);
+  }
+  if (getStageIndex() !== target) throw new Error(`اسلاید ${target + 1} برای خروجی انتخاب نشد.`);
 }
 async function waitForStableRender() {
   try { await document.fonts?.ready; } catch {}
-  await wait(220);
+  await wait(350);
 }
 function canvasToFile(canvas: HTMLCanvasElement, name: string) {
   return new Promise<File>((resolve, reject) => canvas.toBlob(blob => blob ? resolve(new File([blob], name, { type: "image/png" })) : reject(new Error("ساخت تصویر اسلاید ناموفق بود.")), "image/png"));
@@ -96,9 +92,12 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
 
   useEffect(() => {
     const syncEditorState = () => {
-      const s = readSlideState();
-      setEditorCount(Math.max(1, s.count));
-      setCurrent(Math.max(0, Math.min(s.count - 1, s.index)));
+      const s = getStageIndex();
+      const root = document.querySelector<HTMLElement>(".stage-controls");
+      const totalText = root?.innerText.match(/(\d+)\s*\/\s*(\d+)/)?.[2];
+      const count = totalText ? Number(totalText) : 1;
+      setEditorCount(Math.max(1, count));
+      setCurrent(Math.max(0, Math.min(count - 1, s ?? 0)));
     };
     syncEditorState();
     const timer = window.setInterval(syncEditorState, 500);
@@ -243,8 +242,7 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
     setExporting(true); setProgress(0); setMessage("در حال آماده‌سازی خروجی...");
     let stage = "capture";
     try {
-      const preview = findPreview();
-      if (!preview) throw new Error("پیش‌نمایش اسلاید پیدا نشد.");
+      if (!findStageFrame()) throw new Error("پیش‌نمایش اسلاید پیدا نشد.");
       const captures: SlideCapture[] = [];
       const active = activeItems;
       for (let n = 0; n < active.length; n++) {
@@ -252,11 +250,14 @@ export default function ContentStudioMediaPanel({ children }: { children: ReactN
         const source = Math.max(0, Math.min(editorCount - 1, item.slot.sourceIndex));
         await goToSlide(source);
         await waitForStableRender();
-        const canvas = await html2canvas(findPreview() || preview, {
+        const currentFrame = findStageFrame();
+        if (!currentFrame || getStageIndex() !== source) throw new Error(`اسلاید ${source + 1} برای ثبت تصویر آماده نشد.`);
+        const canvas = await html2canvas(currentFrame, {
           scale: 2,
           backgroundColor: null,
           useCORS: true,
           logging: false,
+          removeContainer: true,
           onclone: clonedDocument => {
             const style = clonedDocument.createElement("style");
             style.textContent = "*,*::before,*::after{animation:none!important;transition:none!important;transform:none!important;filter:none!important;caret-color:transparent!important;}";
