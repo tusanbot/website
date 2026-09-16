@@ -60,8 +60,8 @@ export default function GoogleOneTap() {
         window.google?.accounts?.id?.cancel();
     }, []);
 
-    const initialize = useCallback(async () => {
-        if (!GOOGLE_CLIENT_ID || !window.google?.accounts?.id) return;
+    const showPrompt = useCallback(async () => {
+        if (!GOOGLE_CLIENT_ID || !initializedRef.current || !window.google?.accounts?.id) return;
         if (pathname === "/auth" || pathname.startsWith("/auth/")) return;
 
         const { data } = await supabase.auth.getSession();
@@ -70,9 +70,18 @@ export default function GoogleOneTap() {
             return;
         }
 
+        window.google.accounts.id.prompt();
+    }, [cancelPrompt, pathname]);
+
+    const initialize = useCallback(async () => {
+        if (!GOOGLE_CLIENT_ID || initializedRef.current || !window.google?.accounts?.id) return;
+        if (pathname === "/auth" || pathname.startsWith("/auth/")) return;
+
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.user) return;
+
         const { raw, hashed } = await generateNonce();
         nonceRef.current = raw;
-        initializedRef.current = true;
 
         window.google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
@@ -98,13 +107,13 @@ export default function GoogleOneTap() {
                 }
 
                 cancelPrompt();
-                router.refresh();
                 router.push("/dashboard");
             },
         });
 
-        window.google.accounts.id.prompt();
-    }, [cancelPrompt, pathname, router]);
+        initializedRef.current = true;
+        await showPrompt();
+    }, [cancelPrompt, pathname, router, showPrompt]);
 
     useEffect(() => {
         if (!GOOGLE_CLIENT_ID) return;
@@ -115,9 +124,9 @@ export default function GoogleOneTap() {
         }
 
         if (initializedRef.current) {
-            initialize();
+            void showPrompt();
         }
-    }, [cancelPrompt, initialize, pathname]);
+    }, [cancelPrompt, pathname, showPrompt]);
 
     useEffect(() => {
         const {
