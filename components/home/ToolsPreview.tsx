@@ -9,25 +9,20 @@ import { GlassPanel, TusanButton } from "@/components/ui";
 type HomeTool = { id: string; title: string; icon: string; href: string };
 
 const homePopularIds = [
-    "word-to-pdf",
+    "pdf-to-word",
     "pdf-manager",
-    "speech-to-text",
+    "text-to-speech-ai",
     "thesis-idea-ai",
     "qr-code-generator",
     "invoice-builder",
 ];
-
-const missingHomeTools: Record<string, HomeTool> = {
-    "word-to-pdf": { id: "word-to-pdf", title: "Word به PDF", icon: "📝", href: "/tools/word-to-pdf" },
-    "speech-to-text": { id: "speech-to-text", title: "تبدیل صوت به متن", icon: "🎙️", href: "/tools/speech-to-text" },
-};
 
 export default function ToolsPreview() {
     const allTools = [...tools, ...extraTools];
     const featured: HomeTool[] = homePopularIds.map((id) => {
         const tool = allTools.find((item) => item.id === id) ?? aiTools.find((item) => item.id === id);
         if (tool) return { id: tool.id, title: tool.title, icon: tool.icon, href: tool.href };
-        return missingHomeTools[id];
+        return null;
     }).filter(Boolean) as HomeTool[];
 
     return (
