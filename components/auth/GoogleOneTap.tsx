@@ -2,7 +2,7 @@
 
 import Script from "next/script";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 type GoogleCredentialResponse = {
@@ -23,12 +23,23 @@ type GoogleAccountsId = {
         nonce?: string;
         context?: "signin" | "signup" | "use";
         auto_select?: boolean;
-        use_fedcm_for_prompt?: boolean;
         itp_support?: boolean;
         cancel_on_tap_outside?: boolean;
     }) => void;
     prompt: (listener?: (notification: GooglePromptNotification) => void) => void;
     cancel: () => void;
+    renderButton: (
+        parent: HTMLElement,
+        options: {
+            type?: "standard" | "icon";
+            theme?: "outline" | "filled_blue" | "filled_black";
+            size?: "large" | "medium" | "small";
+            text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+            shape?: "rectangular" | "pill" | "circle" | "square";
+            width?: number;
+            logo_alignment?: "left" | "center";
+        },
+    ) => void;
 };
 
 declare global {
@@ -59,6 +70,8 @@ export default function GoogleOneTap() {
     const scriptReadyRef = useRef(false);
     const initializingRef = useRef(false);
     const nonceRef = useRef<string | null>(null);
+    const fallbackRef = useRef<HTMLDivElement | null>(null);
+    const [showFallback, setShowFallback] = useState(false);
 
     const isAuthRoute = pathname === "/auth" || pathname.startsWith("/auth/");
 
@@ -66,27 +79,71 @@ export default function GoogleOneTap() {
         window.google?.accounts?.id?.cancel();
     }, []);
 
+    const handleCredential = useCallback(
+        async (response: GoogleCredentialResponse) => {
+            const nonce = nonceRef.current;
+            if (!response.credential || !nonce) return;
+
+            const { error } = await supabase.auth.signInWithIdToken({
+                provider: "google",
+                token: response.credential,
+                nonce,
+            });
+
+            if (error) {
+                console.error("Google sign-in failed:", error);
+                return;
+            }
+
+            setShowFallback(false);
+            cancelPrompt();
+            router.push("/dashboard");
+        },
+        [cancelPrompt, router],
+    );
+
+    const renderFallbackButton = useCallback(() => {
+        const googleId = window.google?.accounts?.id;
+        const container = fallbackRef.current;
+        if (!googleId || !container || isAuthRoute) return;
+
+        container.innerHTML = "";
+        googleId.renderButton(container, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text: "signin_with",
+            shape: "pill",
+            width: 230,
+            logo_alignment: "left",
+        });
+    }, [isAuthRoute]);
+
     const showPrompt = useCallback(async () => {
         const googleId = window.google?.accounts?.id;
         if (!GOOGLE_CLIENT_ID || !googleId || !initializedRef.current || isAuthRoute) return;
 
         const { data } = await supabase.auth.getSession();
         if (data.session?.user) {
+            setShowFallback(false);
             cancelPrompt();
             return;
         }
 
+        setShowFallback(false);
         googleId.prompt((notification) => {
             if (notification.isNotDisplayed()) {
                 console.info(
                     "Google One Tap was not displayed:",
                     notification.getNotDisplayedReason?.() ?? "unknown",
                 );
+                setShowFallback(true);
             } else if (notification.isSkippedMoment()) {
                 console.info(
                     "Google One Tap was skipped:",
                     notification.getSkippedReason?.() ?? "unknown",
                 );
+                setShowFallback(true);
             }
         });
     }, [cancelPrompt, isAuthRoute]);
@@ -116,27 +173,9 @@ export default function GoogleOneTap() {
                 nonce: hashed,
                 context: "signin",
                 auto_select: false,
-                use_fedcm_for_prompt: true,
                 itp_support: true,
                 cancel_on_tap_outside: true,
-                callback: async (response) => {
-                    const nonce = nonceRef.current;
-                    if (!response.credential || !nonce) return;
-
-                    const { error } = await supabase.auth.signInWithIdToken({
-                        provider: "google",
-                        token: response.credential,
-                        nonce,
-                    });
-
-                    if (error) {
-                        console.error("Google One Tap sign-in failed:", error);
-                        return;
-                    }
-
-                    cancelPrompt();
-                    router.push("/dashboard");
-                },
+                callback: handleCredential,
             });
 
             initializedRef.current = true;
@@ -144,7 +183,7 @@ export default function GoogleOneTap() {
         } finally {
             initializingRef.current = false;
         }
-    }, [cancelPrompt, isAuthRoute, router, showPrompt]);
+    }, [handleCredential, isAuthRoute, showPrompt]);
 
     const handleScriptReady = useCallback(() => {
         scriptReadyRef.current = true;
@@ -156,6 +195,7 @@ export default function GoogleOneTap() {
 
         if (isAuthRoute) {
             cancelPrompt();
+            setShowFallback(false);
             return;
         }
 
@@ -168,10 +208,15 @@ export default function GoogleOneTap() {
     }, [cancelPrompt, initialize, isAuthRoute, pathname, showPrompt]);
 
     useEffect(() => {
+        if (showFallback) renderFallbackButton();
+    }, [renderFallbackButton, showFallback]);
+
+    useEffect(() => {
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((event) => {
             if (event === "SIGNED_IN") {
+                setShowFallback(false);
                 cancelPrompt();
             }
             if (event === "SIGNED_OUT" && scriptReadyRef.current && !isAuthRoute) {
@@ -185,11 +230,21 @@ export default function GoogleOneTap() {
     if (!GOOGLE_CLIENT_ID) return null;
 
     return (
-        <Script
-            id="google-one-tap"
-            src="https://accounts.google.com/gsi/client"
-            strategy="afterInteractive"
-            onReady={handleScriptReady}
-        />
+        <>
+            <Script
+                id="google-one-tap"
+                src="https://accounts.google.com/gsi/client"
+                strategy="afterInteractive"
+                onReady={handleScriptReady}
+            />
+            {showFallback && !isAuthRoute && (
+                <div
+                    ref={fallbackRef}
+                    dir="ltr"
+                    className="fixed right-4 top-4 z-[9999] rounded-full bg-background/95 p-1 shadow-lg ring-1 ring-black/10 backdrop-blur"
+                    aria-label="ورود با حساب گوگل"
+                />
+            )}
+        </>
     );
 }
