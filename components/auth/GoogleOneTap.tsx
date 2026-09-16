@@ -12,6 +12,8 @@ type GoogleCredentialResponse = {
 type GooglePromptNotification = {
     isNotDisplayed: () => boolean;
     isSkippedMoment: () => boolean;
+    getNotDisplayedReason?: () => string;
+    getSkippedReason?: () => string;
 };
 
 type GoogleAccountsId = {
@@ -54,15 +56,19 @@ export default function GoogleOneTap() {
     const pathname = usePathname();
     const router = useRouter();
     const initializedRef = useRef(false);
+    const scriptReadyRef = useRef(false);
+    const initializingRef = useRef(false);
     const nonceRef = useRef<string | null>(null);
+
+    const isAuthRoute = pathname === "/auth" || pathname.startsWith("/auth/");
 
     const cancelPrompt = useCallback(() => {
         window.google?.accounts?.id?.cancel();
     }, []);
 
     const showPrompt = useCallback(async () => {
-        if (!GOOGLE_CLIENT_ID || !initializedRef.current || !window.google?.accounts?.id) return;
-        if (pathname === "/auth" || pathname.startsWith("/auth/")) return;
+        const googleId = window.google?.accounts?.id;
+        if (!GOOGLE_CLIENT_ID || !googleId || !initializedRef.current || isAuthRoute) return;
 
         const { data } = await supabase.auth.getSession();
         if (data.session?.user) {
@@ -70,75 +76,111 @@ export default function GoogleOneTap() {
             return;
         }
 
-        window.google.accounts.id.prompt();
-    }, [cancelPrompt, pathname]);
+        googleId.prompt((notification) => {
+            if (notification.isNotDisplayed()) {
+                console.info(
+                    "Google One Tap was not displayed:",
+                    notification.getNotDisplayedReason?.() ?? "unknown",
+                );
+            } else if (notification.isSkippedMoment()) {
+                console.info(
+                    "Google One Tap was skipped:",
+                    notification.getSkippedReason?.() ?? "unknown",
+                );
+            }
+        });
+    }, [cancelPrompt, isAuthRoute]);
 
     const initialize = useCallback(async () => {
-        if (!GOOGLE_CLIENT_ID || initializedRef.current || !window.google?.accounts?.id) return;
-        if (pathname === "/auth" || pathname.startsWith("/auth/")) return;
+        const googleId = window.google?.accounts?.id;
+        if (
+            !GOOGLE_CLIENT_ID ||
+            !googleId ||
+            initializedRef.current ||
+            initializingRef.current ||
+            isAuthRoute
+        ) {
+            return;
+        }
 
-        const { data } = await supabase.auth.getSession();
-        if (data.session?.user) return;
+        initializingRef.current = true;
+        try {
+            const { data } = await supabase.auth.getSession();
+            if (data.session?.user) return;
 
-        const { raw, hashed } = await generateNonce();
-        nonceRef.current = raw;
+            const { raw, hashed } = await generateNonce();
+            nonceRef.current = raw;
 
-        window.google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            nonce: hashed,
-            context: "signin",
-            auto_select: false,
-            use_fedcm_for_prompt: true,
-            itp_support: true,
-            cancel_on_tap_outside: true,
-            callback: async (response) => {
-                const nonce = nonceRef.current;
-                if (!response.credential || !nonce) return;
+            googleId.initialize({
+                client_id: GOOGLE_CLIENT_ID,
+                nonce: hashed,
+                context: "signin",
+                auto_select: false,
+                use_fedcm_for_prompt: true,
+                itp_support: true,
+                cancel_on_tap_outside: true,
+                callback: async (response) => {
+                    const nonce = nonceRef.current;
+                    if (!response.credential || !nonce) return;
 
-                const { error } = await supabase.auth.signInWithIdToken({
-                    provider: "google",
-                    token: response.credential,
-                    nonce,
-                });
+                    const { error } = await supabase.auth.signInWithIdToken({
+                        provider: "google",
+                        token: response.credential,
+                        nonce,
+                    });
 
-                if (error) {
-                    console.error("Google One Tap sign-in failed:", error);
-                    return;
-                }
+                    if (error) {
+                        console.error("Google One Tap sign-in failed:", error);
+                        return;
+                    }
 
-                cancelPrompt();
-                router.push("/dashboard");
-            },
-        });
+                    cancelPrompt();
+                    router.push("/dashboard");
+                },
+            });
 
-        initializedRef.current = true;
-        await showPrompt();
-    }, [cancelPrompt, pathname, router, showPrompt]);
+            initializedRef.current = true;
+            await showPrompt();
+        } finally {
+            initializingRef.current = false;
+        }
+    }, [cancelPrompt, isAuthRoute, router, showPrompt]);
+
+    const handleScriptReady = useCallback(() => {
+        scriptReadyRef.current = true;
+        void initialize();
+    }, [initialize]);
 
     useEffect(() => {
-        if (!GOOGLE_CLIENT_ID) return;
+        if (!GOOGLE_CLIENT_ID || !scriptReadyRef.current) return;
 
-        if (pathname === "/auth" || pathname.startsWith("/auth/")) {
+        if (isAuthRoute) {
             cancelPrompt();
             return;
         }
 
-        if (initializedRef.current) {
-            void showPrompt();
+        if (!initializedRef.current) {
+            void initialize();
+            return;
         }
-    }, [cancelPrompt, pathname, showPrompt]);
+
+        void showPrompt();
+    }, [cancelPrompt, initialize, isAuthRoute, pathname, showPrompt]);
 
     useEffect(() => {
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((event) => {
-            if (event === "SIGNED_IN" || event === "SIGNED_OUT") {
+            if (event === "SIGNED_IN") {
                 cancelPrompt();
+            }
+            if (event === "SIGNED_OUT" && scriptReadyRef.current && !isAuthRoute) {
+                void showPrompt();
             }
         });
 
         return () => subscription.unsubscribe();
-    }, [cancelPrompt]);
+    }, [cancelPrompt, isAuthRoute, showPrompt]);
 
     if (!GOOGLE_CLIENT_ID) return null;
 
@@ -147,7 +189,7 @@ export default function GoogleOneTap() {
             id="google-one-tap"
             src="https://accounts.google.com/gsi/client"
             strategy="afterInteractive"
-            onReady={initialize}
+            onReady={handleScriptReady}
         />
     );
 }
