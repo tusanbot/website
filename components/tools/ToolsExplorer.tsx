@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { GlassPanel, SectionHeader } from "@/components/ui";
 import { tools, ToolCategory, ToolType } from "@/lib/tools";
 import { extraTools } from "@/lib/extra-tools";
+import { aiTools } from "@/lib/ai-tools";
 
 type Props = { compact?: boolean };
 const categoryTabs: { value: ToolCategory; label: string; icon: string }[] = [{ value: "general", label: "عمومی", icon: "🧰" }, { value: "cybercafe", label: "مخصوص کافی‌نت", icon: "🖥️" }];
@@ -13,7 +14,12 @@ const typeTabs: { value: ToolType; label: string }[] = [{ value: "normal", label
 export default function ToolsExplorer({ compact = false }: Props) {
     const [category, setCategory] = useState<ToolCategory>("general");
     const [type, setType] = useState<ToolType>("normal");
-    const visibleTools = useMemo(() => [...tools, ...extraTools].filter((tool) => tool.category === category && tool.type === type), [category, type]);
+    const visibleTools = useMemo(() => {
+        if (type === "ai") {
+            return aiTools.filter((tool) => tool.featured).map((tool) => ({ ...tool, category: "general" as ToolCategory, type: "ai" as ToolType, enabled: true, indexable: true }));
+        }
+        return [...tools, ...extraTools].filter((tool) => tool.category === category && tool.type === type && tool.enabled);
+    }, [category, type]);
     return (
         <section className={compact ? "py-12" : "py-16 md:py-24"} dir="rtl">
             <div className="mx-auto max-w-7xl px-6 lg:px-8">
