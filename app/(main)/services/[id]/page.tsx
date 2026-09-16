@@ -145,20 +145,6 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
         </div>
       </section>
 
-      {keyboardAliases.length > 0 && (
-        <section dir="rtl" className="max-w-3xl mx-auto px-5 py-4" aria-labelledby="keyboard-search-title">
-          <div className="rounded-2xl border bg-white shadow-sm p-5">
-            <h2 id="keyboard-search-title" className="text-base font-bold">عبارت‌های جستجوی رایج</h2>
-            <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
-              اگر هنگام جستجو صفحه‌کلید روی انگلیسی بوده باشد، ممکن است نام این خدمت یا عبارت مرتبط با آن با چیدمان انگلیسی وارد شده باشد. این شکل‌های نوشتاری برای کمک به شناسایی همان خدمت در نظر گرفته شده‌اند.
-            </p>
-            <ul className="mt-3 flex flex-wrap gap-2" aria-label="عبارت‌های جستجوی صفحه‌کلید انگلیسی">
-              {keyboardAliases.map((alias) => <li key={alias} dir="ltr" className="rounded-lg border bg-gray-50 px-2.5 py-1.5 text-xs font-mono text-[var(--text-muted)]">{alias}</li>)}
-            </ul>
-          </div>
-        </section>
-      )}
-
       {seo && (
         <section dir="rtl" className="max-w-3xl mx-auto px-5 py-5" aria-labelledby="service-seo-content">
           <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
@@ -190,6 +176,27 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
       {related && related.length > 0 && (
         <section dir="rtl" className="max-w-3xl mx-auto px-5 pb-6" aria-labelledby="related-services-title">
           <div className="rounded-2xl border bg-white p-5 shadow-sm"><h2 id="related-services-title" className="text-lg font-bold mb-3">خدمات مرتبط</h2><div className="grid sm:grid-cols-2 gap-2">{related.map(item => <Link key={item.id} href={`/services/${encodeURIComponent(item.slug)}`} className="rounded-xl border p-3 hover:border-[#09967C] transition"><div className="text-sm font-bold">{item.icon || "📄"} {item.title}</div>{item.description && <p className="text-xs text-[var(--text-muted)] mt-1 line-clamp-2">{item.description}</p>}</Link>)}</div></div>
+        </section>
+      )}
+
+      {keyboardAliases.length > 0 && (
+        <section dir="rtl" className="max-w-3xl mx-auto px-5 pb-8" aria-labelledby="keyboard-search-title">
+          <div className="rounded-2xl border bg-white shadow-sm overflow-hidden">
+            <details className="group">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-bold hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+                <span id="keyboard-search-title">عبارت‌های جستجوی رایج</span>
+                <span className="text-xl text-[#09967C] transition-transform group-open:rotate-180" aria-hidden="true">⌄</span>
+              </summary>
+              <div className="border-t px-5 pb-5 pt-4">
+                <p className="text-sm leading-7 text-[var(--text-muted)]">
+                  اگر هنگام جستجو صفحه‌کلید روی انگلیسی بوده باشد، ممکن است نام این خدمت یا عبارت مرتبط با آن با چیدمان انگلیسی وارد شده باشد. این شکل‌های نوشتاری برای کمک به شناسایی همان خدمت در نظر گرفته شده‌اند.
+                </p>
+                <ul className="mt-3 flex flex-wrap gap-2" aria-label="عبارت‌های جستجوی صفحه‌کلید انگلیسی">
+                  {keyboardAliases.map((alias) => <li key={alias} dir="ltr" className="rounded-lg border bg-gray-50 px-2.5 py-1.5 text-xs font-mono text-[var(--text-muted)]">{alias}</li>)}
+                </ul>
+              </div>
+            </details>
+          </div>
         </section>
       )}
     </>
