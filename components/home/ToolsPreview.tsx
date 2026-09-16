@@ -2,10 +2,33 @@
 
 import Link from "next/link";
 import { tools } from "@/lib/tools";
+import { extraTools } from "@/lib/extra-tools";
+import { aiTools } from "@/lib/ai-tools";
 import { GlassPanel, TusanButton } from "@/components/ui";
 
+type HomeTool = { id: string; title: string; icon: string; href: string };
+
+const homePopularIds = [
+    "word-to-pdf",
+    "pdf-manager",
+    "speech-to-text",
+    "thesis-idea-ai",
+    "qr-code-generator",
+    "invoice-builder",
+];
+
+const missingHomeTools: Record<string, HomeTool> = {
+    "word-to-pdf": { id: "word-to-pdf", title: "Word به PDF", icon: "📝", href: "/tools/word-to-pdf" },
+    "speech-to-text": { id: "speech-to-text", title: "تبدیل صوت به متن", icon: "🎙️", href: "/tools/speech-to-text" },
+};
+
 export default function ToolsPreview() {
-    const featured = tools.filter((tool) => tool.featured && tool.enabled && tool.type === "normal").slice(0, 6);
+    const allTools = [...tools, ...extraTools];
+    const featured: HomeTool[] = homePopularIds.map((id) => {
+        const tool = allTools.find((item) => item.id === id) ?? aiTools.find((item) => item.id === id);
+        if (tool) return { id: tool.id, title: tool.title, icon: tool.icon, href: tool.href };
+        return missingHomeTools[id];
+    }).filter(Boolean) as HomeTool[];
 
     return (
         <section id="online-tools" className="relative scroll-mt-28 py-10 md:py-12" dir="rtl">
@@ -16,14 +39,14 @@ export default function ToolsPreview() {
                             <div className="inline-flex items-center rounded-full border border-[var(--primary)]/15 bg-[var(--primary)]/10 px-2.5 py-0.5 text-[11px] font-black text-[var(--primary)]">🛠️ ابزارهای آنلاین</div>
                             <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                                 <h2 className="text-xl font-black text-[var(--text)] sm:text-2xl">ابزارهای پرکاربرد</h2>
-                                <p className="text-xs text-[var(--text-muted)]">PDF، OCR، رزومه، محاسبات و ابزارهای روزمره</p>
+                                <p className="text-xs text-[var(--text-muted)]">شش ابزار منتخب و پرمصرف برای استفاده سریع</p>
                             </div>
                         </div>
                         <Link href="/tools" className="shrink-0"><TusanButton variant="secondary">همه ابزارها ←</TusanButton></Link>
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
                         {featured.map((tool) => (
-                            <Link key={tool.id} href={tool.href || "/tools"} className="group flex min-w-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] px-2.5 py-2.5 transition hover:-translate-y-0.5 hover:border-[var(--primary)]/30">
+                            <Link key={tool.id} href={tool.href} className="group flex min-w-0 items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-secondary)] px-2.5 py-2.5 transition hover:-translate-y-0.5 hover:border-[var(--primary)]/30">
                                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-[var(--primary)]/10 text-base">{tool.icon}</div>
                                 <div className="min-w-0"><h3 className="truncate text-xs font-black text-[var(--text)]">{tool.title}</h3><p className="mt-0.5 truncate text-[10px] text-[var(--text-muted)]">ابزار آنلاین</p></div>
                             </Link>
