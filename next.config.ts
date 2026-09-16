@@ -11,7 +11,7 @@ const securityHeaders = [
 
 const contentSecurityPolicy = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.googletagmanager.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+    "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://www.googletagmanager.com https://accounts.google.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
     "img-src 'self' data: blob: https:",
@@ -23,6 +23,7 @@ const contentSecurityPolicy = [
         "https://*.supabase.in",
         "wss://*.supabase.co",
         "wss://*.supabase.in",
+        "https://accounts.google.com",
         "https://fjpanel.com",
         "https://*.fjpanel.com",
         "https://vercel.live",
@@ -31,7 +32,7 @@ const contentSecurityPolicy = [
         "https://cdn.jsdelivr.net",
         "https://cdnjs.cloudflare.com",
     ].join(" "),
-    "frame-src 'self' https://*.supabase.co",
+    "frame-src 'self' https://*.supabase.co https://accounts.google.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
