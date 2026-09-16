@@ -7,6 +7,7 @@ import "./status-brand.css";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 import AnalyticsTracker from "@/components/analytics/AnalyticsTracker";
 import PwaInstallPrompt from "@/components/pwa/PwaInstallPrompt";
+import GoogleOneTap from "@/components/auth/GoogleOneTap";
 import { getSiteSettings } from "@/lib/siteSettings";
 
 export const dynamic = "force-dynamic";
@@ -126,6 +127,7 @@ gtag('config', '${GA_MEASUREMENT_ID}', { send_page_view: false });`}
           <AnalyticsTracker />
           {children}
           <PwaInstallPrompt />
+          <GoogleOneTap />
         </ThemeProvider>
       </body>
     </html>
