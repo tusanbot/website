@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import ServiceOrderClient from "./ServiceOrderClient";
 import { getCachedServicePageData } from "@/lib/services/servicePageCache";
+import { buildKeyboardAliases } from "@/lib/seo/keyboardAliases";
 
 type Service = NonNullable<Awaited<ReturnType<typeof getCachedServicePageData>>["service"]>;
 
@@ -30,6 +31,13 @@ function getSeoContent(content: any) {
   };
 }
 
+function getKeyboardAliases(service: Service) {
+  return buildKeyboardAliases([
+    service.title,
+    ...(service.seo_keywords || []),
+  ]);
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const { service } = await getCachedServicePageData(id);
@@ -39,11 +47,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const description = service.meta_description?.trim() || service.description?.trim() || `ثبت درخواست ${service.title} در کافی نت توسن با امکان ثبت آنلاین و پیگیری سفارش.`;
   const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.tusancn.ir").replace(/\/$/, "");
   const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
+  const keyboardAliases = getKeyboardAliases(service);
 
   return {
     title: { absolute: title },
     description,
-    keywords: [...new Set([...(service.seo_keywords || []), service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[])],
+    keywords: [...new Set([...(service.seo_keywords || []), ...keyboardAliases, service.title, service.category, "کافی نت توسن", "خدمات آنلاین", "ثبت درخواست آنلاین"].filter(Boolean) as string[])],
     alternates: { canonical: canonicalUrl },
     openGraph: { type: "website", locale: "fa_IR", url: canonicalUrl, siteName: "کافی نت توسن", title, description },
     twitter: { card: "summary", title, description },
@@ -64,10 +73,12 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
   const canonicalUrl = `${siteUrl}/services/${encodeURIComponent(service.slug)}`;
   const fieldLabels = getFieldLabels(service.form_schema);
   const seo = getSeoContent(service.seo_content);
+  const keyboardAliases = getKeyboardAliases(service);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Service",
     name: service.title,
+    ...(keyboardAliases.length > 0 ? { alternateName: keyboardAliases } : {}),
     description: service.description || undefined,
     url: canonicalUrl,
     provider: { "@type": "LocalBusiness", name: "کافی نت توسن", url: siteUrl },
@@ -133,6 +144,20 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
           </div>
         </div>
       </section>
+
+      {keyboardAliases.length > 0 && (
+        <section dir="rtl" className="max-w-3xl mx-auto px-5 py-4" aria-labelledby="keyboard-search-title">
+          <div className="rounded-2xl border bg-white shadow-sm p-5">
+            <h2 id="keyboard-search-title" className="text-base font-bold">عبارت‌های جستجوی رایج</h2>
+            <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">
+              اگر هنگام جستجو صفحه‌کلید روی انگلیسی بوده باشد، ممکن است نام این خدمت یا عبارت مرتبط با آن با چیدمان انگلیسی وارد شده باشد. این شکل‌های نوشتاری برای کمک به شناسایی همان خدمت در نظر گرفته شده‌اند.
+            </p>
+            <ul className="mt-3 flex flex-wrap gap-2" aria-label="عبارت‌های جستجوی صفحه‌کلید انگلیسی">
+              {keyboardAliases.map((alias) => <li key={alias} dir="ltr" className="rounded-lg border bg-gray-50 px-2.5 py-1.5 text-xs font-mono text-[var(--text-muted)]">{alias}</li>)}
+            </ul>
+          </div>
+        </section>
+      )}
 
       {seo && (
         <section dir="rtl" className="max-w-3xl mx-auto px-5 py-5" aria-labelledby="service-seo-content">
