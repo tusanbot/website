@@ -5,17 +5,13 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
-type GoogleCredentialResponse = {
-    credential: string;
-};
-
+type GoogleCredentialResponse = { credential: string };
 type GooglePromptNotification = {
     isNotDisplayed: () => boolean;
     isSkippedMoment: () => boolean;
     getNotDisplayedReason?: () => string;
     getSkippedReason?: () => string;
 };
-
 type GoogleAccountsId = {
     initialize: (config: {
         client_id: string;
@@ -28,27 +24,20 @@ type GoogleAccountsId = {
     }) => void;
     prompt: (listener?: (notification: GooglePromptNotification) => void) => void;
     cancel: () => void;
-    renderButton: (
-        parent: HTMLElement,
-        options: {
-            type?: "standard" | "icon";
-            theme?: "outline" | "filled_blue" | "filled_black";
-            size?: "large" | "medium" | "small";
-            text?: "signin_with" | "signup_with" | "continue_with" | "signin";
-            shape?: "rectangular" | "pill" | "circle" | "square";
-            width?: number;
-            logo_alignment?: "left" | "center";
-        },
-    ) => void;
+    renderButton: (parent: HTMLElement, options: {
+        type?: "standard" | "icon";
+        theme?: "outline" | "filled_blue" | "filled_black";
+        size?: "large" | "medium" | "small";
+        text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+        shape?: "rectangular" | "pill" | "circle" | "square";
+        width?: number;
+        logo_alignment?: "left" | "center";
+    }) => void;
 };
 
 declare global {
     interface Window {
-        google?: {
-            accounts?: {
-                id?: GoogleAccountsId;
-            };
-        };
+        google?: { accounts?: { id?: GoogleAccountsId } };
     }
 }
 
@@ -57,8 +46,7 @@ const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 async function generateNonce(): Promise<{ raw: string; hashed: string }> {
     const bytes = crypto.getRandomValues(new Uint8Array(32));
     const raw = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-    const encoded = new TextEncoder().encode(raw);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", encoded);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(raw));
     const hashed = Array.from(new Uint8Array(hashBuffer), (byte) => byte.toString(16).padStart(2, "0")).join("");
     return { raw, hashed };
 }
@@ -79,34 +67,47 @@ export default function GoogleOneTap() {
         window.google?.accounts?.id?.cancel();
     }, []);
 
-    const handleCredential = useCallback(
-        async (response: GoogleCredentialResponse) => {
-            const nonce = nonceRef.current;
-            if (!response.credential || !nonce) return;
+    // Keep a standards-based OAuth path available if the Google ID-token exchange
+    // is rejected by Auth. The callback route exchanges the code into the same
+    // Supabase browser session and then returns the user to the dashboard.
+    const startOAuthFallback = useCallback(async () => {
+        if (isAuthRoute) return;
+        const redirectTo = `${window.location.origin}/auth/callback?next=/dashboard`;
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: "google",
+            options: { redirectTo },
+        });
+        if (error) console.error("Google OAuth fallback failed:", error.message);
+    }, [isAuthRoute]);
 
-            const { error } = await supabase.auth.signInWithIdToken({
-                provider: "google",
-                token: response.credential,
-                nonce,
-            });
+    const handleCredential = useCallback(async (response: GoogleCredentialResponse) => {
+        const nonce = nonceRef.current;
+        if (!response.credential || !nonce) return;
 
-            if (error) {
-                console.error("Google sign-in failed:", error);
-                return;
-            }
+        const { data, error } = await supabase.auth.signInWithIdToken({
+            provider: "google",
+            token: response.credential,
+            nonce,
+        });
 
-            setShowFallback(false);
-            cancelPrompt();
-            router.push("/dashboard");
-        },
-        [cancelPrompt, router],
-    );
+        if (error || !data.session) {
+            console.error("Google ID-token sign-in failed:", error?.message ?? "No Supabase session returned");
+            // Do not leave the user apparently logged out after Google accepted
+            // the account. Continue through Supabase's normal OAuth flow.
+            await startOAuthFallback();
+            return;
+        }
+
+        setShowFallback(false);
+        cancelPrompt();
+        router.replace("/dashboard");
+        router.refresh();
+    }, [cancelPrompt, router, startOAuthFallback]);
 
     const renderFallbackButton = useCallback(() => {
         const googleId = window.google?.accounts?.id;
         const container = fallbackRef.current;
         if (!googleId || !container || isAuthRoute) return;
-
         container.innerHTML = "";
         googleId.renderButton(container, {
             type: "standard",
@@ -132,16 +133,10 @@ export default function GoogleOneTap() {
 
         setShowFallback(false);
         googleId.prompt((notification) => {
-            if (notification.isNotDisplayed()) {
+            if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
                 console.info(
-                    "Google One Tap was not displayed:",
-                    notification.getNotDisplayedReason?.() ?? "unknown",
-                );
-                setShowFallback(true);
-            } else if (notification.isSkippedMoment()) {
-                console.info(
-                    "Google One Tap was skipped:",
-                    notification.getSkippedReason?.() ?? "unknown",
+                    "Google One Tap unavailable:",
+                    notification.getNotDisplayedReason?.() ?? notification.getSkippedReason?.() ?? "unknown",
                 );
                 setShowFallback(true);
             }
@@ -150,15 +145,7 @@ export default function GoogleOneTap() {
 
     const initialize = useCallback(async () => {
         const googleId = window.google?.accounts?.id;
-        if (
-            !GOOGLE_CLIENT_ID ||
-            !googleId ||
-            initializedRef.current ||
-            initializingRef.current ||
-            isAuthRoute
-        ) {
-            return;
-        }
+        if (!GOOGLE_CLIENT_ID || !googleId || initializedRef.current || initializingRef.current || isAuthRoute) return;
 
         initializingRef.current = true;
         try {
@@ -167,7 +154,6 @@ export default function GoogleOneTap() {
 
             const { raw, hashed } = await generateNonce();
             nonceRef.current = raw;
-
             googleId.initialize({
                 client_id: GOOGLE_CLIENT_ID,
                 nonce: hashed,
@@ -177,7 +163,6 @@ export default function GoogleOneTap() {
                 cancel_on_tap_outside: true,
                 callback: handleCredential,
             });
-
             initializedRef.current = true;
             await showPrompt();
         } finally {
@@ -192,18 +177,15 @@ export default function GoogleOneTap() {
 
     useEffect(() => {
         if (!GOOGLE_CLIENT_ID || !scriptReadyRef.current) return;
-
         if (isAuthRoute) {
             cancelPrompt();
             setShowFallback(false);
             return;
         }
-
         if (!initializedRef.current) {
             void initialize();
             return;
         }
-
         void showPrompt();
     }, [cancelPrompt, initialize, isAuthRoute, pathname, showPrompt]);
 
@@ -212,9 +194,7 @@ export default function GoogleOneTap() {
     }, [renderFallbackButton, showFallback]);
 
     useEffect(() => {
-        const {
-            data: { subscription },
-        } = supabase.auth.onAuthStateChange((event) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
             if (event === "SIGNED_IN") {
                 setShowFallback(false);
                 cancelPrompt();
@@ -223,7 +203,6 @@ export default function GoogleOneTap() {
                 void showPrompt();
             }
         });
-
         return () => subscription.unsubscribe();
     }, [cancelPrompt, isAuthRoute, showPrompt]);
 
@@ -231,12 +210,7 @@ export default function GoogleOneTap() {
 
     return (
         <>
-            <Script
-                id="google-one-tap"
-                src="https://accounts.google.com/gsi/client"
-                strategy="afterInteractive"
-                onReady={handleScriptReady}
-            />
+            <Script id="google-one-tap" src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={handleScriptReady} />
             {showFallback && !isAuthRoute && (
                 <div
                     ref={fallbackRef}
