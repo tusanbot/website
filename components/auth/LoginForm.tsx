@@ -43,6 +43,20 @@ export default function LoginForm({
                 throw new Error('INVALID_CREDENTIALS');
             }
 
+            const referralCode = typeof window !== 'undefined' ? localStorage.getItem('tusan_referral') : null;
+            if (referralCode) {
+                try {
+                    await fetch('/api/referral/claim', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ code: referralCode }),
+                    });
+                    localStorage.removeItem('tusan_referral');
+                } catch (claimError) {
+                    console.error('Referral claim failed:', claimError);
+                }
+            }
+
             router.push('/dashboard');
             router.refresh();
         } catch {
