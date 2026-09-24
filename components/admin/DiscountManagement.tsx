@@ -18,7 +18,7 @@ export default function DiscountManagement(){
  async function load(){
   setLoading(true);setError("");
   try{
-   const [t,d,l,u]=await Promise.all([
+   const [t,d,l,u,sv]=await Promise.all([
     supabase.from("member_tags").select("*").order("created_at",{ascending:false}),
     supabase.from("discounts").select("*").order("priority",{ascending:false}).order("created_at",{ascending:false}),
     supabase.from("tag_referral_links").select("*").order("created_at",{ascending:false}),
@@ -26,13 +26,13 @@ export default function DiscountManagement(){
     supabase.from("services").select("id,title,is_active").eq("is_active",true).order("title")
    ]);
    if(t.error)throw t.error;if(d.error)throw d.error;if(l.error)throw l.error;
-   setTags((t.data||[]) as Tag[]);setDiscounts((d.data||[]) as Discount[]);setLinks((l.data||[]) as LinkRow[]);setUsers((u.users||[]) as User[]);if((services as any)?.error)throw (services as any).error;setServices(((services as any)?.data||[]) as Service[]);
+   setTags((t.data||[]) as Tag[]);setDiscounts((d.data||[]) as Discount[]);setLinks((l.data||[]) as LinkRow[]);setUsers((u.users||[]) as User[]);if(sv.error)throw sv.error;setServices((sv.data||[]) as Service[]);
    if(!codeForm.discount_id && d.data?.[0])setCodeForm(v=>({...v,discount_id:d.data[0].id}));
    if(!linkForm.tag_id && t.data?.[0])setLinkForm(v=>({...v,tag_id:t.data[0].id}));
    if(!assignForm.tagId && t.data?.[0])setAssignForm(v=>({...v,tagId:t.data[0].id}));
    if(!bindingForm.discountId && d.data?.[0])setBindingForm(v=>({...v,discountId:d.data[0].id}));
    if(!bindingForm.tagId && t.data?.[0])setBindingForm(v=>({...v,tagId:t.data[0].id}));
-   if(!bindingForm.serviceId && services?.data?.[0])setBindingForm(v=>({...v,serviceId:services.data[0].id}));
+   if(!bindingForm.serviceId && sv.data?.[0])setBindingForm(v=>({...v,serviceId:sv.data[0].id}));
   }catch(e){setError(e instanceof Error?e.message:"خطا در دریافت اطلاعات.");}finally{setLoading(false);}
  }
  useEffect(()=>{void load();},[]);
