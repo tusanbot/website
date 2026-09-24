@@ -14,7 +14,7 @@ const emptyDiscount={name:"",description:"",discount_type:"percent" as const,val
 
 export default function DiscountManagement(){
  const [tags,setTags]=useState<Tag[]>([]); const [discounts,setDiscounts]=useState<Discount[]>([]); const [links,setLinks]=useState<LinkRow[]>([]); const [users,setUsers]=useState<User[]>([]); const [services,setServices]=useState<Service[]>([]);
- const [loading,setLoading]=useState(true); const [error,setError]=useState(""); const [tagForm,setTagForm]=useState({name:"",slug:"",description:"",color:"#179d99"}); const [discountForm,setDiscountForm]=useState(emptyDiscount); const [codeForm,setCodeForm]=useState({discount_id:"",code:"",usage_limit:"",per_user_limit:"",starts_at:"",ends_at:""}); const [linkForm,setLinkForm]=useState({tag_id:"",code:"",expires_at:""}); const [assignForm,setAssignForm]=useState({userId:"",tagId:"",expires_at:""}); const [bindingForm,setBindingForm]=useState({discountId:"",tagId:"",serviceId:""});
+ const [loading,setLoading]=useState(true); const [error,setError]=useState(""); const [tagForm,setTagForm]=useState({name:"",slug:"",description:"",color:"#179d99"}); const [discountForm,setDiscountForm]=useState(emptyDiscount); const [codeForm,setCodeForm]=useState({discount_id:"",code:"",usage_limit:"",per_user_limit:"",starts_at:"",ends_at:""}); const [linkForm,setLinkForm]=useState({tag_id:"",code:"",expires_at:"",assignment_duration_days:""}); const [assignForm,setAssignForm]=useState({userId:"",tagId:"",expires_at:""}); const [bindingForm,setBindingForm]=useState({discountId:"",tagId:"",serviceId:""});
  async function load(){
   setLoading(true);setError("");
   try{
@@ -53,8 +53,8 @@ export default function DiscountManagement(){
  }
  async function addLink(){
   if(!linkForm.tag_id||!linkForm.code.trim())return setError("تگ و کد لینک الزامی است.");
-  const {error}=await supabase.from("tag_referral_links").insert({tag_id:linkForm.tag_id,code:linkForm.code.trim().toUpperCase(),expires_at:linkForm.expires_at||null});
-  if(error)return setError(error.message);setLinkForm(v=>({...v,code:"",expires_at:""}));await load();
+  const {error}=await supabase.from("tag_referral_links").insert({tag_id:linkForm.tag_id,code:linkForm.code.trim().toUpperCase(),expires_at:linkForm.expires_at||null,assignment_duration_days:linkForm.assignment_duration_days?Number(linkForm.assignment_duration_days):null});
+  if(error)return setError(error.message);setLinkForm(v=>({...v,code:"",expires_at:"",assignment_duration_days:""}));await load();
  }
  async function bindDiscount(){
   if(!bindingForm.discountId)return setError("تخفیف را انتخاب کنید.");
@@ -106,7 +106,7 @@ export default function DiscountManagement(){
   </GlassPanel>
   <GlassPanel className="p-5 space-y-4">
    <h2 className="font-black text-lg">لینک اختصاصی و اختصاص تگ</h2>
-   <div className="grid md:grid-cols-4 gap-3"><select value={linkForm.tag_id} onChange={e=>setLinkForm(v=>({...v,tag_id:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white">{tags.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><TusanInput placeholder="کد لینک، مثلاً TRACTOR" value={linkForm.code} onChange={e=>setLinkForm(v=>({...v,code:e.target.value}))}/><TusanInput placeholder="تاریخ انقضا ISO" value={linkForm.expires_at} onChange={e=>setLinkForm(v=>({...v,expires_at:e.target.value}))}/><TusanButton onClick={addLink}>ساخت لینک</TusanButton></div>
+   <div className="grid md:grid-cols-4 gap-3"><select value={linkForm.tag_id} onChange={e=>setLinkForm(v=>({...v,tag_id:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white">{tags.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><TusanInput placeholder="کد لینک، مثلاً TRACTOR" value={linkForm.code} onChange={e=>setLinkForm(v=>({...v,code:e.target.value}))}/><TusanInput placeholder="تاریخ انقضا ISO" value={linkForm.expires_at} onChange={e=>setLinkForm(v=>({...v,expires_at:e.target.value}))}/><TusanInput placeholder="مدت تگ (روز)" type="number" value={linkForm.assignment_duration_days} onChange={e=>setLinkForm(v=>({...v,assignment_duration_days:e.target.value}))}/><TusanButton onClick={addLink}>ساخت لینک</TusanButton></div>
    <div className="text-sm text-[var(--text-muted)]">لینک خروجی: <span dir="ltr">/join/CODE</span></div>
    <TusanTable columns={[{key:"code",title:"کد"},{key:"tag",title:"تگ"},{key:"status",title:"وضعیت"}]} rows={links.map(l=>({code:<span dir="ltr" className="font-bold">{l.code}</span>,tag:tagName[l.tag_id]||"—",status:<TusanBadge variant={l.is_active?"success":"danger"}>{l.is_active?"فعال":"غیرفعال"}</TusanBadge>}))}/>
    <div className="border-t pt-4 space-y-3">
