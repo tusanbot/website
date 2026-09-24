@@ -14,6 +14,7 @@ export default function AuthContainer() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const [checkingSession, setCheckingSession] = useState(true);
+    const referralCode = (searchParams.get("ref") || "").trim().toUpperCase();
     const [mode, setMode] = useState<Mode>(() => {
         const value = searchParams.get("mode");
         return value === "register" || value === "forgot" ? value : "login";
@@ -56,7 +57,9 @@ export default function AuthContainer() {
     async function handleGoogleLogin() {
         setGoogleLoading(true);
         setGoogleError("");
-        const redirectTo = `${window.location.origin}/auth/callback`;
+        const ref = referralCode || localStorage.getItem("tusan_referral") || "";
+        if (ref) localStorage.setItem("tusan_referral", ref);
+        const redirectTo = `${window.location.origin}/auth/callback${ref ? `?next=/dashboard&ref=${encodeURIComponent(ref)}` : ""}`;
         const { error } = await supabase.auth.signInWithOAuth({
             provider: "google",
             options: { redirectTo },
@@ -95,7 +98,7 @@ export default function AuthContainer() {
                 </div>
                 <div className="transition-all duration-300">
                     {mode === "login" && <LoginForm onRegister={() => setMode("register")} onForgotPassword={() => setMode("forgot")} />}
-                    {mode === "register" && <RegisterForm onLogin={() => setMode("login")} />}
+                    {mode === "register" && <RegisterForm referralCode={referralCode || (typeof window !== "undefined" ? localStorage.getItem("tusan_referral") : null)} onLogin={() => setMode("login")} />}
                     {mode === "forgot" && <ForgotPasswordForm onLogin={() => setMode("login")} />}
                 </div>
                 <div className="my-6 flex items-center gap-3 text-[var(--text-muted)]">
