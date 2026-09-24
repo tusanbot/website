@@ -8,17 +8,21 @@ export async function GET(request: NextRequest) {
 
   try {
     const client = supabaseAdmin();
-    const [{ data: authData, error: authError }, { data: profiles, error: profilesError }, { data: orders, error: ordersError }, { data: assignments, error: assignmentsError }] = await Promise.all([
+    const [{ data: authData, error: authError }, { data: profiles, error: profilesError }, { data: orders, error: ordersError }, { data: assignments, error: assignmentsError }, { data: tagAssignments, error: tagAssignmentsError }, { data: memberTags, error: memberTagsError }] = await Promise.all([
       client.auth.admin.listUsers({ page: 1, perPage: 1000 }),
       client.from("profiles").select("id, full_name, phone, national_code, role, created_at"),
       client.from("orders").select("user_id"),
       client.from("staff_role_assignments").select("user_id,status,commission_percent,staff_code,role_id,staff_roles(code,name)"),
+      client.from("member_tag_assignments").select("user_id,tag_id,expires_at,member_tags(id,name,slug,color,is_active)"),
+      client.from("member_tags").select("id,name,slug,color,is_active"),
     ]);
 
     if (authError) throw authError;
     if (profilesError) throw profilesError;
     if (ordersError) throw ordersError;
     if (assignmentsError) throw assignmentsError;
+    if (tagAssignmentsError) throw tagAssignmentsError;
+    if (memberTagsError) throw memberTagsError;
 
     const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
     const orderCounts: Record<string, number> = {};
@@ -36,6 +40,16 @@ export async function GET(request: NextRequest) {
       staffMap.set(assignment.user_id, list);
     }
 
+    const tagMap = new Map<string, any[]>();
+    for (const assignment of tagAssignments ?? []) {
+      const tag = Array.isArray(assignment.member_tags) ? assignment.member_tags[0] : assignment.member_tags;
+      if (!tag || tag.is_active === false) continue;
+      if (assignment.expires_at && new Date(assignment.expires_at) < new Date()) continue;
+      const list = tagMap.get(assignment.user_id) ?? [];
+      list.push({ id: tag.id, name: tag.name, slug: tag.slug, color: tag.color, expires_at: assignment.expires_at ?? null });
+      tagMap.set(assignment.user_id, list);
+    }
+
     const users = (authData?.users ?? []).map((user) => {
       const profile = profileMap.get(user.id);
       return {
@@ -50,6 +64,7 @@ export async function GET(request: NextRequest) {
         order_count: orderCounts[user.id] ?? 0,
         profile_completed: Boolean(profile?.full_name || profile?.phone || profile?.national_code),
         staff_roles: staffMap.get(user.id) ?? [],
+        tags: tagMap.get(user.id) ?? [],
       };
     }).sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
 
