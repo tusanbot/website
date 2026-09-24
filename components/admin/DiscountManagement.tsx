@@ -10,7 +10,8 @@ type User={id:string;full_name:string|null;email:string|null};
 type LinkRow={id:string;tag_id:string;code:string;is_active:boolean;expires_at:string|null};
 type Service={id:string;title:string;is_active:boolean};
 
-const emptyDiscount={name:"",description:"",discount_type:"percent" as const,value:"",max_discount_amount:"",min_order_amount:"",starts_at:"",ends_at:"",usage_limit:"",per_user_limit:"",priority:"0",stackable:false,is_active:true};
+type DiscountForm = { name:string; description:string; discount_type:"percent"|"fixed"; value:string; max_discount_amount:string; min_order_amount:string; starts_at:string; ends_at:string; usage_limit:string; per_user_limit:string; priority:string; stackable:boolean; is_active:boolean };
+const emptyDiscount: DiscountForm={name:"",description:"",discount_type:"percent",value:"",max_discount_amount:"",min_order_amount:"",starts_at:"",ends_at:"",usage_limit:"",per_user_limit:"",priority:"0",stackable:false,is_active:true};
 
 export default function DiscountManagement(){
  const [tags,setTags]=useState<Tag[]>([]); const [discounts,setDiscounts]=useState<Discount[]>([]); const [links,setLinks]=useState<LinkRow[]>([]); const [users,setUsers]=useState<User[]>([]); const [services,setServices]=useState<Service[]>([]);
