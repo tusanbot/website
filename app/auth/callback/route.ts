@@ -28,16 +28,18 @@ export async function GET(request: NextRequest) {
             try {
                 const adminDb = supabaseAdmin();
                 const { data: link } = await adminDb.from("tag_referral_links")
-                    .select("id,tag_id,is_active,expires_at")
+                    .select("id,tag_id,is_active,expires_at,assignment_duration_days")
                     .eq("code", referralCode)
                     .eq("is_active", true)
                     .maybeSingle();
                 if (link && (!link.expires_at || new Date(link.expires_at) >= new Date())) {
+                    const assignmentExpiresAt = link.assignment_duration_days ? new Date(Date.now() + Number(link.assignment_duration_days) * 86400000) : (link.expires_at ? new Date(link.expires_at) : null);
                     await adminDb.from("member_tag_assignments").upsert({
                         tag_id: link.tag_id,
                         user_id: user.id,
                         source: "referral",
                         referral_link_id: link.id,
+                        expires_at: assignmentExpiresAt?.toISOString() || null,
                     }, { onConflict: "tag_id,user_id" });
                 }
             } catch (claimError) {
