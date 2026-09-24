@@ -2,7 +2,14 @@
   "name": "tusan-cyber",
   "version": "0.1.0",
   "private": true,
-  "scripts": {"dev": "next dev --webpack", "build": "next build --webpack", "start": "next start", "lint": "eslint"},
+  "scripts": {
+    "dev": "next dev --webpack",
+    "build": "opennextjs-cloudflare build",
+    "start": "next start",
+    "lint": "eslint",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && wrangler deploy"
+  },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
@@ -11,6 +18,7 @@
     "@fontsource/noto-naskh-arabic": "^5.2.5",
     "@fontsource/noto-sans-arabic": "^5.2.5",
     "@fontsource/vazirmatn": "^5.3.0",
+    "@opennextjs/cloudflare": "^1.20.6",
     "@supabase/supabase-js": "^2.112.0",
     "@supabase/ssr": "^0.12.4",
     "axios": "^1.11.0",
@@ -28,5 +36,15 @@
     "recharts": "^3.10.1",
     "xlsx": "^0.18.5"
   },
-  "devDependencies": {"@tailwindcss/postcss": "^4", "@types/node": "^20", "@types/qrcode": "^1.5.6", "@types/react": "^19", "@types/react-dom": "^19", "eslint": "^9", "eslint-config-next": "16.3.3", "tailwindcss": "^4"}
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.3",
+    "tailwindcss": "^4",
+    "wrangler": "^4.68.0"
+  }
 }
