@@ -6,9 +6,10 @@ import { TusanInput, TusanButton } from '@/components/ui';
 
 type Props = {
     onLogin: () => void;
+    referralCode?: string | null;
 };
 
-export default function RegisterForm({ onLogin }: Props) {
+export default function RegisterForm({ onLogin, referralCode }: Props) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
 
@@ -21,6 +22,7 @@ export default function RegisterForm({ onLogin }: Props) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const activeReferralCode = (referralCode || (typeof window !== 'undefined' ? localStorage.getItem('tusan_referral') : '') || '').trim().toUpperCase();
 
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -43,6 +45,7 @@ export default function RegisterForm({ onLogin }: Props) {
             const { data, error } = await supabase.auth.signUp({
                 email: email.trim(),
                 password,
+                options: activeReferralCode ? { data: { referral_code: activeReferralCode } } : undefined,
             });
 
             if (error) {
@@ -52,6 +55,15 @@ export default function RegisterForm({ onLogin }: Props) {
             const user = data.user;
 
             if (user) {
+                if (activeReferralCode && data.session) {
+                    try {
+                        await fetch('/api/referral/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: activeReferralCode }) });
+                        localStorage.removeItem('tusan_referral');
+                    } catch (claimError) {
+                        console.error('Referral claim failed:', claimError);
+                    }
+                }
+
                 const fullName = [firstName, lastName]
                     .filter(Boolean)
                     .join(' ')
