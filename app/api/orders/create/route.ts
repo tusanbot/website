@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from '@/lib/supabase-server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { validateFormData } from '@/lib/forms/server-validation';
 import { calculateServicePrice, type PricingRule } from '@/lib/forms/pricing';
+import { evaluateDiscounts } from '@/lib/discounts/server';
 import { MAX_ORDER_BODY_BYTES, validateFormDataShape } from '@/lib/security/request-limits';
 import type { FormField, FormSchema } from '@/types/forms';
 
@@ -15,7 +16,7 @@ async function readBoundedJson(request:Request){const len=request.headers.get('c
 
 export async function POST(request:Request):Promise<Response>{try{
  const userClient=await createSupabaseServerClient(); const {data:{user}}=await userClient.auth.getUser(); if(!user)return NextResponse.json({error:'برای ثبت سفارش ابتدا وارد حساب شوید.'},{status:401});
- const body=await readBoundedJson(request) as {serviceId?:string;formId?:string|null;formData?:Record<string,unknown>;idempotencyKey?:string};
+ const body=await readBoundedJson(request) as {serviceId?:string;formId?:string|null;formData?:Record<string,unknown>;idempotencyKey?:string;discountCode?:string|null};
  if(!body.serviceId||!body.formData||typeof body.formData!=='object'||Array.isArray(body.formData))return NextResponse.json({error:'اطلاعات فرم ناقص است.'},{status:400});
  if(!validateFormDataShape(body.formData))return NextResponse.json({error:'حجم یا ساختار اطلاعات فرم نامعتبر است.'},{status:413});
  const idempotencyKey=String(body.idempotencyKey||request.headers.get('x-idempotency-key')||'').trim();if(idempotencyKey.length>128)return NextResponse.json({error:'شناسه تکرارنشدنی نامعتبر است.'},{status:400});
@@ -25,7 +26,34 @@ export async function POST(request:Request):Promise<Response>{try{
  let schema=normalizeSchema(service.form_schema);let formId:string|null=body.formId??null;let formVersionId:string|null=null;let orderPrice=Number(service.price||0);const pricingRules=normalizeRules(service.pricing_rules);
  if(formId){const {data:cf,error}=await db.from('custom_forms').select('id,schema,service_id,is_public,price,active_version_id,parent_form_id').eq('id',formId).eq('service_id',service.id).eq('is_public',true).maybeSingle();if(error)throw new Error(error.message);if(!cf)return NextResponse.json({error:'فرم انتخاب‌شده معتبر نیست.'},{status:400});formId=cf.id;orderPrice=Number(cf.price??service.price??0);schema=normalizeSchema(cf.schema);if(cf.active_version_id){const {data:v,error:ve}=await db.from('form_versions').select('id,schema,price').eq('id',cf.active_version_id).eq('form_id',cf.id).maybeSingle();if(ve)throw new Error(ve.message);if(!v)return NextResponse.json({error:'نسخه فعال فرم پیدا نشد.'},{status:409});formVersionId=v.id;schema=normalizeSchema(v.schema);orderPrice=Number(v.price??orderPrice);}if(cf.parent_form_id||service.parent_form_id){const pid=cf.parent_form_id||service.parent_form_id;const {data:pf,error:pe}=await db.from('custom_forms').select('id,schema,is_public,active_version_id').eq('id',pid).eq('is_public',true).maybeSingle();if(pe)throw new Error(pe.message);if(pf){let ps=normalizeSchema(pf.schema);if(pf.active_version_id){const {data:pv,error:pve}=await db.from('form_versions').select('schema').eq('id',pf.active_version_id).eq('form_id',pf.id).maybeSingle();if(pve)throw new Error(pve.message);if(!pv)return NextResponse.json({error:'نسخه فعال فرم مادر پیدا نشد.'},{status:409});ps=normalizeSchema(pv.schema);}schema=mergeSchemas(ps,schema);}}}
  const validation=validateFormData(schema,body.formData);if(!validation.valid)return NextResponse.json({error:'اطلاعات فرم کامل یا معتبر نیست.',errors:validation.errors},{status:422});
- const finalPrice=calculateServicePrice(orderPrice,pricingRules,buildPricingData(schema.fields,validation.data));if(!Number.isFinite(finalPrice)||finalPrice<0)return NextResponse.json({error:'مبلغ سفارش نامعتبر است.'},{status:422});
- const {data:order,error:orderError}=await db.from('orders').insert({user_id:user.id,service_id:service.id,form_id:formId,form_version_id:formVersionId,idempotency_key:idempotencyKey||null,tracking_code:generateTrackingCode(),status:'registered',form_data:validation.data,form_schema_snapshot:schema,price:finalPrice}).select('id,tracking_code,price,form_version_id').single();
- if(orderError){if(orderError.code==='23505'&&idempotencyKey){const {data:concurrent}=await db.from('orders').select('id,tracking_code,price,form_version_id').eq('user_id',user.id).eq('idempotency_key',idempotencyKey).maybeSingle();if(concurrent)return NextResponse.json({order:concurrent,idempotent:true});}throw new Error(orderError.message);}return NextResponse.json({order});
+ const originalPrice=calculateServicePrice(orderPrice,pricingRules,buildPricingData(schema.fields,validation.data));
+ if(!Number.isFinite(originalPrice)||originalPrice<0)return NextResponse.json({error:'مبلغ سفارش نامعتبر است.'},{status:422});
+ let discountQuote={originalAmount:Math.round(originalPrice),discountAmount:0,finalAmount:Math.round(originalPrice),applied:[] as any[]};
+ try {
+   discountQuote=await evaluateDiscounts({userId:user.id,serviceId:service.id,originalAmount:originalPrice,code:body.discountCode});
+ } catch (discountError) {
+   if (body.discountCode) return NextResponse.json({error:discountError instanceof Error?discountError.message:'کد تخفیف قابل استفاده نیست.'},{status:422});
+ }
+ const discountSnapshot={version:1,appliedAt:new Date().toISOString(),code:body.discountCode?.trim().toUpperCase()||null,originalAmount:discountQuote.originalAmount,discountAmount:discountQuote.discountAmount,finalAmount:discountQuote.finalAmount,items:discountQuote.applied};
+ const {data:order,error:orderError}=await db.from('orders').insert({user_id:user.id,service_id:service.id,form_id:formId,form_version_id:formVersionId,idempotency_key:idempotencyKey||null,tracking_code:generateTrackingCode(),status:'registered',form_data:validation.data,form_schema_snapshot:schema,original_price:discountQuote.originalAmount,discount_amount:discountQuote.discountAmount,discount_code_id:discountQuote.applied[0]?.discount_code_id||null,discount_id:discountQuote.applied[0]?.discount_id||null,discount_snapshot:discountSnapshot,price:discountQuote.finalAmount}).select('id,tracking_code,price,original_price,discount_amount,form_version_id').single();
+ if(orderError){if(orderError.code==='23505'&&idempotencyKey){const {data:concurrent}=await db.from('orders').select('id,tracking_code,price,form_version_id').eq('user_id',user.id).eq('idempotency_key',idempotencyKey).maybeSingle();if(concurrent)return NextResponse.json({order:concurrent,idempotent:true});}throw new Error(orderError.message);}
+ if (discountQuote.applied.length) {
+   const { error: claimError } = await db.rpc('claim_discount_usages', {
+     p_order_id: order.id,
+     p_user_id: user.id,
+     p_items: discountQuote.applied.map((item:any)=>({
+       discount_id:item.discount_id,
+       discount_code_id:item.discount_code_id,
+       service_id:service.id,
+       original_amount:item.original_amount,
+       discount_amount:item.discount_amount,
+       final_amount:item.final_amount,
+     })),
+   });
+   if (claimError) {
+     await db.from('orders').delete().eq('id',order.id).eq('user_id',user.id);
+     return NextResponse.json({error:claimError.message||'تخفیف در این لحظه قابل استفاده نیست؛ لطفاً دوباره تلاش کنید.'},{status:409});
+   }
+ }
+ return NextResponse.json({order});
 }catch(error){if(error instanceof Error&&error.message==='REQUEST_BODY_TOO_LARGE')return NextResponse.json({error:'حجم درخواست بیش از حد مجاز است.'},{status:413});console.error('Order creation error:',error);return NextResponse.json({error:error instanceof Error?error.message:'خطایی هنگام ثبت سفارش رخ داد.'},{status:500});}}
