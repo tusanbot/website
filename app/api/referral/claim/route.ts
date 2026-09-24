@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const db = supabaseAdmin();
     const { data: link, error } = await db.from("tag_referral_links")
-      .select("id,tag_id,code,is_active,expires_at")
+      .select("id,tag_id,code,is_active,expires_at,assignment_duration_days")
       .eq("code", code)
       .eq("is_active", true)
       .maybeSingle();
@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "لینک دعوت معتبر یا فعال نیست." }, { status: 404 });
     }
 
+    const assignmentExpiresAt = link.assignment_duration_days ? new Date(Date.now() + Number(link.assignment_duration_days) * 86400000) : (link.expires_at ? new Date(link.expires_at) : null);
     const { data: tag, error: tagError } = await db.from("member_tags").select("id,name,is_active").eq("id", link.tag_id).maybeSingle();
     if (tagError) throw tagError;
     if (!tag?.is_active) return NextResponse.json({ error: "تگ این دعوت دیگر فعال نیست." }, { status: 404 });
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         source: "referral",
         referral_link_id: link.id,
+        expires_at: assignmentExpiresAt?.toISOString() || null,
         assigned_at: new Date().toISOString(),
       });
       if (insertError) throw insertError;
