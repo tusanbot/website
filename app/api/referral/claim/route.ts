@@ -8,8 +8,9 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "نشست کاربر معتبر نیست." }, { status: 401 });
 
-    const body = await request.json() as { code?: string };
-    const code = String(body.code || "").trim().toUpperCase();
+    const body = await request.json().catch(() => ({})) as { code?: string };
+    const metadataReferral = String(user.user_metadata?.referral_code || "").trim().toUpperCase();
+    const code = String(body.code || metadataReferral).trim().toUpperCase();
     if (!code) return NextResponse.json({ error: "کد دعوت مشخص نشده است." }, { status: 400 });
 
     const db = supabaseAdmin();
