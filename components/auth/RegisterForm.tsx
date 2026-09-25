@@ -42,10 +42,20 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
         setLoading(true);
 
         try {
+            const redirectOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+            const emailRedirectTo = activeReferralCode && redirectOrigin
+                ? `${redirectOrigin}/auth/callback?next=/dashboard&ref=${encodeURIComponent(activeReferralCode)}`
+                : redirectOrigin
+                    ? `${redirectOrigin}/auth/callback?next=/dashboard`
+                    : undefined;
+
             const { data, error } = await supabase.auth.signUp({
                 email: email.trim(),
                 password,
-                options: activeReferralCode ? { data: { referral_code: activeReferralCode } } : undefined,
+                options: {
+                    ...(activeReferralCode ? { data: { referral_code: activeReferralCode } } : {}),
+                    ...(emailRedirectTo ? { emailRedirectTo } : {}),
+                },
             });
 
             if (error) {
@@ -57,8 +67,10 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
             if (user) {
                 if (activeReferralCode && data.session) {
                     try {
-                        await fetch('/api/referral/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: activeReferralCode }) });
-                        localStorage.removeItem('tusan_referral');
+                        const claimResponse = await fetch('/api/referral/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: activeReferralCode }) });
+                        if (claimResponse.ok) {
+                            localStorage.removeItem('tusan_referral');
+                        }
                     } catch (claimError) {
                         console.error('Referral claim failed:', claimError);
                     }
