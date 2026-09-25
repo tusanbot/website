@@ -44,17 +44,17 @@ export default function LoginForm({
             }
 
             const referralCode = typeof window !== 'undefined' ? localStorage.getItem('tusan_referral') : null;
-            if (referralCode) {
-                try {
-                    await fetch('/api/referral/claim', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ code: referralCode }),
-                    });
+            try {
+                const claimResponse = await fetch('/api/referral/claim', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: referralCode ? JSON.stringify({ code: referralCode }) : JSON.stringify({}),
+                });
+                if (claimResponse.ok && referralCode) {
                     localStorage.removeItem('tusan_referral');
-                } catch (claimError) {
-                    console.error('Referral claim failed:', claimError);
                 }
+            } catch (claimError) {
+                console.error('Referral claim failed:', claimError);
             }
 
             router.push('/dashboard');
