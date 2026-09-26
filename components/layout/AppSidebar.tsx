@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, TusanButton } from "@/components/ui";
+import UserTags from "@/components/user/UserTags";
 
 type UserRole = "guest" | "user" | "admin";
 type StaffRole = "order_manager" | "support_operator";
@@ -73,7 +74,7 @@ export default function AppSidebar({ mobile = false, onClose }: { mobile?: boole
     }
 
     return <GlassPanel className={`h-full flex flex-col ${mobile ? "rounded-none border-0" : "rounded-3xl"}`}>
-        <div className="p-5 border-b border-[var(--border)]"><div className="text-2xl font-black text-[var(--text)]">توسن</div>{role === "guest" ? <div className="mt-3"><Link href="/auth?mode=login" onClick={() => onClose?.()}><TusanButton className="w-full">ورود / ثبت‌نام</TusanButton></Link></div> : <div className="mt-3"><div className="font-bold text-[var(--text)]">{fullName || "کاربر"}</div><div className="text-sm text-[var(--text-muted)] break-all">{email}</div></div>}</div>
+        <div className="p-5 border-b border-[var(--border)]"><div className="text-2xl font-black text-[var(--text)]">توسن</div>{role === "guest" ? <div className="mt-3"><Link href="/auth?mode=login" onClick={() => onClose?.()}><TusanButton className="w-full">ورود / ثبت‌نام</TusanButton></Link></div> : <div className="mt-3"><div className="font-bold text-[var(--text)]">{fullName || "کاربر"}</div><div className="text-sm text-[var(--text-muted)] break-all">{email}</div><UserTags className="mt-3" /></div>}</div>
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
             <div><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">عمومی</div><div className="space-y-1">{publicItems.map((item) => <Item key={item.href} {...item} />)}</div></div>
             {role !== "guest" && <div><div className="mb-2 text-xs font-bold text-[var(--text-muted)]">حساب کاربری</div><div className="space-y-1">{userItems.map((item) => <Item key={item.href} {...item} />)}</div></div>}
