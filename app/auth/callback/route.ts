@@ -27,20 +27,34 @@ export async function GET(request: NextRequest) {
         if (user) {
             try {
                 const adminDb = supabaseAdmin();
-                const { data: link } = await adminDb.from("tag_referral_links")
+
+                // member_tag_assignments references profiles(id), so make sure
+                // the profile exists before assigning the referral tag.
+                const { error: profileError } = await adminDb
+                    .from("profiles")
+                    .upsert({ id: user.id }, { onConflict: "id" });
+
+                if (profileError) throw profileError;
+
+                const { data: link, error: linkError } = await adminDb.from("tag_referral_links")
                     .select("id,tag_id,is_active,expires_at,assignment_duration_days")
                     .eq("code", referralCode)
                     .eq("is_active", true)
                     .maybeSingle();
+
+                if (linkError) throw linkError;
+
                 if (link && (!link.expires_at || new Date(link.expires_at) >= new Date())) {
                     const assignmentExpiresAt = link.assignment_duration_days ? new Date(Date.now() + Number(link.assignment_duration_days) * 86400000) : (link.expires_at ? new Date(link.expires_at) : null);
-                    await adminDb.from("member_tag_assignments").upsert({
+                    const { error: assignmentError } = await adminDb.from("member_tag_assignments").upsert({
                         tag_id: link.tag_id,
                         user_id: user.id,
                         source: "referral",
                         referral_link_id: link.id,
                         expires_at: assignmentExpiresAt?.toISOString() || null,
                     }, { onConflict: "tag_id,user_id" });
+
+                    if (assignmentError) throw assignmentError;
                 }
             } catch (claimError) {
                 console.error("Referral tag claim failed:", claimError);

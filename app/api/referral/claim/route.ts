@@ -8,11 +8,21 @@ export async function POST(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "نشست کاربر معتبر نیست." }, { status: 401 });
 
-    const body = await request.json() as { code?: string };
-    const code = String(body.code || "").trim().toUpperCase();
+    const body = await request.json().catch(() => ({})) as { code?: string };
+    const metadataReferral = String(user.user_metadata?.referral_code || "").trim().toUpperCase();
+    const code = String(body.code || metadataReferral).trim().toUpperCase();
     if (!code) return NextResponse.json({ error: "کد دعوت مشخص نشده است." }, { status: 400 });
 
     const db = supabaseAdmin();
+
+    // member_tag_assignments.user_id references profiles(id). Some auth flows
+    // can create the Supabase user before the profile row exists, so ensure
+    // the profile exists before attempting the tag assignment.
+    const { error: profileError } = await db
+      .from("profiles")
+      .upsert({ id: user.id }, { onConflict: "id" });
+    if (profileError) throw profileError;
+
     const { data: link, error } = await db.from("tag_referral_links")
       .select("id,tag_id,code,is_active,expires_at,assignment_duration_days")
       .eq("code", code)

@@ -42,10 +42,20 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
         setLoading(true);
 
         try {
+            const redirectOrigin = typeof window !== 'undefined' ? window.location.origin : '';
+            const emailRedirectTo = activeReferralCode && redirectOrigin
+                ? `${redirectOrigin}/auth/callback?next=/dashboard&ref=${encodeURIComponent(activeReferralCode)}`
+                : redirectOrigin
+                    ? `${redirectOrigin}/auth/callback?next=/dashboard`
+                    : undefined;
+
             const { data, error } = await supabase.auth.signUp({
                 email: email.trim(),
                 password,
-                options: activeReferralCode ? { data: { referral_code: activeReferralCode } } : undefined,
+                options: {
+                    ...(activeReferralCode ? { data: { referral_code: activeReferralCode } } : {}),
+                    ...(emailRedirectTo ? { emailRedirectTo } : {}),
+                },
             });
 
             if (error) {
@@ -55,25 +65,38 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
             const user = data.user;
 
             if (user) {
-                if (activeReferralCode && data.session) {
-                    try {
-                        await fetch('/api/referral/claim', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: activeReferralCode }) });
-                        localStorage.removeItem('tusan_referral');
-                    } catch (claimError) {
-                        console.error('Referral claim failed:', claimError);
-                    }
-                }
-
                 const fullName = [firstName, lastName]
                     .filter(Boolean)
                     .join(' ')
                     .trim();
 
-                await supabase.from('profiles').upsert({
+                // member_tag_assignments has a foreign key to profiles(id),
+                // so the profile must exist before a referral tag can be claimed.
+                const { error: profileError } = await supabase.from('profiles').upsert({
                     id: user.id,
                     full_name: fullName || null,
                     phone: phone || null,
                 });
+
+                if (profileError) {
+                    console.error('Profile upsert failed:', profileError);
+                } else if (activeReferralCode && data.session) {
+                    try {
+                        const claimResponse = await fetch('/api/referral/claim', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ code: activeReferralCode }),
+                        });
+
+                        if (claimResponse.ok) {
+                            localStorage.removeItem('tusan_referral');
+                        } else {
+                            console.error('Referral claim failed:', await claimResponse.text().catch(() => ''));
+                        }
+                    } catch (claimError) {
+                        console.error('Referral claim failed:', claimError);
+                    }
+                }
             }
 
             setSuccess(

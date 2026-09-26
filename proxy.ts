@@ -11,7 +11,7 @@ import {
 
 const ADMIN_ACCESS_HEADER = "x-tusan-admin-access";
 
- type PendingCookie = {
+type PendingCookie = {
     name: string;
     value: string;
     options?: Parameters<NextResponse["cookies"]["set"]>[2];
@@ -21,11 +21,18 @@ export async function proxy(request: NextRequest) {
     const pendingCookies: PendingCookie[] = [];
     const pathname = request.nextUrl.pathname;
 
-    // Content Studio is intentionally outside the /admin route tree.
-    // Keep the old URL working, but redirect before the /admin layout can
-    // perform its access lookup or participate in the navigation lifecycle.
     if (pathname === "/admin/content-studio" || pathname.startsWith("/admin/content-studio/")) {
         return NextResponse.redirect(new URL("/content-studio", request.url));
+    }
+
+    const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
+
+    // Public pages do not need a server-side Supabase round-trip on every request.
+    // Browser authentication is handled by the Supabase client; privileged
+    // routes are protected below. This removes Cloudflare -> Supabase latency
+    // from the critical path for public pages such as /services and /orders.
+    if (!isAdminRoute) {
+        return NextResponse.next();
     }
 
     const supabase = createServerClient(
@@ -50,18 +57,10 @@ export async function proxy(request: NextRequest) {
     const claims = claimsData?.claims as Record<string, unknown> | undefined;
     const userId = typeof claims?.sub === "string" ? claims.sub : null;
     const sessionId = typeof claims?.session_id === "string" ? claims.session_id : "";
-    const isAdminRoute = pathname === "/admin" || pathname.startsWith("/admin/");
-    const isAuthRoute = pathname === "/auth" || pathname.startsWith("/auth/");
-    const isMaintenanceRoute = pathname === "/maintenance";
-    const isApiRoute = pathname === "/api" || pathname.startsWith("/api/");
 
-    let requestHeaders = new Headers(request.headers);
-    let adminAccessGranted = false;
-    let cacheCookie: { value: string; options: ReturnType<typeof getAdminAccessCookieOptions> } | null = null;
-    let clearCacheCookie = false;
+    const requestHeaders = new Headers(request.headers);
 
-    if (isAdminRoute && (!userId || claimsError)) {
-        clearCacheCookie = true;
+    if (!userId || claimsError) {
         const redirect = NextResponse.redirect(new URL("/auth?mode=login", request.url));
         pendingCookies.forEach(({ name, value, options }) => redirect.cookies.set(name, value, options));
         redirect.cookies.set(ADMIN_ACCESS_CACHE_COOKIE, "", {
@@ -71,79 +70,54 @@ export async function proxy(request: NextRequest) {
         return redirect;
     }
 
-    if (isAdminRoute && userId && sessionId) {
-        const ip = getRequestIp(request);
-        const cachedToken = request.cookies.get(ADMIN_ACCESS_CACHE_COOKIE)?.value;
-        const cached = verifyAdminAccessToken(cachedToken, { sub: userId, sid: sessionId, ip });
+    const ip = getRequestIp(request);
+    const cachedToken = request.cookies.get(ADMIN_ACCESS_CACHE_COOKIE)?.value;
+    const cached = verifyAdminAccessToken(cachedToken, { sub: userId, sid: sessionId, ip });
 
-        if (cached) {
-            adminAccessGranted = true;
-            cacheCookie = cachedToken
-                ? { value: cachedToken, options: getAdminAccessCookieOptions(ADMIN_ACCESS_CACHE_TTL_SECONDS) }
-                : null;
-        } else {
-            const { data: profile, error: profileError } = await supabase
-                .from("profiles")
-                .select("role")
-                .eq("id", userId)
-                .maybeSingle();
-
-            if (profileError || profile?.role !== "admin") {
-                clearCacheCookie = true;
-                const redirect = NextResponse.redirect(new URL("/", request.url));
-                pendingCookies.forEach(({ name, value, options }) => redirect.cookies.set(name, value, options));
-                redirect.cookies.set(ADMIN_ACCESS_CACHE_COOKIE, "", {
-                    ...getAdminAccessCookieOptions(0),
-                    expires: new Date(0),
-                });
-                return redirect;
-            }
-
-            adminAccessGranted = true;
-            const token = createAdminAccessToken({
-                sub: userId,
-                sid: sessionId,
-                ip,
-                exp: Math.floor(Date.now() / 1000) + ADMIN_ACCESS_CACHE_TTL_SECONDS,
-            });
-            if (token) {
-                cacheCookie = { value: token, options: getAdminAccessCookieOptions() };
-            }
+    if (cached) {
+        requestHeaders.set(ADMIN_ACCESS_HEADER, "1");
+        const response = NextResponse.next({ request: { headers: requestHeaders } });
+        pendingCookies.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        if (cachedToken) {
+            response.cookies.set(
+                ADMIN_ACCESS_CACHE_COOKIE,
+                cachedToken,
+                getAdminAccessCookieOptions(ADMIN_ACCESS_CACHE_TTL_SECONDS)
+            );
         }
-
-        requestHeaders.set(ADMIN_ACCESS_HEADER, adminAccessGranted ? "1" : "0");
+        return response;
     }
 
-    const response = NextResponse.next({ request: { headers: requestHeaders } });
-    pendingCookies.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+    const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .maybeSingle();
 
-    if (cacheCookie) {
-        response.cookies.set(ADMIN_ACCESS_CACHE_COOKIE, cacheCookie.value, cacheCookie.options);
-    } else if (clearCacheCookie) {
-        response.cookies.set(ADMIN_ACCESS_CACHE_COOKIE, "", {
+    if (profileError || profile?.role !== "admin") {
+        const redirect = NextResponse.redirect(new URL("/", request.url));
+        pendingCookies.forEach(({ name, value, options }) => redirect.cookies.set(name, value, options));
+        redirect.cookies.set(ADMIN_ACCESS_CACHE_COOKIE, "", {
             ...getAdminAccessCookieOptions(0),
             expires: new Date(0),
         });
+        return redirect;
     }
 
-    if (!isMaintenanceRoute && !isAuthRoute && !isApiRoute && !isAdminRoute) {
-        const { data: settings } = await supabase
-            .from("site_settings")
-            .select("config")
-            .limit(1)
-            .maybeSingle();
+    requestHeaders.set(ADMIN_ACCESS_HEADER, "1");
 
-        const config = settings?.config;
-        const maintenance = config && typeof config === "object" && !Array.isArray(config)
-            ? (config as Record<string, unknown>).maintenance
-            : null;
-        const maintenanceEnabled = maintenance && typeof maintenance === "object" && !Array.isArray(maintenance)
-            ? (maintenance as Record<string, unknown>).enabled === true
-            : false;
+    const token = createAdminAccessToken({
+        sub: userId,
+        sid: sessionId,
+        ip,
+        exp: Math.floor(Date.now() / 1000) + ADMIN_ACCESS_CACHE_TTL_SECONDS,
+    });
 
-        if (maintenanceEnabled) return NextResponse.redirect(new URL("/maintenance", request.url));
+    const response = NextResponse.next({ request: { headers: requestHeaders } });
+    pendingCookies.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+    if (token) {
+        response.cookies.set(ADMIN_ACCESS_CACHE_COOKIE, token, getAdminAccessCookieOptions());
     }
-
     return response;
 }
 
