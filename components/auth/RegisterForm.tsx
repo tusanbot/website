@@ -79,8 +79,13 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
                 });
 
                 if (profileError) {
+                    // The profile may already be created by the database trigger,
+                    // and RLS can reject the client-side upsert. This must not
+                    // prevent the referral claim, which is handled server-side.
                     console.error('Profile upsert failed:', profileError);
-                } else if (activeReferralCode && data.session) {
+                }
+
+                if (activeReferralCode && data.session) {
                     try {
                         const claimResponse = await fetch('/api/referral/claim', {
                             method: 'POST',
