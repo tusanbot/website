@@ -14,6 +14,15 @@ export async function POST(request: NextRequest) {
     if (!code) return NextResponse.json({ error: "کد دعوت مشخص نشده است." }, { status: 400 });
 
     const db = supabaseAdmin();
+
+    // member_tag_assignments.user_id references profiles(id). Some auth flows
+    // can create the Supabase user before the profile row exists, so ensure
+    // the profile exists before attempting the tag assignment.
+    const { error: profileError } = await db
+      .from("profiles")
+      .upsert({ id: user.id }, { onConflict: "id" });
+    if (profileError) throw profileError;
+
     const { data: link, error } = await db.from("tag_referral_links")
       .select("id,tag_id,code,is_active,expires_at,assignment_duration_days")
       .eq("code", code)
