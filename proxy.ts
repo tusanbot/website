@@ -19,6 +19,12 @@ type PendingCookie = {
 
 export async function proxy(request: NextRequest) {
     const pendingCookies: PendingCookie[] = [];
+    const host = request.headers.get("host")?.split(":")[0]?.toLowerCase();
+    const pathnameForCanonical = request.nextUrl.pathname;
+    if (pathnameForCanonical.startsWith("/payment/") && host && host !== "tusancn.ir" && host !== "www.tusancn.ir") {
+        const canonical = new URL(request.nextUrl.pathname + request.nextUrl.search, "https://tusancn.ir");
+        return NextResponse.redirect(canonical, 308);
+    }
     const pathname = request.nextUrl.pathname;
 
     if (pathname === "/admin/content-studio" || pathname.startsWith("/admin/content-studio/")) {
