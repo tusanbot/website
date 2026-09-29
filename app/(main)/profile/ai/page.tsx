@@ -24,13 +24,20 @@ export default function AiProfilePage() {
   const [error, setError] = useState(false);
 
   useEffect(() => {
+    let active = true;
     fetch("/api/ai/profile", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data) => {
-        if (data.profile) setProfile(data.profile);
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || "بارگذاری پروفایل هوش مصنوعی انجام نشد.");
+        if (active && data.profile) setProfile(data.profile);
       })
-      .catch(() => { setError(true); setMessage("دریافت تنظیمات هوش مصنوعی ناموفق بود."); })
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        if (!active) return;
+        setError(true);
+        setMessage(e instanceof Error ? e.message : "بارگذاری پروفایل هوش مصنوعی انجام نشد.");
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, []);
 
   async function save(event: React.FormEvent) {
@@ -47,10 +54,11 @@ export default function AiProfilePage() {
       const response = await fetch("/api/ai/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        cache: "no-store",
         body: JSON.stringify({ apiKeys }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "ذخیره ناموفق بود.");
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "ذخیره پروفایل هوش مصنوعی انجام نشد.");
 
       setProfile(data.profile);
       setTextApiKey("");
@@ -58,7 +66,7 @@ export default function AiProfilePage() {
       setMessage("تنظیمات هوش مصنوعی با موفقیت ذخیره شد.");
     } catch (e) {
       setError(true);
-      setMessage(e instanceof Error ? e.message : "ذخیره ناموفق بود.");
+      setMessage(e instanceof Error ? e.message : "ذخیره پروفایل هوش مصنوعی انجام نشد.");
     } finally {
       setSaving(false);
     }
@@ -66,16 +74,18 @@ export default function AiProfilePage() {
 
   async function remove() {
     if (!confirm("کلیدهای API ذخیره‌شده حذف شوند؟")) return;
-    const response = await fetch("/api/ai/profile", { method: "DELETE" });
-    if (response.ok) {
+    try {
+      const response = await fetch("/api/ai/profile", { method: "DELETE", cache: "no-store" });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || "حذف تنظیمات ناموفق بود.");
       setProfile(null);
       setTextApiKey("");
       setTtsApiKey("");
       setMessage("تنظیمات هوش مصنوعی حذف شد.");
       setError(false);
-    } else {
+    } catch (e) {
       setError(true);
-      setMessage("حذف تنظیمات ناموفق بود.");
+      setMessage(e instanceof Error ? e.message : "حذف تنظیمات ناموفق بود.");
     }
   }
 
