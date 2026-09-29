@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, TusanButton, SectionHeader, TusanTable, TusanBadge, TusanStatCard } from "@/components/ui";
 import StaffRoleManagement from "@/components/admin/StaffRoleManagement";
+import UserManagementDialog from "@/components/admin/UserManagementDialog";
 
 type StaffAssignment = { code: string; name: string; status: string; commission_percent: number | null };
 type UserProfile = {
@@ -18,6 +19,7 @@ export default function AdminUsers() {
     const [search, setSearch] = useState("");
     const [roleFilter, setRoleFilter] = useState<"all" | "user" | "admin">("all");
     const [selectedStaffUser, setSelectedStaffUser] = useState<UserProfile | null>(null);
+    const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true); const [error, setError] = useState("");
 
     useEffect(() => { loadUsers(); }, []);
@@ -65,7 +67,7 @@ export default function AdminUsers() {
             phone: user.phone || "تکمیل نشده", role: <TusanBadge variant={user.role === "admin" ? "info" : "success"}>{getRoleLabel(user.role)}</TusanBadge>,
             staff: user.staff_roles.filter(r => r.status === "approved").length ? <div className="flex flex-wrap gap-1 justify-center">{user.staff_roles.filter(r => r.status === "approved").map(r => <TusanBadge key={r.code} variant="info">{r.name}{r.code === "order_manager" && r.commission_percent != null ? ` · ${Number(r.commission_percent).toLocaleString("fa-IR")}٪` : ""}</TusanBadge>)}</div> : <span className="text-xs text-[var(--text-muted)]">بدون مقام</span>,
             profile: user.profile_completed ? <TusanBadge variant="success">تکمیل‌شده</TusanBadge> : <TusanBadge variant="warning">تکمیل نشده</TusanBadge>, orders: <span className="font-bold text-[var(--text)]">{user.order_count.toLocaleString("fa-IR")}</span>, created: formatDate(user.created_at),
-            actions: <div className="flex flex-wrap gap-2 justify-end"><Link href={`/admin/orders?user=${user.id}`}><TusanButton size="sm" variant="outline">سفارش‌ها</TusanButton></Link><TusanButton size="sm" variant="secondary" onClick={() => setSelectedStaffUser(user)}>مدیریت مقام</TusanButton></div>
+            actions: <div className="flex flex-wrap gap-2 justify-end"><Link href={`/admin/orders?user=${user.id}`}><TusanButton size="sm" variant="outline">سفارش‌ها</TusanButton></Link><TusanButton size="sm" variant="secondary" onClick={() => setSelectedStaffUser(user)}>مدیریت مقام</TusanButton><TusanButton size="sm" onClick={() => setSelectedUser(user)}>مدیریت کاربر</TusanButton></div>
         }))} emptyTitle="کاربری با این مشخصات پیدا نشد" emptyDescription="عبارت جستجو یا فیلتر نقش را تغییر دهید." />}
     </div>;
 }
