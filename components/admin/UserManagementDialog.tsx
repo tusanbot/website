@@ -40,7 +40,7 @@ export default function UserManagementDialog({ userId, onClose, onSaved }: Props
       const original=[...assigned]; const add=selectedTags.filter(x=>!original.includes(x)); const remove=original.filter(x=>!selectedTags.includes(x));
       const r=await fetch(`/api/admin/users/${userId}`,{method:"PATCH",headers:h,body:JSON.stringify({
         email:user.email, email_confirm:emailConfirm,
-        phone:user.phone, phone_confirm:phoneConfirm,
+        phone:user.profile?.phone ?? user.phone ?? "", phone_confirm:phoneConfirm,
         password:password||undefined,
         profile:user.profile,
         add_tag_ids:add, remove_tag_ids:remove
