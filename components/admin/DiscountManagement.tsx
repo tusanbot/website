@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Copy, Check, Link2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { GlassPanel, SectionHeader, TusanBadge, TusanButton, TusanInput, TusanTable } from "@/components/ui";
 
 type Tag={id:string;name:string;slug:string;description:string|null;color:string;is_active:boolean};
 type Discount={id:string;name:string;description:string|null;discount_type:"percent"|"fixed";value:number;max_discount_amount:number|null;min_order_amount:number|null;starts_at:string|null;ends_at:string|null;usage_limit:number|null;per_user_limit:number|null;is_active:boolean;stackable:boolean;priority:number};
 type User={id:string;full_name:string|null;email:string|null};
-type LinkRow={id:string;tag_id:string;code:string;is_active:boolean;expires_at:string|null};
+type LinkRow={id:string;tag_id:string;code:string;is_active:boolean;expires_at:string|null;assignment_duration_days:number|null};
 type Service={id:string;title:string;is_active:boolean};
 
 type DiscountForm = { name:string; description:string; discount_type:"percent"|"fixed"; value:string; max_discount_amount:string; min_order_amount:string; starts_at:string; ends_at:string; usage_limit:string; per_user_limit:string; priority:string; stackable:boolean; is_active:boolean };
@@ -15,7 +16,7 @@ const emptyDiscount: DiscountForm={name:"",description:"",discount_type:"percent
 
 export default function DiscountManagement(){
  const [tags,setTags]=useState<Tag[]>([]); const [discounts,setDiscounts]=useState<Discount[]>([]); const [links,setLinks]=useState<LinkRow[]>([]); const [users,setUsers]=useState<User[]>([]); const [services,setServices]=useState<Service[]>([]);
- const [loading,setLoading]=useState(true); const [error,setError]=useState(""); const [tagForm,setTagForm]=useState({name:"",slug:"",description:"",color:"#179d99"}); const [discountForm,setDiscountForm]=useState(emptyDiscount); const [codeForm,setCodeForm]=useState({discount_id:"",code:"",usage_limit:"",per_user_limit:"",starts_at:"",ends_at:""}); const [linkForm,setLinkForm]=useState({tag_id:"",code:"",expires_at:"",assignment_duration_days:""}); const [assignForm,setAssignForm]=useState({userId:"",tagId:"",expires_at:""}); const [bindingForm,setBindingForm]=useState({discountId:"",tagId:"",serviceId:""});
+ const [loading,setLoading]=useState(true); const [copiedLink,setCopiedLink]=useState(""); const [error,setError]=useState(""); const [tagForm,setTagForm]=useState({name:"",slug:"",description:"",color:"#179d99"}); const [discountForm,setDiscountForm]=useState(emptyDiscount); const [codeForm,setCodeForm]=useState({discount_id:"",code:"",usage_limit:"",per_user_limit:"",starts_at:"",ends_at:""}); const [linkForm,setLinkForm]=useState({tag_id:"",code:"",expires_at:"",assignment_duration_days:""}); const [assignForm,setAssignForm]=useState({userId:"",tagId:"",expires_at:""}); const [bindingForm,setBindingForm]=useState({discountId:"",tagId:"",serviceId:""});
  async function load(){
   setLoading(true);setError("");
   try{
@@ -39,8 +40,17 @@ export default function DiscountManagement(){
  useEffect(()=>{void load();},[]);
  async function addTag(){
   if(!tagForm.name.trim()||!tagForm.slug.trim())return setError("نام و slug تگ الزامی است.");
-  const {error}=await supabase.from("member_tags").insert({name:tagForm.name.trim(),slug:tagForm.slug.trim().toLowerCase(),description:tagForm.description.trim()||null,color:tagForm.color});
-  if(error)return setError(error.message);setTagForm({name:"",slug:"",description:"",color:"#179d99"});await load();
+  const slug=tagForm.slug.trim().toLowerCase().replace(/[^a-z0-9_-]+/g,"-").replace(/^-+|-+$/g,"");
+  if(!slug)return setError("slug تگ معتبر نیست.");
+  const {data:tag,error}=await supabase.from("member_tags").insert({name:tagForm.name.trim(),slug,description:tagForm.description.trim()||null,color:tagForm.color}).select("id").single();
+  if(error)return setError(error.message);
+  const code=slug.toUpperCase().slice(0,80);
+  const {error:linkError}=await supabase.from("tag_referral_links").insert({tag_id:tag.id,code});
+  if(linkError){
+    await supabase.from("member_tags").delete().eq("id",tag.id);
+    return setError("تگ ثبت نشد؛ ساخت لینک ثبت‌نام اختصاصی تگ ناموفق بود.");
+  }
+  setTagForm({name:"",slug:"",description:"",color:"#179d99"});await load();
  }
  async function addDiscount(){
   if(!discountForm.name.trim()||!discountForm.value)return setError("نام و مقدار تخفیف الزامی است.");
@@ -81,7 +91,7 @@ export default function DiscountManagement(){
   <GlassPanel className="p-5 space-y-4">
    <h2 className="font-black text-lg">تگ اعضا</h2>
    <div className="grid md:grid-cols-4 gap-3"><TusanInput placeholder="نام تگ" value={tagForm.name} onChange={e=>setTagForm(v=>({...v,name:e.target.value}))}/><TusanInput placeholder="slug انگلیسی" value={tagForm.slug} onChange={e=>setTagForm(v=>({...v,slug:e.target.value}))}/><TusanInput placeholder="توضیح" value={tagForm.description} onChange={e=>setTagForm(v=>({...v,description:e.target.value}))}/><TusanButton onClick={addTag}>افزودن تگ</TusanButton></div>
-   <div className="flex flex-wrap gap-2">{tags.map(t=><TusanBadge key={t.id} variant={t.is_active?"info":"danger"}>{t.name} · {t.slug}</TusanBadge>)}</div>
+   <div className="space-y-2">{tags.map(t=>{const link=links.find(l=>l.tag_id===t.id&&l.is_active);const url=link?(typeof window!=="undefined"?window.location.origin:"https://tusancn.ir")+"/join/"+encodeURIComponent(link.code):"";return <div key={t.id} className="flex flex-col gap-3 rounded-2xl border border-[var(--border)] p-3 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-2"><TusanBadge variant={t.is_active?"info":"danger"}>{t.name} · {t.slug}</TusanBadge>{link&&<span className="text-xs text-[var(--text-muted)]">کد: <span dir="ltr" className="font-mono font-bold">{link.code}</span></span>}</div>{link?<div className="flex items-center gap-2"><span dir="ltr" className="max-w-[420px] truncate rounded-xl bg-[var(--surface-secondary)] px-3 py-2 text-xs text-[var(--text-muted)]">{url}</span><TusanButton variant="secondary" onClick={async()=>{await navigator.clipboard.writeText(url);setCopiedLink(link.id);setTimeout(()=>setCopiedLink(""),1800);}}>{copiedLink===link.id?<><Check size={15}/>کپی شد</>:<><Copy size={15}/>کپی لینک</>}</TusanButton></div>:<span className="text-xs text-red-600">لینک ثبت‌نام ندارد</span>}</div>})}</div>
   </GlassPanel>
   <GlassPanel className="p-5 space-y-4">
    <h2 className="font-black text-lg">تخفیف جدید</h2>
@@ -108,7 +118,7 @@ export default function DiscountManagement(){
   <GlassPanel className="p-5 space-y-4">
    <h2 className="font-black text-lg">لینک اختصاصی و اختصاص تگ</h2>
    <div className="grid md:grid-cols-4 gap-3"><select value={linkForm.tag_id} onChange={e=>setLinkForm(v=>({...v,tag_id:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white">{tags.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><TusanInput placeholder="کد لینک، مثلاً TRACTOR" value={linkForm.code} onChange={e=>setLinkForm(v=>({...v,code:e.target.value}))}/><TusanInput placeholder="تاریخ انقضا ISO" value={linkForm.expires_at} onChange={e=>setLinkForm(v=>({...v,expires_at:e.target.value}))}/><TusanInput placeholder="مدت تگ (روز)" type="number" value={linkForm.assignment_duration_days} onChange={e=>setLinkForm(v=>({...v,assignment_duration_days:e.target.value}))}/><TusanButton onClick={addLink}>ساخت لینک</TusanButton></div>
-   <div className="text-sm text-[var(--text-muted)]">لینک خروجی: <span dir="ltr">/join/CODE</span></div>
+   <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]"><Link2 size={16}/>لینک‌های این بخش با فرمت <span dir="ltr" className="font-mono">https://tusancn.ir/join/CODE</span> ساخته می‌شوند و مستقیماً تگ را به کاربر ثبت‌نام‌شده اختصاص می‌دهند.</div>
    <TusanTable columns={[{key:"code",title:"کد"},{key:"tag",title:"تگ"},{key:"status",title:"وضعیت"}]} rows={links.map(l=>({code:<span dir="ltr" className="font-bold">{l.code}</span>,tag:tagName[l.tag_id]||"—",status:<TusanBadge variant={l.is_active?"success":"danger"}>{l.is_active?"فعال":"غیرفعال"}</TusanBadge>}))}/>
    <div className="border-t pt-4 space-y-3">
     <div className="grid md:grid-cols-4 gap-3"><select value={bindingForm.discountId} onChange={e=>setBindingForm(v=>({...v,discountId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white">{discounts.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select><select value={bindingForm.tagId} onChange={e=>setBindingForm(v=>({...v,tagId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white"><option value="">بدون تگ (عمومی)</option>{tags.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><select value={bindingForm.serviceId} onChange={e=>setBindingForm(v=>({...v,serviceId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white"><option value="">همه خدمات</option>{services.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select><TusanButton onClick={bindDiscount}>اتصال تخفیف</TusanButton></div>
