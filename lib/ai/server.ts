@@ -25,11 +25,35 @@ function pickModel(available: Array<{ name: string; methods: string[] }>, capabi
   return preferred.find((name) => candidates.some((item) => item.name === name)) || candidates.find((item) => capability === "text" && /flash/i.test(item.name))?.name || candidates[0]?.name;
 }
 export async function discoverGeminiModels(apiKey: string) {
-  const response = await fetch(`${getGeminiBaseUrl()}/models`, { headers: { "x-goog-api-key": apiKey.trim() }, cache: "no-store", signal: AbortSignal.timeout(10000) });
-  if (!response.ok) { if (response.status === 401 || response.status === 403) throw new Error("GEMINI_AUTH"); if (response.status === 429) throw new Error("GEMINI_RATE_LIMIT"); throw new Error("GEMINI_MODELS_UNAVAILABLE"); }
-  const data = await response.json() as { models?: GeminiModel[] }; const available = normalizeModels(data.models || []);
+  const baseUrl = getGeminiBaseUrl();
+  let response: Response;
+  try {
+    response = await fetch(baseUrl + "/models", {
+      method: "GET",
+      headers: { "x-goog-api-key": apiKey.trim(), Accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "network error";
+    console.error("Gemini model discovery request failed", { baseUrl, detail });
+    throw new Error("GEMINI_NETWORK");
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { error?: { message?: string; status?: string } } | null;
+    const detail = payload?.error?.message || payload?.error?.status || ("HTTP " + response.status);
+    console.error("Gemini model discovery failed", { baseUrl, status: response.status, detail });
+    if (response.status === 401 || response.status === 403) throw new Error("GEMINI_AUTH");
+    if (response.status === 429) throw new Error("GEMINI_RATE_LIMIT");
+    throw new Error("GEMINI_MODELS_UNAVAILABLE");
+  }
+
+  const data = await response.json() as { models?: GeminiModel[] };
+  const available = normalizeModels(data.models || []);
   return { available, config: { text: pickModel(available, "text"), image: pickModel(available, "image"), video: pickModel(available, "video"), music: pickModel(available, "music"), tts: pickModel(available, "tts"), available, checkedAt: new Date().toISOString() } satisfies AiModelConfig };
 }
+
 export async function validateGeminiKey(apiKey: string, capability: AiCapability = "text") {
   if (!apiKey.trim()) return { ok: false as const, message: "کلید API را وارد کنید." };
   try {
@@ -43,6 +67,9 @@ export async function validateGeminiKey(apiKey: string, capability: AiCapability
   } catch (error) {
     if (error instanceof Error && error.message === "GEMINI_AUTH") return { ok: false as const, message: "کلید Gemini معتبر نیست یا دسترسی لازم را ندارد." };
     if (error instanceof Error && error.message === "GEMINI_RATE_LIMIT") return { ok: false as const, message: "محدودیت درخواست Gemini فعال است؛ کمی بعد دوباره تلاش کنید." };
+    if (error instanceof Error && error.message === "GEMINI_NETWORK") return { ok: false as const, message: "ارتباط سرور توسن با سرویس Gemini برقرار نشد. اتصال اینترنت سرور یا تنظیمات GEMINI_API_BASE_URL را بررسی کنید." };
+    if (error instanceof Error && error.message === "GEMINI_MODELS_UNAVAILABLE") return { ok: false as const, message: "فهرست مدل‌های Gemini از سمت Google دریافت نشد. تنظیمات API یا دسترسی کلید را بررسی کنید." };
+    console.error("Gemini key validation failed", error);
     return { ok: false as const, message: "اعتبارسنجی کلید Gemini انجام نشد." };
   }
 }
