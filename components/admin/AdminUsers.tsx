@@ -69,5 +69,6 @@ export default function AdminUsers() {
             profile: user.profile_completed ? <TusanBadge variant="success">تکمیل‌شده</TusanBadge> : <TusanBadge variant="warning">تکمیل نشده</TusanBadge>, orders: <span className="font-bold text-[var(--text)]">{user.order_count.toLocaleString("fa-IR")}</span>, created: formatDate(user.created_at),
             actions: <div className="flex flex-wrap gap-2 justify-end"><Link href={`/admin/orders?user=${user.id}`}><TusanButton size="sm" variant="outline">سفارش‌ها</TusanButton></Link><TusanButton size="sm" variant="secondary" onClick={() => setSelectedStaffUser(user)}>مدیریت مقام</TusanButton><TusanButton size="sm" onClick={() => setSelectedUser(user)}>مدیریت کاربر</TusanButton></div>
         }))} emptyTitle="کاربری با این مشخصات پیدا نشد" emptyDescription="عبارت جستجو یا فیلتر نقش را تغییر دهید." />}
+    {selectedUser && <UserManagementDialog userId={selectedUser.id} onClose={() => setSelectedUser(null)} onSaved={() => { setSelectedUser(null); void loadUsers(); }} />}
     </div>;
 }
