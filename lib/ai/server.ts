@@ -62,17 +62,26 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
     try { keys[capability] = await getProfileApiKey(existing.profile.id, capability); } catch { /* capability is not configured */ }
   }
 
+  // Only validate keys supplied in this request. Existing saved keys are already
+  // trusted configuration and must not block adding a new independent capability
+  // (for example, adding TTS must not fail because an old text key is no longer valid).
+  const incomingCapabilities = new Set(Object.keys(incomingKeys) as AiCapability[]);
   const validationEntries = await Promise.all(
-    Object.entries(keys).map(async ([capability, key]) => [capability, await validateGeminiKey(key!, capability as AiCapability)] as const)
+    [...incomingCapabilities].map(async (capability) => {
+      const key = keys[capability];
+      return [capability, await validateGeminiKey(key!, capability)] as const;
+    })
   );
   const invalidResult = validationEntries.find(([, result]) => !result.ok)?.[1];
   if (invalidResult && !invalidResult.ok) return { ok: false as const, message: invalidResult.message };
-  if (!validationEntries.length) return { ok: false as const, message: "حداقل یک کلید API برای متن و چت یا متن به صوت وارد کنید." };
+  if (!Object.keys(keys).length) return { ok: false as const, message: "حداقل یک کلید API برای متن و چت یا متن به صوت وارد کنید." };
 
-  const modelConfig: AiModelConfig = {};
-  for (const capability of ["text", "tts"] as const) {
-    const result = validationEntries.find(([name]) => name === capability)?.[1];
-    if (result?.ok) modelConfig[capability] = result.model;
+  const existingConfig = existing?.profile.model_config
+    ? (existing.profile.model_config as AiModelConfig)
+    : {};
+  const modelConfig: AiModelConfig = { ...existingConfig };
+  for (const [capability, result] of validationEntries) {
+    if (result.ok) modelConfig[capability] = result.model;
   }
 
   const primaryKey = keys.text || keys.tts;
