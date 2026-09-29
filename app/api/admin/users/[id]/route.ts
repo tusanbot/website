@@ -106,8 +106,8 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
     }
 
     if (Array.isArray(body.add_tag_ids) || Array.isArray(body.remove_tag_ids)) {
-      const addTagIds = [...new Set((body.add_tag_ids ?? []).filter((x: unknown): x is string => typeof x === "string" && x))];
-      const removeTagIds = [...new Set((body.remove_tag_ids ?? []).filter((x: unknown): x is string => typeof x === "string" && x))];
+      const addTagIds = [...new Set((body.add_tag_ids ?? []).filter((x: unknown): x is string => typeof x === "string" && x.length > 0))];
+      const removeTagIds = [...new Set((body.remove_tag_ids ?? []).filter((x: unknown): x is string => typeof x === "string" && x.length > 0))];
 
       if (removeTagIds.length) {
         const { error } = await client.from("member_tag_assignments").delete().eq("user_id", id).in("tag_id", removeTagIds);
