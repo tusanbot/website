@@ -28,7 +28,16 @@ export default function DiscountManagement(){
     supabase.from("services").select("id,title,is_active").eq("is_active",true).order("title")
    ]);
    if(t.error)throw t.error;if(d.error)throw d.error;if(l.error)throw l.error;
-   setTags((t.data||[]) as Tag[]);setDiscounts((d.data||[]) as Discount[]);setLinks((l.data||[]) as LinkRow[]);setUsers((u.users||[]) as User[]);if(sv.error)throw sv.error;setServices((sv.data||[]) as Service[]);
+   const fetchedTags=(t.data||[]) as Tag[]; const fetchedLinks=(l.data||[]) as LinkRow[];
+   const linkedTagIds=new Set(fetchedLinks.map(link=>link.tag_id));
+   const missingLinks=fetchedTags.filter(tag=>!linkedTagIds.has(tag.id));
+   if(missingLinks.length){
+    const generated=missingLinks.map(tag=>({tag_id:tag.id,code:tag.slug.toUpperCase().slice(0,80)}));
+    const {error:generatedError}=await supabase.from("tag_referral_links").upsert(generated,{onConflict:"code"});
+    if(generatedError) console.error("Failed to generate missing tag referral links:",generatedError);
+    else fetchedLinks.push(...generated.map((item,index)=>({id:"generated-"+index,tag_id:item.tag_id,code:item.code,is_active:true,expires_at:null,assignment_duration_days:null})));
+   }
+   setTags(fetchedTags);setDiscounts((d.data||[]) as Discount[]);setLinks(fetchedLinks);setUsers((u.users||[]) as User[]);if(sv.error)throw sv.error;setServices((sv.data||[]) as Service[]);
    if(!codeForm.discount_id && d.data?.[0])setCodeForm(v=>({...v,discount_id:d.data[0].id}));
    if(!linkForm.tag_id && t.data?.[0])setLinkForm(v=>({...v,tag_id:t.data[0].id}));
    if(!assignForm.tagId && t.data?.[0])setAssignForm(v=>({...v,tagId:t.data[0].id}));
