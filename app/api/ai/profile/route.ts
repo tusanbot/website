@@ -19,13 +19,13 @@ export async function PUT(request: NextRequest) {
     const body = await request.json() as { apiKey?: unknown; apiKeys?: unknown };
     const apiKeys: AiCapabilityKeys = {};
     if (body.apiKeys && typeof body.apiKeys === "object" && !Array.isArray(body.apiKeys)) {
-      for (const capability of ["text", "image", "video", "music", "tts"] as const) {
+      for (const capability of ["text", "tts"] as const) {
         const value = (body.apiKeys as Record<string, unknown>)[capability];
         if (typeof value === "string" && value.trim().length >= 20) apiKeys[capability] = value.trim();
       }
     }
     if (typeof body.apiKey === "string" && body.apiKey.trim().length >= 20 && !apiKeys.text) apiKeys.text = body.apiKey.trim();
-    if (!Object.keys(apiKeys).length) return NextResponse.json({ error: "حداقل یک کلید API معتبر وارد کنید." }, { status: 400 });
+    if (!Object.keys(apiKeys).length) return NextResponse.json({ error: "حداقل یک کلید API برای متن و چت یا متن به صوت وارد کنید." }, { status: 400 });
     const result = await createAiSession(apiKeys);
     if (!result.ok) return NextResponse.json({ error: result.message }, { status: 401 });
     return NextResponse.json({ profile: result.profile });
