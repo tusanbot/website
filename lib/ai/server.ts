@@ -65,8 +65,8 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
   const validationEntries = await Promise.all(
     Object.entries(keys).map(async ([capability, key]) => [capability, await validateGeminiKey(key!, capability as AiCapability)] as const)
   );
-  const invalidEntry = validationEntries.find(([, result]) => !result.ok);
-  if (invalidEntry) return { ok: false as const, message: invalidEntry[1].message };
+  const invalidResult = validationEntries.find(([, result]) => !result.ok)?.[1];
+  if (invalidResult && !invalidResult.ok) return { ok: false as const, message: invalidResult.message };
   if (!validationEntries.length) return { ok: false as const, message: "حداقل یک کلید API برای متن و چت یا متن به صوت وارد کنید." };
 
   const modelConfig: AiModelConfig = {};
