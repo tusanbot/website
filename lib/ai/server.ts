@@ -178,9 +178,9 @@ export async function getAiProfile() {
   if (!data) return null;
   const profile = Array.isArray(data.ai_profiles) ? data.ai_profiles[0] : data.ai_profiles;
   if (!profile) return null;
-  const siteUserId = await getSiteUserId();
-  if (profile.user_id && profile.user_id !== siteUserId) return null;
-  if (!profile.user_id && siteUserId) return null;
+  // The AI session is an independent bearer session. Do not require a second
+  // Supabase Auth lookup just to read it; a stale main-auth cookie must not
+  // prevent the user from opening the AI profile page.
   if (profile.provider === "gemini" && DEPRECATED_TEXT_MODELS.has(profile.model)) {
     profile.model = DEFAULT_TEXT_MODEL;
     const currentConfig = (profile.model_config || {}) as AiModelConfig;
