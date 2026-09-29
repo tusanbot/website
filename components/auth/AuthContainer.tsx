@@ -23,6 +23,7 @@ export default function AuthContainer() {
     const [googleError, setGoogleError] = useState("");
 
     useEffect(() => {
+        if (referralCode) localStorage.setItem("tusan_referral", referralCode);
         let mounted = true;
 
         async function checkSession() {
@@ -43,9 +44,20 @@ export default function AuthContainer() {
         const {
             data: { subscription },
         } = supabase.auth.onAuthStateChange((_event, session) => {
-            if (session?.user) {
-                router.replace("/dashboard");
-            }
+            if (!session?.user) return;
+            const ref = referralCode || localStorage.getItem("tusan_referral") || "";
+            const claimPromise = ref
+                ? fetch("/api/referral/claim", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ code: ref }),
+                }).then((response) => {
+                    if (response.ok) localStorage.removeItem("tusan_referral");
+                }).catch((error) => {
+                    console.error("Referral claim after auth state change failed:", error);
+                })
+                : Promise.resolve();
+            void claimPromise.finally(() => router.replace("/dashboard"));
         });
 
         return () => {
