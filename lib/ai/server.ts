@@ -39,7 +39,6 @@ export async function discoverGeminiModels(apiKey: string) {
     console.error("Gemini model discovery request failed", { baseUrl, detail });
     throw new Error("GEMINI_NETWORK");
   }
-
   if (!response.ok) {
     const payload = await response.json().catch(() => null) as { error?: { message?: string; status?: string } } | null;
     const detail = payload?.error?.message || payload?.error?.status || ("HTTP " + response.status);
@@ -48,12 +47,10 @@ export async function discoverGeminiModels(apiKey: string) {
     if (response.status === 429) throw new Error("GEMINI_RATE_LIMIT");
     throw new Error("GEMINI_MODELS_UNAVAILABLE");
   }
-
   const data = await response.json() as { models?: GeminiModel[] };
   const available = normalizeModels(data.models || []);
   return { available, config: { text: pickModel(available, "text"), image: pickModel(available, "image"), video: pickModel(available, "video"), music: pickModel(available, "music"), tts: pickModel(available, "tts"), available, checkedAt: new Date().toISOString() } satisfies AiModelConfig };
 }
-
 export async function validateGeminiKey(apiKey: string, capability: AiCapability = "text") {
   if (!apiKey.trim()) return { ok: false as const, message: "کلید API را وارد کنید." };
   try {
@@ -73,25 +70,42 @@ export async function validateGeminiKey(apiKey: string, capability: AiCapability
     return { ok: false as const, message: "اعتبارسنجی کلید Gemini انجام نشد." };
   }
 }
-async function getSiteUserId() { const site = await createSupabaseServerClient(); const { data: { user } } = await site.auth.getUser(); return user?.id || null; }
+
+async function getSiteUserId() {
+  const site = await createSupabaseServerClient();
+  const { data, error } = await site.auth.getClaims();
+  if (error) {
+    console.error("AI profile auth claims lookup failed", error);
+    return null;
+  }
+  const sub = data?.claims?.sub;
+  return typeof sub === "string" ? sub : null;
+}
+
 const keyColumn: Record<AiCapability, string> = { text: "text_encrypted_api_key", image: "image_encrypted_api_key", video: "video_encrypted_api_key", music: "music_encrypted_api_key", tts: "tts_encrypted_api_key" };
 function capabilityPayload(keys: AiCapabilityKeys) { const payload: Record<string, string> = {}; for (const capability of Object.keys(keyColumn) as AiCapability[]) { const value = keys[capability]?.trim(); if (value) payload[keyColumn[capability]] = encryptApiKey(value); } return payload; }
+
+async function getExistingAiProfile() {
+  try {
+    return await getAiProfile();
+  } catch (error) {
+    console.error("AI existing profile lookup failed", error);
+    return null;
+  }
+}
 
 export async function createAiSession(input: string | AiCapabilityKeys) {
   const incomingKeys: AiCapabilityKeys = typeof input === "string"
     ? { text: input }
     : Object.fromEntries(Object.entries(input).filter(([, value]) => typeof value === "string" && value.trim())) as AiCapabilityKeys;
 
-  const existing = await getAiProfile();
+  const existing = await getExistingAiProfile();
   const keys: AiCapabilityKeys = { ...incomingKeys };
   for (const capability of ["text", "tts"] as const) {
     if (keys[capability] || !existing?.profile.id) continue;
     try { keys[capability] = await getProfileApiKey(existing.profile.id, capability); } catch { /* capability is not configured */ }
   }
 
-  // Only validate keys supplied in this request. Existing saved keys are already
-  // trusted configuration and must not block adding a new independent capability
-  // (for example, adding TTS must not fail because an old text key is no longer valid).
   const incomingCapabilities = new Set(Object.keys(incomingKeys) as AiCapability[]);
   const validationEntries = await Promise.all(
     [...incomingCapabilities].map(async (capability) => {
@@ -103,13 +117,9 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
   if (invalidResult && !invalidResult.ok) return { ok: false as const, message: invalidResult.message };
   if (!Object.keys(keys).length) return { ok: false as const, message: "حداقل یک کلید API برای متن و چت یا متن به صوت وارد کنید." };
 
-  const existingConfig = existing?.profile.model_config
-    ? (existing.profile.model_config as AiModelConfig)
-    : {};
+  const existingConfig = existing?.profile.model_config ? (existing.profile.model_config as AiModelConfig) : {};
   const modelConfig: AiModelConfig = { ...existingConfig };
-  for (const [capability, result] of validationEntries) {
-    if (result.ok) modelConfig[capability] = result.model;
-  }
+  for (const [capability, result] of validationEntries) if (result.ok) modelConfig[capability] = result.model;
 
   const primaryKey = keys.text || keys.tts;
   if (!primaryKey) return { ok: false as const, message: "حداقل یک کلید API برای متن و چت یا متن به صوت وارد کنید." };
@@ -129,7 +139,8 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
 
   let profile;
   if (userId) {
-    const { data: current } = await db.from("ai_profiles").select("id").eq("user_id", userId).maybeSingle();
+    const { data: current, error: currentError } = await db.from("ai_profiles").select("id").eq("user_id", userId).maybeSingle();
+    if (currentError) throw new Error("خواندن پروفایل هوش مصنوعی انجام نشد.");
     if (current?.id) {
       const { data, error } = await db.from("ai_profiles").update(payload).eq("id", current.id).select("id,provider,model,model_config,created_at,last_used_at").single();
       if (error || !data) throw new Error("ذخیره پروفایل هوش مصنوعی انجام نشد.");
@@ -155,15 +166,39 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
 }
 
 export async function getAiProfile() {
-  const jar = await cookies(); const token = jar.get(AI_SESSION_COOKIE)?.value; if (!token) return null; const db = supabaseAdmin();
-  const { data } = await db.from("ai_sessions").select("id,ai_profile_id,expires_at,ai_profiles(id,user_id,provider,model,model_config,created_at,last_used_at)").eq("token_hash", hashSessionToken(token)).gt("expires_at", new Date().toISOString()).maybeSingle(); if (!data) return null;
-  const profile = Array.isArray(data.ai_profiles) ? data.ai_profiles[0] : data.ai_profiles; if (!profile) return null; const siteUserId = await getSiteUserId(); if (profile.user_id && profile.user_id !== siteUserId) return null; if (!profile.user_id && siteUserId) return null;
-  if (profile.provider === "gemini" && DEPRECATED_TEXT_MODELS.has(profile.model)) { profile.model = DEFAULT_TEXT_MODEL; const currentConfig = (profile.model_config || {}) as AiModelConfig; profile.model_config = { ...currentConfig, text: DEFAULT_TEXT_MODEL }; await db.from("ai_profiles").update({ model: DEFAULT_TEXT_MODEL, model_config: profile.model_config, last_used_at: new Date().toISOString() }).eq("id", profile.id); }
+  const jar = await cookies();
+  const token = jar.get(AI_SESSION_COOKIE)?.value;
+  if (!token) return null;
+  const db = supabaseAdmin();
+  const { data, error } = await db.from("ai_sessions").select("id,ai_profile_id,expires_at,ai_profiles(id,user_id,provider,model,model_config,created_at,last_used_at)").eq("token_hash", hashSessionToken(token)).gt("expires_at", new Date().toISOString()).maybeSingle();
+  if (error) {
+    console.error("AI profile session lookup failed", error);
+    throw new Error("AI_PROFILE_LOOKUP_FAILED");
+  }
+  if (!data) return null;
+  const profile = Array.isArray(data.ai_profiles) ? data.ai_profiles[0] : data.ai_profiles;
+  if (!profile) return null;
+  const siteUserId = await getSiteUserId();
+  if (profile.user_id && profile.user_id !== siteUserId) return null;
+  if (!profile.user_id && siteUserId) return null;
+  if (profile.provider === "gemini" && DEPRECATED_TEXT_MODELS.has(profile.model)) {
+    profile.model = DEFAULT_TEXT_MODEL;
+    const currentConfig = (profile.model_config || {}) as AiModelConfig;
+    profile.model_config = { ...currentConfig, text: DEFAULT_TEXT_MODEL };
+    await db.from("ai_profiles").update({ model: DEFAULT_TEXT_MODEL, model_config: profile.model_config, last_used_at: new Date().toISOString() }).eq("id", profile.id);
+  }
   return { sessionId: data.id, profile };
 }
 
 export async function getAiCapabilityModel(profileId: string, capability: AiCapability, apiKey: string, existingConfig?: AiModelConfig | null) {
-  const config = existingConfig || {}; const current = config[capability]; if (current) return current; const discovered = await discoverGeminiModels(apiKey); const model = discovered.config[capability]; if (!model) throw new Error(`GEMINI_${capability.toUpperCase()}_MODEL_UNAVAILABLE`); await supabaseAdmin().from("ai_profiles").update({ model_config: { ...config, [capability]: model, available: discovered.config.available, checkedAt: discovered.config.checkedAt }, last_used_at: new Date().toISOString() }).eq("id", profileId); return model;
+  const config = existingConfig || {};
+  const current = config[capability];
+  if (current) return current;
+  const discovered = await discoverGeminiModels(apiKey);
+  const model = discovered.config[capability];
+  if (!model) throw new Error(`GEMINI_${capability.toUpperCase()}_MODEL_UNAVAILABLE`);
+  await supabaseAdmin().from("ai_profiles").update({ model_config: { ...config, [capability]: model, available: discovered.config.available, checkedAt: discovered.config.checkedAt }, last_used_at: new Date().toISOString() }).eq("id", profileId);
+  return model;
 }
 export async function requireAiProfile() { const session = await getAiProfile(); if (!session) throw new Error("AI_PROFILE_REQUIRED"); return session; }
 export async function getProfileApiKey(profileId: string, capability: AiCapability = "text") {
@@ -173,10 +208,14 @@ export async function getProfileApiKey(profileId: string, capability: AiCapabili
   const record = data as unknown as Record<string, string | null | undefined>;
   const capabilityKey = record[keyColumn[capability]];
   if (capabilityKey) return decryptApiKey(capabilityKey);
-
   const legacyKey = record.encrypted_api_key;
   const config = (record.model_config || {}) as AiModelConfig;
   if (legacyKey && (capability === "text" || Boolean(config[capability]))) return decryptApiKey(legacyKey);
   throw new Error("AI API key not configured");
 }
-export async function destroyAiSession() { const jar = await cookies(); const token = jar.get(AI_SESSION_COOKIE)?.value; if (token) await supabaseAdmin().from("ai_sessions").delete().eq("token_hash", hashSessionToken(token)); jar.set(AI_SESSION_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 }); }
+export async function destroyAiSession() {
+  const jar = await cookies();
+  const token = jar.get(AI_SESSION_COOKIE)?.value;
+  if (token) await supabaseAdmin().from("ai_sessions").delete().eq("token_hash", hashSessionToken(token));
+  jar.set(AI_SESSION_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
+}
