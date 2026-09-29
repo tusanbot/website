@@ -30,14 +30,14 @@ export default function UserManagementDialog({ userId, onClose, onSaved }: Props
     }catch(e){setError(e instanceof Error?e.message:"خطا در دریافت اطلاعات کاربر.");}finally{setLoading(false);}
   }
 
-  const assigned = useMemo(()=>new Set((user?.assignments||[]).map((x:any)=>x.tag_id)),[user]);
+  const assigned = useMemo<Set<string>>(() => new Set<string>((user?.assignments ?? []).map((x:any) => x.tag_id).filter((x: unknown): x is string => typeof x === "string" && x.length > 0)), [user]);
   function toggleTag(id:string){setSelectedTags(v=>v.includes(id)?v.filter(x=>x!==id):[...v,id]);}
 
   async function save(){
     if(!user) return; setSaving(true); setError(""); setMessage("");
     try{
       const h=await authHeaders();
-      const original=[...assigned]; const add=selectedTags.filter(x=>!original.includes(x)); const remove=original.filter(x=>!selectedTags.includes(x));
+      const original=Array.from(assigned); const add=selectedTags.filter(x=>!original.includes(x)); const remove=original.filter(x=>!selectedTags.includes(x));
       const r=await fetch(`/api/admin/users/${userId}`,{method:"PATCH",headers:h,body:JSON.stringify({
         email:user.email, email_confirm:emailConfirm,
         phone:user.profile?.phone ?? user.phone ?? "", phone_confirm:phoneConfirm,
