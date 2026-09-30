@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    const response = NextResponse.redirect(new URL(safeNext, request.url));
+    // cPanel/Passenger may expose the internal Next.js origin (0.0.0.0:3000)\n    // to server-side requests. Never send that internal host back to the browser.\n    const publicSiteUrl = (process.env.PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\\/$/, "");\n    const response = NextResponse.redirect(new URL(safeNext, publicSiteUrl));
     response.cookies.delete("tusan_referral");
     return response;
 }
