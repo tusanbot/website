@@ -45,7 +45,10 @@ export async function GET(request: NextRequest) {
                 if (linkError) throw linkError;
 
                 if (link && (!link.expires_at || new Date(link.expires_at) >= new Date())) {
-                    const assignmentExpiresAt = link.assignment_duration_days ? new Date(Date.now() + Number(link.assignment_duration_days) * 86400000) : (link.expires_at ? new Date(link.expires_at) : null);
+                    const assignmentExpiresAt = link.assignment_duration_days
+                        ? new Date(Date.now() + Number(link.assignment_duration_days) * 86400000)
+                        : (link.expires_at ? new Date(link.expires_at) : null);
+
                     const { error: assignmentError } = await adminDb.from("member_tag_assignments").upsert({
                         tag_id: link.tag_id,
                         user_id: user.id,
@@ -62,7 +65,10 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // cPanel/Passenger may expose the internal Next.js origin (0.0.0.0:3000)\n    // to server-side requests. Never send that internal host back to the browser.\n    const publicSiteUrl = (process.env.PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\\/$/, "");\n    const response = NextResponse.redirect(new URL(safeNext, publicSiteUrl));
+    // cPanel/Passenger may expose the internal Next.js origin (0.0.0.0:3000)
+    // to server-side requests. Never send that internal host back to the browser.
+    const publicSiteUrl = (process.env.PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\/$/, "");
+    const response = NextResponse.redirect(new URL(safeNext, publicSiteUrl));
     response.cookies.delete("tusan_referral");
     return response;
 }
