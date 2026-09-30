@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Bot, KeyRound, ShieldCheck, Trash2, Volume2, MessageSquareText } from "lucide-react";
 import { TusanButton, TusanCard } from "@/components/ui";
 
-type ModelConfig = { text?: string; tts?: string };
+type ModelConfig = { text?: string; image?: string; video?: string; music?: string; tts?: string };
 type Profile = {
   id: string;
   provider: string;
@@ -18,6 +18,9 @@ export default function AiProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [textApiKey, setTextApiKey] = useState("");
   const [ttsApiKey, setTtsApiKey] = useState("");
+  const [imageApiKey, setImageApiKey] = useState("");
+  const [videoApiKey, setVideoApiKey] = useState("");
+  const [musicApiKey, setMusicApiKey] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -50,6 +53,9 @@ export default function AiProfilePage() {
       const apiKeys: Record<string, string> = {};
       if (textApiKey.trim()) apiKeys.text = textApiKey.trim();
       if (ttsApiKey.trim()) apiKeys.tts = ttsApiKey.trim();
+      if (imageApiKey.trim()) apiKeys.image = imageApiKey.trim();
+      if (videoApiKey.trim()) apiKeys.video = videoApiKey.trim();
+      if (musicApiKey.trim()) apiKeys.music = musicApiKey.trim();
 
       const response = await fetch("/api/ai/profile", {
         method: "PUT",
@@ -63,6 +69,9 @@ export default function AiProfilePage() {
       setProfile(data.profile);
       setTextApiKey("");
       setTtsApiKey("");
+      setImageApiKey("");
+      setVideoApiKey("");
+      setMusicApiKey("");
       setMessage("تنظیمات هوش مصنوعی با موفقیت ذخیره شد.");
     } catch (e) {
       setError(true);
@@ -91,6 +100,9 @@ export default function AiProfilePage() {
 
   const textModel = profile?.model_config?.text;
   const ttsModel = profile?.model_config?.tts;
+  const imageModel = profile?.model_config?.image;
+  const videoModel = profile?.model_config?.video;
+  const musicModel = profile?.model_config?.music;
 
   return (
     <section className="mx-auto max-w-3xl space-y-5" dir="rtl">
@@ -129,6 +141,12 @@ export default function AiProfilePage() {
             </div>
             {ttsModel && <p className="mt-2 text-xs text-emerald-700">مدل فعال: <span dir="ltr">{ttsModel}</span></p>}
           </div>
+
+          <div className="rounded-2xl border border-[var(--border)] p-4"><h2 className="font-bold mb-3">تولید تصویر</h2><p className="mb-3 text-sm leading-6 text-[var(--text-muted)]">کلید Gemini برای ابزارهای تولید و ویرایش تصویر.</p><input type="password" value={imageApiKey} onChange={(e) => setImageApiKey(e.target.value)} dir="ltr" autoComplete="new-password" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-3 px-4 text-left outline-none" placeholder={imageModel ? "کلید تصویر ثبت شده است؛ برای تغییر وارد کنید" : "کلید Gemini برای تصویر"} />{imageModel && <p className="mt-2 text-xs text-emerald-700">مدل فعال: <span dir="ltr">{imageModel}</span></p>}</div>
+
+          <div className="rounded-2xl border border-[var(--border)] p-4"><h2 className="font-bold mb-3">تولید ویدیو</h2><p className="mb-3 text-sm leading-6 text-[var(--text-muted)]">کلید Gemini برای قابلیت‌های ویدیویی.</p><input type="password" value={videoApiKey} onChange={(e) => setVideoApiKey(e.target.value)} dir="ltr" autoComplete="new-password" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-3 px-4 text-left outline-none" placeholder={videoModel ? "کلید ویدیو ثبت شده است؛ برای تغییر وارد کنید" : "کلید Gemini برای ویدیو"} />{videoModel && <p className="mt-2 text-xs text-emerald-700">مدل فعال: <span dir="ltr">{videoModel}</span></p>}</div>
+
+          <div className="rounded-2xl border border-[var(--border)] p-4"><h2 className="font-bold mb-3">تولید موسیقی</h2><p className="mb-3 text-sm leading-6 text-[var(--text-muted)]">کلید Gemini برای قابلیت‌های تولید موسیقی.</p><input type="password" value={musicApiKey} onChange={(e) => setMusicApiKey(e.target.value)} dir="ltr" autoComplete="new-password" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-3 px-4 text-left outline-none" placeholder={musicModel ? "کلید موسیقی ثبت شده است؛ برای تغییر وارد کنید" : "کلید Gemini برای موسیقی"} />{musicModel && <p className="mt-2 text-xs text-emerald-700">مدل فعال: <span dir="ltr">{musicModel}</span></p>}</div>
 
           <p className="text-xs leading-6 text-[var(--text-muted)]">حداقل یکی از دو کلید را وارد کنید. اگر قبلاً یک قابلیت را ثبت کرده‌اید، برای افزودن قابلیت دیگر لازم نیست کلید قبلی را دوباره وارد کنید.</p>
 
