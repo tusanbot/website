@@ -30,7 +30,7 @@ export async function PUT(request: NextRequest) {
     const body = await request.json() as { apiKey?: unknown; apiKeys?: unknown };
     const apiKeys: AiCapabilityKeys = {};
     if (body.apiKeys && typeof body.apiKeys === "object" && !Array.isArray(body.apiKeys)) {
-      for (const capability of ["text", "tts"] as const) {
+      for (const capability of ["text", "image", "video", "music", "tts"] as const) {
         const value = (body.apiKeys as Record<string, unknown>)[capability];
         if (typeof value === "string" && value.trim().length >= 20) apiKeys[capability] = value.trim();
       }
