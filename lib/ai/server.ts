@@ -101,7 +101,7 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
 
   const existing = await getExistingAiProfile();
   const keys: AiCapabilityKeys = { ...incomingKeys };
-  for (const capability of ["text", "tts"] as const) {
+  for (const capability of ["text", "image", "video", "music", "tts"] as const) {
     if (keys[capability] || !existing?.profile.id) continue;
     try { keys[capability] = await getProfileApiKey(existing.profile.id, capability); } catch { /* capability is not configured */ }
   }
