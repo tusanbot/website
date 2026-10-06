@@ -1,7 +1,7 @@
 export type XaiTextResult = { text: string; model: string };
 export type XaiSpeechResult = { audioBase64: string; mimeType: string; model: string };
 
-const BASE_URL = (process.env.XAI_API_BASE_URL || "https://api.x.ai/v1").replace(/\\/$/, "");
+const BASE_URL = (process.env.XAI_API_BASE_URL || "https://api.x.ai/v1").replace(/\/$/, "");
 const DEFAULT_TEXT_MODEL = "grok-4.7";
 const DEFAULT_TTS_MODEL = "grok-voice";
 
