@@ -2,14 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { generateWithGeminiApiKey } from "@/lib/ai/gemini";
+import { generateWithXaiApiKey } from "@/lib/ai/xai";
 
 const MAX_MESSAGE_LENGTH=4000, MAX_HISTORY=10, RATE_LIMIT=20, RATE_WINDOW_SECONDS=600;
 const GEMINI_KEY_NAMES=["GEMINI_API_KEY_1","GEMINI_API_KEY_2","GEMINI_API_KEY_3","GEMINI_API_KEY_4","GEMINI_API_KEY_5"] as const;
+const XAI_KEY_NAMES=["XAI_API_KEY_1","XAI_API_KEY_2","XAI_API_KEY_3","XAI_API_KEY_4","XAI_API_KEY_5"] as const;
 type Searchable={title?:string|null;name?:string|null;question?:string|null;answer?:string|null;description?:string|null;excerpt?:string|null;content?:string|null;category?:string|null;keywords?:string[]|null;primary_keyword?:string|null;seo_keywords?:string[]|null};
 const clean=(v:unknown,max=MAX_MESSAGE_LENGTH)=>String(v??"").replace(/\u0000/g,"").trim().slice(0,max);
-const keys=()=>GEMINI_KEY_NAMES.map(name=>({name,key:process.env[name]?.trim()||""})).filter((x):x is {name:(typeof GEMINI_KEY_NAMES)[number];key:string}=>!!x.key);
-function errPublic(e:unknown){const s=(e as {status?:number})?.status,m=e instanceof Error?e.message:"";if(s===429||m==="GEMINI_RATE_LIMIT")return{error:"محدودیت سرویس هوش مصنوعی فعال شده است؛ چند دقیقه بعد دوباره تلاش کنید.",status:429};if(s===401||m==="GEMINI_AUTH")return{error:"سرویس هوش مصنوعی پشتیبانی موقتاً در دسترس نیست.",status:503};return{error:"پاسخ هوش مصنوعی دریافت نشد؛ می‌توانید به پشتیبانی انسانی متصل شوید.",status:502};}
-async function generate(prompt:string){const ks=keys();if(!ks.length)throw Object.assign(new Error("GEMINI_NOT_CONFIGURED"),{status:503});let last:unknown=null,limited=false;for(const {name,key} of ks){try{const r=await generateWithGeminiApiKey(key,prompt,"gemini-2.5-flash",{temperature:.2,maxOutputTokens:900,timeoutMs:25000});console.info("support-ai Gemini key succeeded",{key:name,model:r.model});return r;}catch(e){last=e;const m=e instanceof Error?e.message:"",s=(e as {status?:number})?.status;const rl=s===429||m==="GEMINI_RATE_LIMIT",auth=s===401||m==="GEMINI_AUTH",up=s===408||s===502||s===503||s===504||m==="GEMINI_UPSTREAM";if(rl)limited=true;if(rl||auth||up){console.warn("support-ai Gemini key failed; trying next key",{key:name,status:s,message:m});continue;}throw e;}}if(limited)throw Object.assign(new Error("GEMINI_RATE_LIMIT"),{status:429});throw last||Object.assign(new Error("GEMINI_UPSTREAM"),{status:502});}
+const keys=(names: readonly string[])=>names.map(name=>({name,key:process.env[name]?.trim()||""})).filter(x=>!!x.key);
+const configuredProviders=()=>((process.env.SUPPORT_AI_PROVIDERS||"xai,gemini").split(",").map(x=>x.trim().toLowerCase()).filter(x=>x==="xai"||x==="gemini") as Array<"xai"|"gemini">);
+function errPublic(e:unknown){const s=(e as {status?:number})?.status,m=e instanceof Error?e.message:"";if(s===429||m==="GEMINI_RATE_LIMIT"||m==="XAI_429")return{error:"محدودیت سرویس هوش مصنوعی فعال شده است؛ چند دقیقه بعد دوباره تلاش کنید.",status:429};if(s===401||s===403||m==="GEMINI_AUTH"||m==="XAI_401"||m==="XAI_403")return{error:"سرویس هوش مصنوعی پشتیبانی موقتاً در دسترس نیست.",status:503};return{error:"پاسخ هوش مصنوعی دریافت نشد؛ می‌توانید به پشتیبانی انسانی متصل شوید.",status:502};}
+async function generate(prompt:string){
+ const providers=configuredProviders(); if(!providers.length)throw Object.assign(new Error("AI_NOT_CONFIGURED"),{status:503});
+ let last:unknown=null,limited=false;
+ for(const provider of providers){
+  const names=provider==="xai"?XAI_KEY_NAMES:GEMINI_KEY_NAMES;
+  const ks=keys(names);
+  for(const {name,key} of ks){
+   try{
+    const r=provider==="xai"
+      ? await generateWithXaiApiKey(key,prompt,process.env.SUPPORT_XAI_MODEL||"grok-4.7",{temperature:.2,maxOutputTokens:900,timeoutMs:25000})
+      : await generateWithGeminiApiKey(key,prompt,process.env.SUPPORT_GEMINI_MODEL||"gemini-3.6-flash",{temperature:.2,maxOutputTokens:900,timeoutMs:25000});
+    console.info("support-ai provider succeeded",{provider,key:name,model:r.model}); return r;
+   }catch(e){
+    last=e; const m=e instanceof Error?e.message:"",s=(e as {status?:number})?.status;
+    if(s===429||m==="GEMINI_RATE_LIMIT"||m==="XAI_429") limited=true;
+    if(s===429||s===401||s===403||s===502||s===503||s===504||m.includes("_UPSTREAM")||m.includes("_AUTH")||m.includes("_429")) continue;
+    throw e;
+   }
+  }
+ }
+ if(limited)throw Object.assign(new Error("AI_RATE_LIMIT"),{status:429});
+ throw last||Object.assign(new Error("AI_UPSTREAM"),{status:502});
+}
 function norm(v:string){return v.toLowerCase().replace(/[\u200c\u200d]/g,"").replace(/ي/g,"ی").replace(/ك/g,"ک").replace(/ة/g,"ه").replace(/ۀ/g,"ه").replace(/[؟?!،؛:()\[\]{}"'«»]/g," ").replace(/\s+/g," ").trim();}
 function terms(q:string){const stop=new Set(["از","به","در","با","برای","را","که","و","یا","من","می","میشه","چی","چطور","چگونه","چه","یک","این","آن","است","هست","دارم","دارید"]);return norm(q).split(" ").filter(x=>x.length>=2&&!stop.has(x)).slice(0,14);}
 function score(x:Searchable,ts:string[]){const title=norm(`${x.title||""} ${x.name||""}`),body=norm(`${x.description||""} ${x.excerpt||""} ${x.content||""} ${x.category||""} ${x.question||""} ${x.answer||""} ${(x.keywords||[]).join(" ")} ${x.primary_keyword||""} ${(x.seo_keywords||[]).join(" ")}`);return ts.reduce((n,t)=>n+(title.includes(t)?10:0)+(body.includes(t)?3:0),0);}
@@ -17,7 +42,7 @@ function relevant<T extends Searchable>(xs:T[]|null|undefined,q:string,n:number)
 function active(x:{is_active?:boolean|null;end_at?:string|null;extended_end_at?:string|null}){if(x.is_active===false)return false;const e=x.extended_end_at||x.end_at;return !e||new Date(e).getTime()>=Date.now();}
 
 export async function POST(request:NextRequest){
- const site=await createSupabaseServerClient();const {data:{user}}=await site.auth.getUser();if(!user)return NextResponse.json({error:"برای استفاده از پشتیبانی آنلاین وارد حساب خود شوید."},{status:401});if(!keys().length)return NextResponse.json({error:"سرویس هوش مصنوعی پشتیبانی هنوز پیکربندی نشده است."},{status:503});
+ const site=await createSupabaseServerClient();const {data:{user}}=await site.auth.getUser();if(!user)return NextResponse.json({error:"برای استفاده از پشتیبانی آنلاین وارد حساب خود شوید."},{status:401});if(!configuredProviders().some(p=>keys(p==="xai"?XAI_KEY_NAMES:GEMINI_KEY_NAMES).length))return NextResponse.json({error:"سرویس هوش مصنوعی پشتیبانی هنوز پیکربندی نشده است."},{status:503});
  try{
   const b=await request.json() as Record<string,unknown>,message=clean(b.message),orderId=clean(b.orderId,80)||null,history=Array.isArray(b.history)?b.history.slice(-MAX_HISTORY).map(i=>({role:i?.role==="assistant"?"assistant":"user",text:clean(i?.text,2500)})).filter(i=>i.text):[];
   if(!message)return NextResponse.json({error:"پیام خود را وارد کنید."},{status:400});
@@ -69,5 +94,5 @@ ${conversationContext||"شروع گفتگو"}
 === سؤال جدید ===
 ${message}`;
   const result=await generate(prompt);return NextResponse.json({reply:result.text,model:result.model,remaining:rate?.remaining??null});
- }catch(e){console.error("support-ai",e);if(e instanceof Error&&e.message==="GEMINI_NOT_CONFIGURED")return NextResponse.json({error:"سرویس هوش مصنوعی پشتیبانی هنوز پیکربندی نشده است."},{status:503});const r=errPublic(e);return NextResponse.json({error:r.error},{status:r.status});}
+ }catch(e){console.error("support-ai",e);if(e instanceof Error&&e.message==="AI_NOT_CONFIGURED")return NextResponse.json({error:"سرویس هوش مصنوعی پشتیبانی هنوز پیکربندی نشده است."},{status:503});const r=errPublic(e);return NextResponse.json({error:r.error},{status:r.status});}
 }
