@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Bot, KeyRound, ShieldCheck, Trash2, Volume2, MessageSquareText } from "lucide-react";
 import { TusanButton, TusanCard } from "@/components/ui";
 
-type ModelConfig = { text?: string; image?: string; video?: string; music?: string; tts?: string };
+type ModelConfig = { text?: string; image?: string; video?: string; music?: string; tts?: string; textProvider?: "gemini"|"xai"; ttsProvider?: "gemini"|"xai" };
 type Profile = {
   id: string;
   provider: string;
@@ -18,6 +18,8 @@ export default function AiProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [textApiKey, setTextApiKey] = useState("");
   const [ttsApiKey, setTtsApiKey] = useState("");
+  const [textProvider, setTextProvider] = useState<"gemini"|"xai">("xai");
+  const [ttsProvider, setTtsProvider] = useState<"gemini"|"xai">("xai");
   const [imageApiKey, setImageApiKey] = useState("");
   const [videoApiKey, setVideoApiKey] = useState("");
   const [musicApiKey, setMusicApiKey] = useState("");
@@ -32,7 +34,7 @@ export default function AiProfilePage() {
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || "بارگذاری پروفایل هوش مصنوعی انجام نشد.");
-        if (active && data.profile) setProfile(data.profile);
+        if (active && data.profile) { setProfile(data.profile); setTextProvider(data.profile.model_config?.textProvider || (data.profile.provider === "xai" ? "xai" : "gemini")); setTtsProvider(data.profile.model_config?.ttsProvider || (data.profile.provider === "xai" ? "xai" : "gemini")); }
       })
       .catch((e) => {
         if (!active) return;
@@ -61,7 +63,7 @@ export default function AiProfilePage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ apiKeys }),
+        body: JSON.stringify({ apiKeys, providers: { text: textProvider, tts: ttsProvider } }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "ذخیره پروفایل هوش مصنوعی انجام نشد.");
@@ -109,7 +111,7 @@ export default function AiProfilePage() {
       <div>
         <div className="flex items-center gap-2 text-[var(--primary)]"><Bot size={22} /><span className="text-sm font-bold">هوش مصنوعی</span></div>
         <h1 className="mt-2 text-2xl font-black">پروفایل هوش مصنوعی</h1>
-        <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">کلیدهای شخصی Gemini را برای قابلیت‌هایی که استفاده می‌کنید ثبت کنید. هر قابلیت مستقل اعتبارسنجی می‌شود و برای متن به صوت نیازی به کلید متن و چت ندارید.</p>
+        <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">Provider هوش مصنوعی را برای هر قابلیت جداگانه انتخاب کنید. در حال حاضر Google Gemini و xAI/Grok پشتیبانی می‌شوند و می‌توانید برای متن و چت و متن به صوت Provider متفاوت داشته باشید.</p>
       </div>
 
       <TusanCard className="p-5 sm:p-7">
@@ -123,21 +125,21 @@ export default function AiProfilePage() {
 
         <form onSubmit={save} className="space-y-5">
           <div className="rounded-2xl border border-[var(--border)] p-4">
-            <div className="mb-3 flex items-center gap-2"><MessageSquareText size={19} className="text-[var(--primary)]" /><h2 className="font-bold">متن و چت</h2></div>
+            <div className="mb-3"><label className="text-sm font-bold">Provider متن و چت<select value={textProvider} onChange={e=>setTextProvider(e.target.value as "gemini"|"xai")} className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm"><option value="xai">xAI / Grok</option><option value="gemini">Google / Gemini</option></select></label></div><div className="mb-3 flex items-center gap-2"><MessageSquareText size={19} className="text-[var(--primary)]" /><h2 className="font-bold">متن و چت</h2></div>
             <p className="mb-3 text-sm leading-6 text-[var(--text-muted)]">برای چت و قابلیت‌های تولید و پردازش متن توسن.</p>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
-              <input type="password" value={textApiKey} onChange={(e) => setTextApiKey(e.target.value)} dir="ltr" autoComplete="new-password" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-3 pl-10 pr-4 text-left outline-none" placeholder={textModel ? "کلید متن و چت ثبت شده است؛ برای تغییر کلید جدید وارد کنید" : "کلید Gemini برای متن و چت"} />
+              <input type="password" value={textApiKey} onChange={(e) => setTextApiKey(e.target.value)} dir="ltr" autoComplete="new-password" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-3 pl-10 pr-4 text-left outline-none" placeholder={textModel ? "کلید متن و چت ثبت شده است؛ برای تغییر کلید جدید وارد کنید" : "کلید Provider انتخاب‌شده برای متن و چت"} />
             </div>
             {textModel && <p className="mt-2 text-xs text-emerald-700">مدل فعال: <span dir="ltr">{textModel}</span></p>}
           </div>
 
           <div className="rounded-2xl border border-[var(--border)] p-4">
-            <div className="mb-3 flex items-center gap-2"><Volume2 size={19} className="text-[var(--primary)]" /><h2 className="font-bold">متن به صوت</h2></div>
-            <p className="mb-3 text-sm leading-6 text-[var(--text-muted)]">کلید Gemini مخصوص تولید صوت. این کلید کاملاً مستقل از کلید متن و چت است.</p>
+            <div className="mb-3"><label className="text-sm font-bold">Provider متن به صوت<select value={ttsProvider} onChange={e=>setTtsProvider(e.target.value as "gemini"|"xai")} className="mt-2 w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-sm"><option value="xai">xAI / Grok Voice</option><option value="gemini">Google / Gemini TTS</option></select></label></div><div className="mb-3 flex items-center gap-2"><Volume2 size={19} className="text-[var(--primary)]" /><h2 className="font-bold">متن به صوت</h2></div>
+            <p className="mb-3 text-sm leading-6 text-[var(--text-muted)]">کلید Provider انتخاب‌شده برای متن به صوت. این کلید کاملاً مستقل از کلید متن و چت است.</p>
             <div className="relative">
               <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" size={18} />
-              <input type="password" value={ttsApiKey} onChange={(e) => setTtsApiKey(e.target.value)} dir="ltr" autoComplete="new-password" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-3 pl-10 pr-4 text-left outline-none" placeholder={ttsModel ? "کلید متن به صوت ثبت شده است؛ برای تغییر کلید جدید وارد کنید" : "کلید Gemini برای متن به صوت"} />
+              <input type="password" value={ttsApiKey} onChange={(e) => setTtsApiKey(e.target.value)} dir="ltr" autoComplete="new-password" className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-3 pl-10 pr-4 text-left outline-none" placeholder={ttsModel ? "کلید متن به صوت ثبت شده است؛ برای تغییر کلید جدید وارد کنید" : "کلید Provider انتخاب‌شده برای متن به صوت"} />
             </div>
             {ttsModel && <p className="mt-2 text-xs text-emerald-700">مدل فعال: <span dir="ltr">{ttsModel}</span></p>}
           </div>
