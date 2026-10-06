@@ -224,7 +224,7 @@ export async function getProfileApiKey(profileId: string, capability: AiCapabili
   if (error || !data) throw new Error("AI profile not found");
   const record = data as unknown as Record<string, string | null | undefined>;
   const config = (record.model_config || {}) as AiModelConfig;
-  const selectedProvider = provider || (capability === "tts" ? config.ttsProvider : capability === "text" ? config.textProvider : (record.provider as AiProvider) || "gemini");
+  const selectedProvider: AiProvider = provider || (capability === "tts" ? config.ttsProvider : capability === "text" ? config.textProvider : (record.provider as AiProvider) || "gemini");
   const selectedColumn = columnFor(selectedProvider, capability);
   const capabilityKey = selectedColumn ? record[selectedColumn] : null;
   if (capabilityKey) return decryptApiKey(capabilityKey);
