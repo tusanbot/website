@@ -108,7 +108,7 @@ export async function createAiSession(input: string | AiCapabilityKeys | { keys:
   const keys: AiCapabilityKeys = { ...incomingKeys };
   for (const capability of ["text", "image", "video", "music", "tts"] as const) {
     if (keys[capability] || !existing?.profile.id) continue;
-    try { keys[capability] = await getProfileApiKey(existing.profile.id, capability, providerFor(existing.profile.model_config as AiModelConfig, existing.profile.provider, capability)); } catch { /* capability is not configured */ }
+    try { const desiredProvider = providers[capability] || providerFor(existing.profile.model_config as AiModelConfig, existing.profile.provider, capability); keys[capability] = await getProfileApiKey(existing.profile.id, capability, desiredProvider); } catch { /* capability is not configured */ }
   }
 
   const incomingCapabilities = new Set(Object.keys(incomingKeys) as AiCapability[]);
