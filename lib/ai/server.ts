@@ -2,14 +2,16 @@ import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 import { createSessionToken, decryptApiKey, encryptApiKey, hashApiKey, hashSessionToken } from "@/lib/ai/crypto";
+import { discoverXaiModels, validateXaiKey } from "@/lib/ai/xai";
 
 export const AI_SESSION_COOKIE = "tusan_ai_session";
 const SESSION_DAYS = 30;
 const DEFAULT_TEXT_MODEL = "gemini-3.6-flash";
 const DEPRECATED_TEXT_MODELS = new Set(["gemini-2.5-flash"]);
 export type AiCapability = "text" | "image" | "video" | "music" | "tts";
+export type AiProvider = "gemini" | "xai";
 export type GeminiModel = { name?: string; supportedGenerationMethods?: string[] };
-export type AiModelConfig = { text?: string; image?: string; video?: string; music?: string; tts?: string; available?: Array<{ name: string; methods: string[] }>; checkedAt?: string };
+export type AiModelConfig = { text?: string; image?: string; video?: string; music?: string; tts?: string; textProvider?: AiProvider; ttsProvider?: AiProvider; available?: Array<{ name: string; methods: string[] }>; checkedAt?: string };
 export type AiCapabilityKeys = Partial<Record<AiCapability, string>>;
 const PREFERRED_TEXT_MODELS = ["gemini-3.6-flash", "gemini-3.6-flash-preview", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
 const PREFERRED_IMAGE_MODELS = ["gemini-3.1-flash-image", "gemini-3-pro-image-preview", "gemini-2.5-flash-image"];
@@ -83,7 +85,11 @@ async function getSiteUserId() {
 }
 
 const keyColumn: Record<AiCapability, string> = { text: "text_encrypted_api_key", image: "image_encrypted_api_key", video: "video_encrypted_api_key", music: "music_encrypted_api_key", tts: "tts_encrypted_api_key" };
-function capabilityPayload(keys: AiCapabilityKeys) { const payload: Record<string, string> = {}; for (const capability of Object.keys(keyColumn) as AiCapability[]) { const value = keys[capability]?.trim(); if (value) payload[keyColumn[capability]] = encryptApiKey(value); } return payload; }
+const xaiKeyColumn: Partial<Record<AiCapability, string>> = { text: "xai_text_encrypted_api_key", tts: "xai_tts_encrypted_api_key" };
+function providerFor(config: AiModelConfig | null | undefined, profileProvider: string, capability: AiCapability): AiProvider { const selected = capability === "tts" ? config?.ttsProvider : capability === "text" ? config?.textProvider : undefined; return selected === "xai" ? "xai" : selected === "gemini" ? "gemini" : profileProvider === "xai" ? "xai" : "gemini"; }
+function columnFor(provider: AiProvider, capability: AiCapability) { return provider === "xai" ? xaiKeyColumn[capability] : keyColumn[capability]; }
+function capabilityPayload(keys: AiCapabilityKeys, providers?: Partial<Record<AiCapability, AiProvider>>) { const payload: Record<string, string> = {}; for (const capability of Object.keys(keyColumn) as AiCapability[]) { const value = keys[capability]?.trim(); if (!value) continue; const column = columnFor(providers?.[capability] || "gemini", capability); if (column) payload[column] = encryptApiKey(value); } return payload; }
+
 
 async function getExistingAiProfile() {
   try {
@@ -94,23 +100,23 @@ async function getExistingAiProfile() {
   }
 }
 
-export async function createAiSession(input: string | AiCapabilityKeys) {
-  const incomingKeys: AiCapabilityKeys = typeof input === "string"
-    ? { text: input }
-    : Object.fromEntries(Object.entries(input).filter(([, value]) => typeof value === "string" && value.trim())) as AiCapabilityKeys;
+export async function createAiSession(input: string | AiCapabilityKeys | { keys: AiCapabilityKeys; providers?: Partial<Record<AiCapability, AiProvider>> }) {
+  const incomingKeys: AiCapabilityKeys = typeof input === "string" ? { text: input } : "keys" in input ? input.keys : Object.fromEntries(Object.entries(input).filter(([, value]) => typeof value === "string" && value.trim())) as AiCapabilityKeys;
+  const providers: Partial<Record<AiCapability, AiProvider>> = typeof input === "object" && "keys" in input ? (input.providers || {}) : {};
 
   const existing = await getExistingAiProfile();
   const keys: AiCapabilityKeys = { ...incomingKeys };
   for (const capability of ["text", "image", "video", "music", "tts"] as const) {
     if (keys[capability] || !existing?.profile.id) continue;
-    try { keys[capability] = await getProfileApiKey(existing.profile.id, capability); } catch { /* capability is not configured */ }
+    try { keys[capability] = await getProfileApiKey(existing.profile.id, capability, providerFor(existing.profile.model_config as AiModelConfig, existing.profile.provider, capability)); } catch { /* capability is not configured */ }
   }
 
   const incomingCapabilities = new Set(Object.keys(incomingKeys) as AiCapability[]);
   const validationEntries = await Promise.all(
     [...incomingCapabilities].map(async (capability) => {
       const key = keys[capability];
-      return [capability, await validateGeminiKey(key!, capability)] as const;
+      const provider = providers[capability] || providerFor(existing?.profile.model_config as AiModelConfig, existing?.profile.provider || "gemini", capability);
+      return [capability, provider === "xai" ? await validateXaiKey(key!, capability === "tts" ? "tts" : "text") : await validateGeminiKey(key!, capability)] as const;
     })
   );
   const invalidResult = validationEntries.find(([, result]) => !result.ok)?.[1];
@@ -119,7 +125,7 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
 
   const existingConfig = existing?.profile.model_config ? (existing.profile.model_config as AiModelConfig) : {};
   const modelConfig: AiModelConfig = { ...existingConfig };
-  for (const [capability, result] of validationEntries) if (result.ok) modelConfig[capability] = result.model;
+  for (const [capability, result] of validationEntries) if (result.ok) { modelConfig[capability] = result.model; const provider = providers[capability] || providerFor(existingConfig, existing?.profile.provider || "gemini", capability); if (capability === "text") modelConfig.textProvider = provider; if (capability === "tts") modelConfig.ttsProvider = provider; }
 
   const primaryKey = keys.text || keys.tts;
   if (!primaryKey) return { ok: false as const, message: "حداقل یک کلید API برای متن و چت یا متن به صوت وارد کنید." };
@@ -130,10 +136,10 @@ export async function createAiSession(input: string | AiCapabilityKeys) {
   const payload = {
     key_hash: hashApiKey(primaryKey),
     encrypted_api_key: encryptApiKey(primaryKey),
-    provider: "gemini",
+    provider: modelConfig.textProvider || "gemini",
     model: modelConfig.text || modelConfig.tts || DEFAULT_TEXT_MODEL,
     model_config: modelConfig,
-    ...capabilityPayload(keys),
+    ...capabilityPayload(keys, providers),
     last_used_at: now,
   };
 
@@ -190,10 +196,21 @@ export async function getAiProfile() {
   return { sessionId: data.id, profile };
 }
 
+export async function getAiCapabilityProvider(profileId: string, capability: AiCapability, config?: AiModelConfig | null) {
+  const session = await getAiProfile();
+  return providerFor(config || session?.profile.model_config as AiModelConfig, session?.profile.provider || "gemini", capability);
+}
 export async function getAiCapabilityModel(profileId: string, capability: AiCapability, apiKey: string, existingConfig?: AiModelConfig | null) {
   const config = existingConfig || {};
+  const provider = providerFor(config, "gemini", capability);
   const current = config[capability];
   if (current) return current;
+  if (provider === "xai") {
+    const discovered = await discoverXaiModels(apiKey);
+    const model = capability === "tts" ? discovered.tts : discovered.text;
+    await supabaseAdmin().from("ai_profiles").update({ model_config: { ...config, [capability]: model, textProvider: capability === "text" ? "xai" : config.textProvider, ttsProvider: capability === "tts" ? "xai" : config.ttsProvider, checkedAt: new Date().toISOString() }, last_used_at: new Date().toISOString() }).eq("id", profileId);
+    return model;
+  }
   const discovered = await discoverGeminiModels(apiKey);
   const model = discovered.config[capability];
   if (!model) throw new Error(`GEMINI_${capability.toUpperCase()}_MODEL_UNAVAILABLE`);
@@ -201,15 +218,17 @@ export async function getAiCapabilityModel(profileId: string, capability: AiCapa
   return model;
 }
 export async function requireAiProfile() { const session = await getAiProfile(); if (!session) throw new Error("AI_PROFILE_REQUIRED"); return session; }
-export async function getProfileApiKey(profileId: string, capability: AiCapability = "text") {
+export async function getProfileApiKey(profileId: string, capability: AiCapability = "text", provider?: AiProvider) {
   const db = supabaseAdmin();
   const { data, error } = await db.from("ai_profiles").select("*").eq("id", profileId).single();
   if (error || !data) throw new Error("AI profile not found");
   const record = data as unknown as Record<string, string | null | undefined>;
-  const capabilityKey = record[keyColumn[capability]];
+  const config = (record.model_config || {}) as AiModelConfig;
+  const selectedProvider = provider || (capability === "tts" ? config.ttsProvider : capability === "text" ? config.textProvider : (record.provider as AiProvider) || "gemini");
+  const selectedColumn = columnFor(selectedProvider, capability);
+  const capabilityKey = selectedColumn ? record[selectedColumn] : null;
   if (capabilityKey) return decryptApiKey(capabilityKey);
   const legacyKey = record.encrypted_api_key;
-  const config = (record.model_config || {}) as AiModelConfig;
   if (legacyKey && (capability === "text" || Boolean(config[capability]))) return decryptApiKey(legacyKey);
   throw new Error("AI API key not configured");
 }
