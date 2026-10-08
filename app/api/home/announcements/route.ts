@@ -19,10 +19,21 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: "دریافت اطلاعیه‌ها انجام نشد." }, { status: 503, headers: { "Cache-Control": "no-store" } });
   }
 
+  // Time validity is enforced here in addition to is_active so stale rows
+  // can never leak to the public API when an admin flag is left unchanged.
+  // extended_end_at always takes precedence over end_at.
   const activeAnnouncements = (announcements || []).filter((item) => {
     const starts = item.start_at ? Date.parse(item.start_at) : null;
-    const ends = item.extended_end_at ? Date.parse(item.extended_end_at) : (item.end_at ? Date.parse(item.end_at) : null);
-    return (starts === null || Number.isNaN(starts) || starts <= now) && (ends === null || Number.isNaN(ends) || ends >= now);
+    const endValue = item.extended_end_at || item.end_at;
+    const ends = endValue ? Date.parse(endValue) : null;
+
+    return (
+      (starts === null || !Number.isNaN(starts)) &&
+      (starts === null || starts <= now) &&
+      ends !== null &&
+      !Number.isNaN(ends) &&
+      ends > now
+    );
   });
 
   const serviceIds = [...new Set(activeAnnouncements.map((item) => item.service_id).filter(Boolean))] as string[];
