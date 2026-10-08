@@ -75,7 +75,9 @@ export async function validateXaiKey(apiKey: string, capability: "text" | "tts" 
     if (status === 0) return { ok: false as const, message: "سرور توسن نتوانست به xAI وصل شود. DNS، فایروال یا XAI_API_BASE_URL را بررسی کنید." };
     console.error("xAI key validation failed", { status, detail });
     return { ok: false as const, message: detail ? `اعتبارسنجی کلید xAI انجام نشد: ${detail}` : "اعتبارسنجی کلید xAI انجام نشد." };
+  }
 }
+
 export async function generateWithXaiApiKey(apiKey: string, prompt: string, model = DEFAULT_TEXT_MODEL, options: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number } = {}): Promise<XaiTextResult> {
   const response = await fetch(`${BASE_URL}/responses`, {
     method: "POST",
