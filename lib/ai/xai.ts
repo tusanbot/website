@@ -14,15 +14,46 @@ async function readError(response: Response) {
   try { return await response.json(); } catch { return null; }
 }
 
-export async function discoverXaiModels(apiKey: string) {
-  const response = await fetch(`${BASE_URL}/models`, {
-    headers: { Authorization: `Bearer ${apiKey.trim()}`, Accept: "application/json" },
-    cache: "no-store", signal: AbortSignal.timeout(15000),
-  });
-  if (!response.ok) {
-    const payload = await readError(response) as { error?: { message?: string } } | null;
-    throw errorFor(response.status, payload?.error?.message || "");
+async function requestXai(path: string, apiKey: string, init: RequestInit = {}) {
+  try {
+    return await fetch(`${BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        Accept: "application/json",
+        ...(init.headers || {}),
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "network error";
+    console.error("xAI request failed", { baseUrl: BASE_URL, path, detail });
+    throw errorFor(0, detail);
   }
+}
+
+export async function discoverXaiModels(apiKey: string) {
+  let response = await requestXai("/models", apiKey);
+  let payload = await readError(response) as { error?: { message?: string } } | null;
+
+  // Restricted xAI keys may be allowed to call inference without being allowed
+  // to enumerate models. Validate such a key with a minimal Responses request.
+  if (!response.ok && (response.status === 403 || response.status === 404)) {
+    response = await requestXai("/responses", apiKey, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: DEFAULT_TEXT_MODEL, input: "ping", max_output_tokens: 1, store: false }),
+    });
+    payload = await readError(response) as { error?: { message?: string } } | null;
+    if (response.ok) return { available: [DEFAULT_TEXT_MODEL], text: DEFAULT_TEXT_MODEL, tts: DEFAULT_TTS_MODEL };
+  }
+
+  if (!response.ok) {
+    const detail = payload?.error?.message || `HTTP ${response.status}`;
+    throw errorFor(response.status, detail);
+  }
+
   const data = await response.json() as { data?: Array<{ id?: string }> };
   const models = (data.data || []).map(x => x.id).filter((x): x is string => Boolean(x));
   const text = models.find(x => x === DEFAULT_TEXT_MODEL) || models.find(x => /^grok-4/i.test(x)) || models[0];
@@ -36,12 +67,15 @@ export async function validateXaiKey(apiKey: string, capability: "text" | "tts" 
     return { ok: true as const, model: capability === "tts" ? discovered.tts : discovered.text, modelConfig: discovered };
   } catch (error) {
     const status = (error as { status?: number })?.status;
-    if (status === 401 || status === 403) return { ok: false as const, message: "کلید xAI معتبر نیست یا دسترسی لازم را ندارد." };
+    const detail = (error as { detail?: string })?.detail || "";
+    if (status === 401) return { ok: false as const, message: "کلید xAI معتبر نیست یا منقضی شده است." };
+    if (status === 403) return { ok: false as const, message: "کلید xAI معتبر است اما دسترسی لازم برای مدل یا endpoint انتخاب‌شده را ندارد." };
     if (status === 429) return { ok: false as const, message: "محدودیت درخواست xAI فعال است؛ کمی بعد دوباره تلاش کنید." };
-    return { ok: false as const, message: "اعتبارسنجی کلید xAI انجام نشد." };
-  }
+    if (status === 404) return { ok: false as const, message: "مدل انتخاب‌شده در endpoint فعلی xAI در دسترس نیست." };
+    if (status === 0) return { ok: false as const, message: "سرور توسن نتوانست به xAI وصل شود. DNS، فایروال یا XAI_API_BASE_URL را بررسی کنید." };
+    console.error("xAI key validation failed", { status, detail });
+    return { ok: false as const, message: detail ? `اعتبارسنجی کلید xAI انجام نشد: ${detail}` : "اعتبارسنجی کلید xAI انجام نشد." };
 }
-
 export async function generateWithXaiApiKey(apiKey: string, prompt: string, model = DEFAULT_TEXT_MODEL, options: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number } = {}): Promise<XaiTextResult> {
   const response = await fetch(`${BASE_URL}/responses`, {
     method: "POST",
