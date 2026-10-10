@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { isIP } from "node:net";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function POST(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
   let parsed: URL;
   try { parsed = new URL(sourceUrl); } catch { return NextResponse.json({ error: "نشانی منبع معتبر نیست." }, { status: 400 }); }
   const host = parsed.hostname.toLowerCase();
-  if (parsed.protocol !== "https:" || host === "localhost" || host.endsWith(".local") || host === "metadata.google.internal" ||
+  if (parsed.protocol !== "https:" || isIP(host) !== 0 || host === "localhost" || host.endsWith(".local") || host === "metadata.google.internal" ||
       /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host) ||
       /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:")) {
     return NextResponse.json({ error: "برای امنیت، فقط نشانی HTTPS عمومی پذیرفته می‌شود." }, { status: 400 });
