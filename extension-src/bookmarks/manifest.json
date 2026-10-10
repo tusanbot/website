@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "بوکمارک‌های کافی‌نت توسن",
+  "version": "1.0.0",
+  "description": "افزودن انتخابی و دسته‌بندی‌شده سایت‌های کاربردی کافی‌نت به نوار بوکمارک مرورگر",
+  "permissions": [
+    "bookmarks",
+    "storage"
+  ],
+  "action": {
+    "default_title": "بوکمارک‌های کافی‌نت توسن",
+    "default_popup": "popup.html"
+  }
+}
