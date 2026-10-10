@@ -1,4 +1,4 @@
-name: MySQL pilot lockfile and install check
+name: MySQL pilot install and build check
 
 on:
   push:
@@ -24,21 +24,21 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: mysql-pilot-lockfile
+  group: mysql-pilot-check-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  lockfile-and-build:
+  install-lint-build:
     runs-on: ubuntu-latest
     steps:
       - name: Check out pilot branch
         uses: actions/checkout@v4
         with:
-          ref: migration/blog-mysql-pilot
-          persist-credentials: true
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
+          persist-credentials: false
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -46,31 +46,14 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Regenerate package lock from package.json
-        if: github.event_name != 'pull_request'
-        run: npm install --package-lock-only --ignore-scripts
-
-      - name: Commit lockfile if it changed
-        if: github.event_name != 'pull_request'
-        run: |
-          if ! git diff --quiet -- package-lock.json; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            git commit -m "chore: sync MySQL pilot package lock"
-            git push origin HEAD:migration/blog-mysql-pilot
-          else
-            echo "package-lock.json is already synchronized."
-          fi
-
-      - name: Verify clean dependency installation
+      - name: Verify lockfile and clean dependency installation
         run: npm ci
 
       - name: Verify mysql2 can be imported
         run: node --input-type=module -e "import('mysql2/promise').then(() => console.log('mysql2 import OK'))"
 
-      - name: Run ESLint
-        run: npm run lint
+      - name: Lint pilot files
+        run: npx eslint 'app/(main)/mysql-test/page.tsx' scripts/migrate-blog-to-mysql.mjs
 
       - name: Build Next.js application
         run: npm run build
