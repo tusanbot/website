@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import type { FormEvent } from "react";
 import { Plus, Rss, ExternalLink } from "lucide-react";
 
 type Source = { id: string; name: string; url: string; category: string; source_type: string; is_active: boolean; last_checked_at: string | null; last_error: string | null };
@@ -8,7 +9,7 @@ export default function NewsSourceManager({ initialSources }: { initialSources: 
   const [sources, setSources] = useState(initialSources);
   const [name, setName] = useState(""); const [url, setUrl] = useState(""); const [category, setCategory] = useState("general");
   const [busy, setBusy] = useState(false); const [message, setMessage] = useState("");
-  async function addSource(event: React.FormEvent<HTMLFormElement>) {
+  async function addSource(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage("");
     try {
       const response = await fetch("/api/admin/news-sources", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, url, category, source_type: "rss" }) });
