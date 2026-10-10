@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import mysql from "mysql2/promise";
+import type { RowDataPacket } from "mysql2";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -69,15 +70,15 @@ export default async function MysqlBlogPilotPage() {
       connectTimeout: 5000,
     });
 
-    const [[categoryCount]] = await connection.query(
+    const [[categoryCount]] = await connection.query<RowDataPacket[]>(
       "SELECT COUNT(*) AS count FROM blog_categories",
-    ) as any;
-    const [[postCount]] = await connection.query(
-      "SELECT COUNT(*) AS count FROM blog_posts",
-    ) as any;
-    const [[relationCount]] = await connection.query(
-      "SELECT COUNT(*) AS count FROM blog_post_services",
-    ) as any;
+    );
+    const [[postCount]] = await connection.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS count FROM blog_posts WHERE status = 'published'",
+    );
+    const [[relationCount]] = await connection.query<RowDataPacket[]>(
+      "SELECT COUNT(*) AS count FROM blog_post_services bps INNER JOIN blog_posts p ON p.id = bps.post_id WHERE p.status = 'published'",
+    );
 
     counts = {
       categories: Number(categoryCount.count),
@@ -123,7 +124,7 @@ export default async function MysqlBlogPilotPage() {
           <section className="mt-6 grid gap-4 sm:grid-cols-3">
             {[
               ["دسته‌بندی‌ها", counts.categories],
-              ["کل مقالات", counts.posts],
+              ["مقالات منتشرشده", counts.posts],
               ["ارتباط مقاله و خدمات", counts.relations],
             ].map(([label, value]) => (
               <div key={label} className="rounded-2xl border border-[var(--border)] bg-[var(--surface-strong)] p-5 shadow-sm">
