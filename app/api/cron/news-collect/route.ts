@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { isIP } from "node:net";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -51,7 +52,14 @@ export async function GET(request: NextRequest) {
   const summary = { sources: sources?.length ?? 0, scanned: 0, queued: 0, duplicates: 0, errors: [] as string[] };
   for (const source of sources ?? []) {
     try {
-      const response = await fetch(source.url, { headers: { "user-agent": "TusanNewsBot/1.0 (+https://www.tusancn.ir/news)" }, signal: AbortSignal.timeout(12000), cache: "no-store" });
+      const sourceUrl = new URL(source.url);
+      const host = sourceUrl.hostname.toLowerCase();
+      if (sourceUrl.protocol !== "https:" || isIP(host) !== 0 || host === "localhost" || host.endsWith(".local") || host === "metadata.google.internal" ||
+          /^(127\\.|10\\.|192\\.168\\.|169\\.254\\.|0\\.)/.test(host) || /^172\\.(1[6-9]|2\\d|3[01])\\./.test(host) ||
+          host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:")) {
+        throw new Error("منبع باید HTTPS عمومی باشد");
+      }
+      const response = await fetch(sourceUrl, { headers: { "user-agent": "TusanNewsBot/1.0 (+https://www.tusancn.ir/news)" }, signal: AbortSignal.timeout(12000), cache: "no-store" });
       if (!response.ok) throw new Error("HTTP " + response.status);
       const xml = await response.text();
       if (!/<(?:rss|feed|rdf:RDF)\b/i.test(xml)) throw new Error("منبع RSS/Atom معتبر نیست");
