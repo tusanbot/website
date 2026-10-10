@@ -8,6 +8,19 @@ on:
       - package.json
       - package-lock.json
       - .github/workflows/mysql-pilot-lockfile.yml
+      - app/(main)/mysql-test/page.tsx
+      - scripts/migrate-blog-to-mysql.mjs
+      - database/mysql/blog-pilot-schema.sql
+  pull_request:
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/mysql-pilot-lockfile.yml
+      - app/(main)/mysql-test/page.tsx
+      - scripts/migrate-blog-to-mysql.mjs
+      - database/mysql/blog-pilot-schema.sql
   workflow_dispatch:
 
 permissions:
@@ -18,7 +31,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  lockfile:
+  lockfile-and-build:
     runs-on: ubuntu-latest
     steps:
       - name: Check out pilot branch
@@ -34,9 +47,11 @@ jobs:
           cache: npm
 
       - name: Regenerate package lock from package.json
+        if: github.event_name != 'pull_request'
         run: npm install --package-lock-only --ignore-scripts
 
       - name: Commit lockfile if it changed
+        if: github.event_name != 'pull_request'
         run: |
           if ! git diff --quiet -- package-lock.json; then
             git config user.name "github-actions[bot]"
@@ -53,3 +68,18 @@ jobs:
 
       - name: Verify mysql2 can be imported
         run: node --input-type=module -e "import('mysql2/promise').then(() => console.log('mysql2 import OK'))"
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: pilot-build-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: pilot-build-placeholder
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: pilot
+          MYSQL_PASSWORD: pilot
+          MYSQL_DATABASE: pilot
