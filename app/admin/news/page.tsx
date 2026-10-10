@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import NewsReviewActions from "./NewsReviewActions";
+import NewsSourceManager from "./NewsSourceManager";
 
 export const metadata = { title: "مدیریت اخبار و اطلاعیه‌ها | توسن" };
 
@@ -15,6 +16,9 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
   const { data: items, error } = await supabase.from("news_announcements")
     .select("id,title,slug,excerpt,category,source_name,source_url,created_at,published_at,status")
     .eq("status", status).order("created_at", { ascending: false }).limit(100);
+  const { data: sourceRows } = await supabase.from("news_sources")
+    .select("id,name,url,category,source_type,is_active,last_checked_at,last_error")
+    .order("created_at", { ascending: false }).limit(100);
   const labels: Record<string,string> = { review: "در انتظار بررسی", draft: "پیش‌نویس", published: "منتشرشده", archived: "بایگانی‌شده" };
   return <main dir="rtl" className="mx-auto max-w-6xl space-y-6">
     <header className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6">
@@ -22,6 +26,7 @@ export default async function AdminNewsPage({ searchParams }: { searchParams: Pr
       <p className="mt-2 text-sm leading-7 text-[var(--text-muted)]">موارد جمع‌آوری‌شده ابتدا در صف بررسی قرار می‌گیرند و تا زمان انتشار دستی در سایت عمومی نمایش داده نمی‌شوند.</p>
       <div className="mt-4 flex flex-wrap gap-2">{Object.entries(labels).map(([key,label])=><a key={key} href={"/admin/news?status=" + key} className={"rounded-xl border px-4 py-2 text-sm font-bold " + (status===key ? "border-[var(--primary)] bg-[var(--primary)] text-white" : "border-[var(--border)] bg-[var(--background)]")}>{label}</a>)}</div>
     </header>
+    <NewsSourceManager initialSources={(sourceRows ?? []) as Array<{ id: string; name: string; url: string; category: string; source_type: string; is_active: boolean; last_checked_at: string | null; last_error: string | null }}/> 
     {error ? <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">خطا در خواندن اخبار: {error.message}. ابتدا مهاجرت دیتابیس را اجرا کنید.</p> :
     !items?.length ? <div className="rounded-2xl border border-dashed border-[var(--border)] p-12 text-center text-[var(--text-muted)]">در این وضعیت موردی وجود ندارد.</div> :
     <div className="space-y-3">{items.map(item=><article key={item.id} className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5">
