@@ -11,6 +11,7 @@ on:
       - app/(main)/mysql-test/page.tsx
       - scripts/migrate-blog-to-mysql.mjs
       - database/mysql/blog-pilot-schema.sql
+      - components/admin/DiscountManagement.tsx
   pull_request:
     branches:
       - main
@@ -21,6 +22,7 @@ on:
       - app/(main)/mysql-test/page.tsx
       - scripts/migrate-blog-to-mysql.mjs
       - database/mysql/blog-pilot-schema.sql
+      - components/admin/DiscountManagement.tsx
   workflow_dispatch:
 
 permissions:
