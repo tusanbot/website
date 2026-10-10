@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
       const sourceUrl = new URL(source.url);
       const host = sourceUrl.hostname.toLowerCase();
       if (sourceUrl.protocol !== "https:" || isIP(host) !== 0 || host === "localhost" || host.endsWith(".local") || host === "metadata.google.internal" ||
-          /^(127\\.|10\\.|192\\.168\\.|169\\.254\\.|0\\.)/.test(host) || /^172\\.(1[6-9]|2\\d|3[01])\\./.test(host) ||
+          /^(127\.|10\.|192\.168\.|169\.254\.|0\.)/.test(host) || /^172\.(1[6-9]|2\\d|3[01])\./.test(host) ||
           host === "::1" || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:")) {
         throw new Error("منبع باید HTTPS عمومی باشد");
       }
