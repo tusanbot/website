@@ -59,8 +59,10 @@ export async function GET(request: NextRequest) {
       summary.scanned += items.length;
       for (const item of items) {
         const sourceGuid = source.id + ":" + item.guid;
-        const { data: exists } = await supabase.from("news_announcements").select("id").or("source_url.eq." + item.link.replace(/[,.()]/g, "") + ",source_guid.eq." + sourceGuid.replace(/[,.()]/g, "")).limit(1).maybeSingle();
-        if (exists) { summary.duplicates++; continue; }
+        const { data: byGuid } = await supabase.from("news_announcements").select("id").eq("source_guid", sourceGuid).limit(1).maybeSingle();
+        if (byGuid) { summary.duplicates++; continue; }
+        const { data: byUrl } = await supabase.from("news_announcements").select("id").eq("source_url", item.link).limit(1).maybeSingle();
+        if (byUrl) { summary.duplicates++; continue; }
         const description = plainText(item.description).slice(0, 1800);
         const { error } = await supabase.from("news_announcements").insert({
           title: item.title.slice(0, 240), slug: makeSlug(item.title, sourceGuid),
