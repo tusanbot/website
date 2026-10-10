@@ -1,0 +1,347 @@
+[
+  {
+    "name": "مالیات و امور مالیاتی",
+    "sites": [
+      {
+        "title": "سازمان امور مالیاتی",
+        "url": "https://www.tax.gov.ir/"
+      },
+      {
+        "title": "درگاه خدمات مالیاتی",
+        "url": "https://my.tax.gov.ir/"
+      },
+      {
+        "title": "سامانه مؤدیان",
+        "url": "https://tp.tax.gov.ir/"
+      },
+      {
+        "title": "پرداخت قبوض مالیاتی",
+        "url": "https://payments.tax.gov.ir/"
+      },
+      {
+        "title": "مالیات حقوق",
+        "url": "https://salary.tax.gov.ir/"
+      },
+      {
+        "title": "مالیات نقل‌وانتقال خودرو",
+        "url": "https://cartransfer.tax.gov.ir/"
+      }
+    ]
+  },
+  {
+    "name": "بیمه و تأمین اجتماعی",
+    "sites": [
+      {
+        "title": "سازمان تأمین اجتماعی",
+        "url": "https://www.tamin.ir/"
+      },
+      {
+        "title": "خدمات غیرحضوری تأمین اجتماعی",
+        "url": "https://es.tamin.ir/"
+      },
+      {
+        "title": "سامانه کارفرمایان تأمین اجتماعی",
+        "url": "https://samt.tamin.ir/"
+      },
+      {
+        "title": "بیمه مرکزی",
+        "url": "https://www.centinsur.ir/"
+      },
+      {
+        "title": "سازمان بیمه سلامت",
+        "url": "https://www.ihio.gov.ir/"
+      }
+    ]
+  },
+  {
+    "name": "خودرو و راهور",
+    "sites": [
+      {
+        "title": "سامانه سخا",
+        "url": "https://sakha.epolice.ir/"
+      },
+      {
+        "title": "نوبت‌دهی تعویض پلاک",
+        "url": "https://nobatdehi.epolice.ir/"
+      },
+      {
+        "title": "پلیس راهور ۱۲۰",
+        "url": "https://rahvar120.ir/"
+      },
+      {
+        "title": "ایران‌خودرو",
+        "url": "https://www.ikco.ir/"
+      },
+      {
+        "title": "فروش اینترنتی ایران‌خودرو",
+        "url": "https://esale.ikco.ir/"
+      },
+      {
+        "title": "سایپا",
+        "url": "https://www.saipacorp.com/"
+      },
+      {
+        "title": "فروش اینترنتی سایپا",
+        "url": "https://saipa.iranecar.com/"
+      }
+    ]
+  },
+  {
+    "name": "خدمات دولت و یارانه",
+    "sites": [
+      {
+        "title": "پنجره ملی خدمات دولت هوشمند",
+        "url": "https://my.gov.ir/"
+      },
+      {
+        "title": "سامانه حمایت و دهک‌بندی",
+        "url": "https://hemayat.mcls.gov.ir/"
+      },
+      {
+        "title": "سازمان ثبت احوال",
+        "url": "https://www.sabteahval.ir/"
+      },
+      {
+        "title": "سازمان هدفمندسازی یارانه‌ها",
+        "url": "https://www.hadafmandi.ir/"
+      },
+      {
+        "title": "سازمان حج و زیارت",
+        "url": "https://www.haj.ir/"
+      }
+    ]
+  },
+  {
+    "name": "نظام وظیفه و خدمات پلیس",
+    "sites": [
+      {
+        "title": "سامانه سخا",
+        "url": "https://sakha.epolice.ir/"
+      },
+      {
+        "title": "فراجا",
+        "url": "https://police.ir/"
+      },
+      {
+        "title": "خدمات الکترونیک انتظامی",
+        "url": "https://www.epolice.ir/"
+      }
+    ]
+  },
+  {
+    "name": "وام و خدمات بانکی",
+    "sites": [
+      {
+        "title": "بانک مرکزی",
+        "url": "https://www.cbi.ir/"
+      },
+      {
+        "title": "ثبت‌نام وام ازدواج",
+        "url": "https://ve.cbi.ir/"
+      },
+      {
+        "title": "ثبت‌نام وام فرزندآوری",
+        "url": "https://ve.cbi.ir/"
+      },
+      {
+        "title": "سامانه سهام عدالت",
+        "url": "https://sahamedalat.ir/"
+      },
+      {
+        "title": "سامانه سجام",
+        "url": "https://www.sejam.ir/"
+      }
+    ]
+  },
+  {
+    "name": "مدرسه و دانشگاه",
+    "sites": [
+      {
+        "title": "سازمان سنجش آموزش کشور",
+        "url": "https://www.sanjesh.org/"
+      },
+      {
+        "title": "سامانه آزمون دانشگاه آزاد",
+        "url": "https://azmoon.iau.ir/"
+      },
+      {
+        "title": "پذیرش دانشگاه آزاد",
+        "url": "https://paziresh.iau.ir/"
+      },
+      {
+        "title": "پنجره واحد آموزش‌وپرورش",
+        "url": "https://my.medu.ir/"
+      },
+      {
+        "title": "ثبت‌نام کتاب درسی",
+        "url": "https://irtextbook.ir/"
+      },
+      {
+        "title": "وزارت علوم",
+        "url": "https://www.msrt.ir/"
+      },
+      {
+        "title": "دانشگاه پیام نور",
+        "url": "https://www.pnu.ac.ir/"
+      }
+    ]
+  },
+  {
+    "name": "قضایی و ثبتی",
+    "sites": [
+      {
+        "title": "درگاه خدمات الکترونیک قضایی",
+        "url": "https://adliran.ir/"
+      },
+      {
+        "title": "ابلاغ الکترونیک قضایی",
+        "url": "https://eblagh.adliran.ir/"
+      },
+      {
+        "title": "سازمان ثبت اسناد و املاک",
+        "url": "https://www.ssaa.ir/"
+      },
+      {
+        "title": "سامانه ثبت شرکت‌ها",
+        "url": "https://irsherkat.ssaa.ir/"
+      },
+      {
+        "title": "روزنامه رسمی کشور",
+        "url": "https://www.rrk.ir/"
+      }
+    ]
+  },
+  {
+    "name": "مجوزها و اصناف",
+    "sites": [
+      {
+        "title": "درگاه ملی مجوزها",
+        "url": "https://mojavez.ir/"
+      },
+      {
+        "title": "سامانه جامع تجارت",
+        "url": "https://www.ntsw.ir/"
+      },
+      {
+        "title": "وزارت صمت",
+        "url": "https://mimt.gov.ir/"
+      },
+      {
+        "title": "سامانه ایرانیان اصناف",
+        "url": "https://iranianasnaf.ir/"
+      },
+      {
+        "title": "سامانه مشاغل خانگی",
+        "url": "https://smkh.mcls.gov.ir/"
+      }
+    ]
+  },
+  {
+    "name": "مسکن و املاک",
+    "sites": [
+      {
+        "title": "سامانه ملی املاک و اسکان",
+        "url": "https://amlak.mrud.ir/"
+      },
+      {
+        "title": "سامانه خودنویس",
+        "url": "https://khodnevis.mrud.ir/"
+      },
+      {
+        "title": "وزارت راه و شهرسازی",
+        "url": "https://www.mrud.ir/"
+      },
+      {
+        "title": "سامانه طرح‌های حمایتی مسکن",
+        "url": "https://saman.mrud.ir/"
+      }
+    ]
+  },
+  {
+    "name": "بازنشستگان و ایثارگران",
+    "sites": [
+      {
+        "title": "خدمات بازنشستگان نیروهای مسلح",
+        "url": "https://esata.ir/"
+      },
+      {
+        "title": "بنیاد شهید و امور ایثارگران",
+        "url": "https://www.isaar.ir/"
+      }
+    ]
+  },
+  {
+    "name": "تجارت و گمرک",
+    "sites": [
+      {
+        "title": "گمرک جمهوری اسلامی ایران",
+        "url": "https://www.irica.ir/"
+      },
+      {
+        "title": "سامانه جامع تجارت",
+        "url": "https://www.ntsw.ir/"
+      },
+      {
+        "title": "اتاق بازرگانی ایران",
+        "url": "https://iccima.ir/"
+      }
+    ]
+  },
+  {
+    "name": "ابزارهای آنلاین توسن",
+    "sites": [
+      {
+        "title": "PDF به Word",
+        "url": "https://www.tusancn.ir/tools/pdf-to-word"
+      },
+      {
+        "title": "مدیریت PDF",
+        "url": "https://www.tusancn.ir/tools/pdf-manager"
+      },
+      {
+        "title": "مدیریت عکس",
+        "url": "https://www.tusancn.ir/tools/image-manager"
+      },
+      {
+        "title": "فاکتورساز",
+        "url": "https://www.tusancn.ir/tools/invoice"
+      },
+      {
+        "title": "رزومه‌ساز",
+        "url": "https://www.tusancn.ir/tools/resume-builder"
+      },
+      {
+        "title": "QR ساز",
+        "url": "https://www.tusancn.ir/tools/qr-code-generator"
+      },
+      {
+        "title": "عکس و PDF به متن (OCR)",
+        "url": "https://www.tusancn.ir/tools/ocr"
+      },
+      {
+        "title": "مدیریت ویدیو",
+        "url": "https://www.tusancn.ir/tools/video-manager"
+      },
+      {
+        "title": "برنامه درس هفتگی",
+        "url": "https://www.tusancn.ir/tools/weekly-study-plan"
+      },
+      {
+        "title": "پوستر شورای دانش‌آموزی",
+        "url": "https://www.tusancn.ir/tools/student-council-poster"
+      },
+      {
+        "title": "تبدیل متن به صوت",
+        "url": "https://www.tusancn.ir/tools/text-to-speech"
+      },
+      {
+        "title": "اصلاح نگارش متن",
+        "url": "https://www.tusancn.ir/tools/text-corrector"
+      },
+      {
+        "title": "ابزارهای آنلاین توسن",
+        "url": "https://www.tusancn.ir/tools"
+      }
+    ]
+  }
+]
