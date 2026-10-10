@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
           title: item.title.slice(0, 240), slug: makeSlug(item.title, sourceGuid),
           excerpt: description.slice(0, 360) || null, content: description || item.title,
           category: source.category || "general", source_name: source.name, source_url: item.link,
-          official_url: item.link, source_guid: sourceGuid, status: "review", published_at: null,
+          official_url: null, source_guid: sourceGuid, status: "review", published_at: null,
         });
         if (error) {
           if (error.code === "23505") { summary.duplicates++; continue; }
