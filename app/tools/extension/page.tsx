@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookmarkCheck, Chrome, Download, ExternalLink, FolderTree, Globe, ShieldCheck, CheckCircle2, Copy, ChevronDown } from "lucide-react";
+import { BookmarkCheck, Chrome, Download, ExternalLink, FolderTree, Globe, ShieldCheck, CheckCircle2, ChevronDown } from "lucide-react";
 
 const browsers = [
   { id: "chrome", name: "Google Chrome", detail: "بسته نصب و دانلود مستقیم", accent: "from-emerald-500 to-teal-600", badge: "پیشنهاد ما" },
