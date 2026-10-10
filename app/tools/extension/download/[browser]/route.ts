@@ -40,7 +40,7 @@ function zipStore(files: { name: string; data: Buffer }[]) {
 export async function GET(_request: Request, context: { params: Promise<{ browser: string }> }) {
   const { browser } = await context.params;
   if (!["chrome", "firefox", "edge"].includes(browser)) return new Response("مرورگر پشتیبانی نمی‌شود.", { status: 404 });
-  const root = path.join(process.cwd(), "extension-src", "bookmarks");
+  const root = path.join(process.cwd(), "public", "extension-src", "bookmarks");
   const names = ["manifest.json", "popup.html", "popup.css", "popup.js", "sites.json"];
   const files: { name: string; data: Buffer }[] = [];
   for (const name of names) {
