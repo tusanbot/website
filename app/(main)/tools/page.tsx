@@ -22,6 +22,7 @@ export default function ToolsPage() {
                     <h1 className="text-3xl font-black tracking-tight sm:text-4xl">ابزارهای آنلاین توسن</h1>
                     <p className="mt-4 text-base leading-8 text-[var(--text-muted)]">مجموعه‌ای از ابزارهای کاربردی و هوش مصنوعی برای کارهای روزمره، خدمات کافی‌نت و آماده‌سازی فایل‌ها؛ سریع، ساده و قابل استفاده آنلاین.</p>
                 </div>
+                <div className="mt-6 flex justify-center"><Link href="/bookmark-maker" className="inline-flex items-center gap-2 rounded-2xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 px-5 py-3 text-sm font-black text-[var(--primary)] transition hover:bg-[var(--primary)] hover:text-white">ساخت بوکمارک‌های کافی‌نت توسن</Link></div>
                 <nav aria-label="ابزارهای منتخب" className="mt-6 flex flex-wrap justify-center gap-2">
                     {indexableTools.map((tool) => <Link key={tool.id} href={tool.href!} className="rounded-full border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs font-bold text-[var(--text-muted)] transition hover:border-[var(--primary)]/40 hover:text-[var(--primary)]">{tool.title}</Link>)}
                 </nav>
