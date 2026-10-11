@@ -65,3 +65,21 @@
 ## Immediate next step
 
 Finish read-only extraction of constraints/indexes/policies, routine security/definitions, triggers, and view SQL. Compare target MySQL schema with the source inventory, then prepare additive DDL and repeatable transfer scripts. Do not switch routes or move all production data until Auth, Storage, and authorization decisions are settled.
+
+
+## Read-only cPanel target-schema inventory
+
+A read-only Node script is available at [`scripts/inventory-mysql-schema.mjs`](../scripts/inventory-mysql-schema.mjs). It reads MySQL `INFORMATION_SCHEMA` only and does not query application rows or change the database. It expects `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_DATABASE`, `MYSQL_USER`, and `MYSQL_PASSWORD` from the private environment file.
+
+Run it from the existing pilot clone in cPanel Terminal:
+
+```bash
+cd ~/blog-mysql-pilot
+set -a
+source .env.migration
+set +a
+~/nodevenv/tusancn/22/bin/node scripts/inventory-mysql-schema.mjs > ~/mysql-schema-inventory.json
+wc -c ~/mysql-schema-inventory.json
+```
+
+The JSON output is written outside the repository in the account home directory so it is not accidentally committed. Download `mysql-schema-inventory.json` through cPanel File Manager and attach it in this conversation; then the target/source schema comparison can be prepared without sharing credentials. Do not paste the contents of `.env.migration`.
