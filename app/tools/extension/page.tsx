@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookmarkCheck, Chrome, Download, ExternalLink, FolderTree, Globe, ShieldCheck, CheckCircle2, ChevronDown } from "lucide-react";
+import { BookmarkCheck, Chrome, Download, ExternalLink, FolderTree, Globe, ShieldCheck, CheckCircle2, ChevronDown, Copy } from "lucide-react";
 
 const browsers = [
   { id: "chrome", name: "Google Chrome", detail: "بسته نصب و دانلود مستقیم", accent: "from-emerald-500 to-teal-600", badge: "پیشنهاد ما" },
@@ -60,6 +60,30 @@ export default function ExtensionPage() {
           <a href="https://chromewebstore.google.com/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs font-bold hover:border-[var(--primary)]">فروشگاه Chrome <ExternalLink size={14}/></a>
           <a href="https://addons.mozilla.org/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs font-bold hover:border-[var(--primary)]">فروشگاه Firefox <ExternalLink size={14}/></a>
           <a href="https://microsoftedge.microsoft.com/addons/" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 text-xs font-bold hover:border-[var(--primary)]">فروشگاه Edge <ExternalLink size={14}/></a>
+        </div>
+      </section>
+
+
+      <section id="bookmarklet" className="mx-auto max-w-7xl scroll-mt-24 px-5 py-12 sm:px-8 md:py-16">
+        <div className="grid gap-7 rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-sm md:grid-cols-[1fr_.9fr] md:items-center md:p-8">
+          <div>
+            <p className="text-sm font-black text-[var(--primary)]">بدون نصب افزونه</p>
+            <h2 className="mt-2 text-2xl font-black sm:text-3xl">نشانک سریع توسن (Bookmarklet)</h2>
+            <p className="mt-3 text-sm leading-8 text-[var(--text-secondary)]">یک میان‌بر کوچک به نوار نشانک‌های Chrome اضافه کنید. هر وقت روی آن کلیک کنید، فهرست دسته‌بندی‌شده خدمات توسن در یک صفحه باز می‌شود؛ نیازی به نصب افزونه یا حساب توسعه‌دهنده نیست.</p>
+            <ol className="mt-4 list-inside list-decimal space-y-2 text-sm leading-7">
+              <li>کد زیر را کپی کنید.</li>
+              <li>در Chrome یک نشانک جدید بسازید (با <kbd className="rounded border border-[var(--border)] px-1.5 py-0.5 text-xs">Ctrl + D</kbd> می‌توانید از همین صفحه شروع کنید).</li>
+              <li>نام نشانک را «نشانک سریع توسن» بگذارید و کد را در فیلد نشانی / URL قرار دهید؛ سپس ذخیره کنید.</li>
+              <li>از این پس روی نشانک «نشانک سریع توسن» در نوار نشانک‌ها کلیک کنید.</li>
+            </ol>
+            <p className="mt-3 text-xs leading-6 text-[var(--text-muted)]">توجه: این میان‌بر فهرست خدمات را باز می‌کند؛ به‌دلیل محدودیت امنیتی Chrome، خودش پوشه‌ها یا نشانک‌های دائمی مرورگر را ایجاد نمی‌کند.</p>
+          </div>
+          <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 sm:p-5">
+            <div className="flex items-center gap-2 font-black"><BookmarkCheck size={19} className="text-[var(--primary)]"/> کد نشانک سریع</div>
+            <textarea readOnly aria-label="کد Bookmarklet نشانک سریع توسن" value={"javascript:(()=>{window.open('https://tusancn.ir/tools/extension/quick','_blank')})()"} className="mt-3 min-h-24 w-full resize-y rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 text-left text-xs leading-6" dir="ltr" />
+            <button type="button" onClick={() => { void navigator.clipboard.writeText("javascript:(()=>{window.open('https://tusancn.ir/tools/extension/quick','_blank')})()"); }} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[var(--primary)] px-4 py-3 text-sm font-black text-white transition hover:bg-[var(--primary-dark)]"><Copy size={17}/> کپی کد Bookmarklet</button>
+            <a href="/tools/extension/quick" className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] px-4 py-3 text-sm font-bold"><ExternalLink size={16}/> آزمایش فهرست سریع توسن</a>
+          </div>
         </div>
       </section>
 
