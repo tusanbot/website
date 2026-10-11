@@ -75,19 +75,7 @@ function walk(dir, results) {
 }
 
 const results = [];
-for (const start of ["app", "components", "lib", "hooks", "contexts", "scripts", "database", "middleware.ts", "instrumentation.ts", "next.config.ts"]) {
-  const full = path.join(root, start);
-  if (fs.existsSync(full)) {
-    if (fs.statSync(full).isDirectory()) walk(full, results);
-    else {
-      const single = [];
-      walk(path.dirname(full), single);
-      for (const item of single) {
-        if (item.file === start) results.push(item);
-      }
-    }
-  }
-}
+walk(root, results);
 results.sort((a, b) => a.file.localeCompare(b.file));
 
 const totals = Object.fromEntries(patterns.map(([name]) => [name, 0]));
