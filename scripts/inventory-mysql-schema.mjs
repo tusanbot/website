@@ -33,15 +33,20 @@ let connection;
 try {
   connection = await mysql.createConnection(connectionOptions);
   const db = process.env.MYSQL_DATABASE;
-  const [tables] = await connection.execute(
+  const warnings = [];
+  async function query(sql, params, label) {
+    try { const [rows] = await connection.execute(sql, params); return rows; }
+    catch (error) { warnings.push(label + ": " + (error?.message || String(error))); return []; }
+  }
+  const tables = await query(
     `SELECT TABLE_NAME AS table_name, TABLE_TYPE AS table_type, ENGINE AS engine,
             TABLE_COLLATION AS table_collation, TABLE_ROWS AS estimated_rows
        FROM information_schema.TABLES
       WHERE TABLE_SCHEMA = ?
       ORDER BY TABLE_NAME`,
-    [db],
+    [db], "tables",
   );
-  const [columns] = await connection.execute(
+  const columns = await query(
     `SELECT TABLE_NAME AS table_name, ORDINAL_POSITION AS ordinal_position,
             COLUMN_NAME AS column_name, COLUMN_TYPE AS column_type,
             IS_NULLABLE AS is_nullable, COLUMN_DEFAULT AS column_default,
@@ -50,19 +55,18 @@ try {
        FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = ?
       ORDER BY TABLE_NAME, ORDINAL_POSITION`,
-    [db],
+    [db], "columns",
   );
-  const [indexes] = await connection.execute(
+  const indexes = await query(
     `SELECT TABLE_NAME AS table_name, INDEX_NAME AS index_name, NON_UNIQUE AS non_unique,
             SEQ_IN_INDEX AS sequence_in_index, COLUMN_NAME AS column_name,
-            COLLATION AS collation, SUB_PART AS sub_part, INDEX_TYPE AS index_type,
-            EXPRESSION AS expression
+            COLLATION AS collation, SUB_PART AS sub_part, INDEX_TYPE AS index_type
        FROM information_schema.STATISTICS
       WHERE TABLE_SCHEMA = ?
       ORDER BY TABLE_NAME, INDEX_NAME, SEQ_IN_INDEX`,
-    [db],
+    [db], "indexes",
   );
-  const [constraints] = await connection.execute(
+  const constraints = await query(
     `SELECT tc.TABLE_NAME AS table_name, tc.CONSTRAINT_NAME AS constraint_name,
             tc.CONSTRAINT_TYPE AS constraint_type,
             kcu.COLUMN_NAME AS column_name, kcu.ORDINAL_POSITION AS ordinal_position,
@@ -81,9 +85,9 @@ try {
         AND tc.CONSTRAINT_NAME = rc.CONSTRAINT_NAME
       WHERE tc.CONSTRAINT_SCHEMA = ?
       ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME, kcu.ORDINAL_POSITION`,
-    [db],
+    [db], "constraints",
   );
-  const [checks] = await connection.execute(
+  const checks = await query(
     `SELECT tc.TABLE_NAME AS table_name, tc.CONSTRAINT_NAME AS constraint_name,
             cc.CHECK_CLAUSE AS check_clause
        FROM information_schema.TABLE_CONSTRAINTS tc
@@ -92,16 +96,16 @@ try {
         AND tc.CONSTRAINT_NAME = cc.CONSTRAINT_NAME
       WHERE tc.CONSTRAINT_SCHEMA = ? AND tc.CONSTRAINT_TYPE = 'CHECK'
       ORDER BY tc.TABLE_NAME, tc.CONSTRAINT_NAME`,
-    [db],
+    [db], "checks (optional on older MySQL/MariaDB)",
   );
-  const [views] = await connection.execute(
+  const views = await query(
     `SELECT TABLE_NAME AS view_name, VIEW_DEFINITION AS view_definition,
             CHECK_OPTION AS check_option, IS_UPDATABLE AS is_updatable,
             SECURITY_TYPE AS security_type
        FROM information_schema.VIEWS
       WHERE TABLE_SCHEMA = ?
       ORDER BY TABLE_NAME`,
-    [db],
+    [db], "views",
   );
 
   const output = {
@@ -109,6 +113,7 @@ try {
     database: db,
     source: "MySQL INFORMATION_SCHEMA (metadata only)",
     read_only: true,
+    warnings,
     counts: {
       tables_and_views: tables.length,
       columns: columns.length,
