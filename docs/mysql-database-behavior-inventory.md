@@ -1,0 +1,890 @@
+# Supabase database behavior inventory
+
+**Project:** `yhbaedfifcxgjxutnyjc`  
+**Branch:** `migration/blog-mysql-pilot`  
+**Method:** read-only PostgreSQL catalog queries; no production schema/data changes.  
+**Scope:** public constraints, indexes, RLS policies, routine metadata/security flags, triggers, and views. Function source bodies and application data are intentionally excluded.
+
+## Summary
+
+- Constraints: 265
+- Indexes: 231
+- RLS policies: 126
+- Public routines: 89
+- Trigger event entries: 40
+- Public views: 1
+- SECURITY DEFINER routines: 80
+- SECURITY DEFINER routines executable by `anon`: 12
+- SECURITY DEFINER routines executable by `authenticated`: 46
+- RLS-enabled tables with no listed policy: 6 (`financial_transactions`, `social_sync_logs`, `api_rate_limits`, `ai_profiles`, `ai_sessions`, `traxtor_saved_projects`)
+
+> These catalog results identify review targets, not proof that a specific exploit is possible. Validate intended authorization and routine call sites before changing permissions.
+
+## Constraints
+
+Type codes: `p` primary key, `f` foreign key, `u` unique, `c` check, `x` exclusion.
+
+- `ai_profiles.ai_profiles_pkey` [p]: `PRIMARY KEY (id)`
+- `ai_profiles.ai_profiles_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `ai_sessions.ai_sessions_ai_profile_id_fkey` [f]: `FOREIGN KEY (ai_profile_id) REFERENCES ai_profiles(id) ON DELETE CASCADE`
+- `ai_sessions.ai_sessions_pkey` [p]: `PRIMARY KEY (id)`
+- `ai_sessions.ai_sessions_token_hash_key` [u]: `UNIQUE (token_hash)`
+- `api_rate_limits.api_rate_limits_pkey` [p]: `PRIMARY KEY (key)`
+- `blog_categories.blog_categories_pkey` [p]: `PRIMARY KEY (id)`
+- `blog_categories.blog_categories_slug_key` [u]: `UNIQUE (slug)`
+- `blog_comments.blog_comments_content_check` [c]: `CHECK (((char_length(TRIM(BOTH FROM content)) >= 2) AND (char_length(TRIM(BOTH FROM content)) <= 2000)))`
+- `blog_comments.blog_comments_pkey` [p]: `PRIMARY KEY (id)`
+- `blog_comments.blog_comments_post_id_fkey` [f]: `FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE`
+- `blog_comments.blog_comments_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))`
+- `blog_comments.blog_comments_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `blog_post_services.blog_post_services_pkey` [p]: `PRIMARY KEY (post_id, service_id)`
+- `blog_post_services.blog_post_services_post_id_fkey` [f]: `FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE`
+- `blog_post_services.blog_post_services_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE`
+- `blog_posts.blog_posts_author_id_fkey` [f]: `FOREIGN KEY (author_id) REFERENCES auth.users(id) ON DELETE SET NULL`
+- `blog_posts.blog_posts_category_id_fkey` [f]: `FOREIGN KEY (category_id) REFERENCES blog_categories(id) ON DELETE SET NULL`
+- `blog_posts.blog_posts_pkey` [p]: `PRIMARY KEY (id)`
+- `blog_posts.blog_posts_slug_key` [u]: `UNIQUE (slug)`
+- `blog_posts.blog_posts_status_check` [c]: `CHECK ((status = ANY (ARRAY['draft'::text, 'published'::text])))`
+- `blog_ratings.blog_ratings_pkey` [p]: `PRIMARY KEY (id)`
+- `blog_ratings.blog_ratings_post_id_fkey` [f]: `FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE`
+- `blog_ratings.blog_ratings_post_id_user_id_key` [u]: `UNIQUE (post_id, user_id)`
+- `blog_ratings.blog_ratings_rating_check` [c]: `CHECK (((rating >= 1) AND (rating <= 5)))`
+- `blog_ratings.blog_ratings_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `blog_reactions.blog_reactions_pkey` [p]: `PRIMARY KEY (id)`
+- `blog_reactions.blog_reactions_post_id_fkey` [f]: `FOREIGN KEY (post_id) REFERENCES blog_posts(id) ON DELETE CASCADE`
+- `blog_reactions.blog_reactions_post_id_user_id_key` [u]: `UNIQUE (post_id, user_id)`
+- `blog_reactions.blog_reactions_reaction_check` [c]: `CHECK ((reaction = ANY (ARRAY['like'::text, 'dislike'::text])))`
+- `blog_reactions.blog_reactions_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `custom_forms.custom_forms_active_version_id_fkey` [f]: `FOREIGN KEY (active_version_id) REFERENCES form_versions(id)`
+- `custom_forms.custom_forms_created_by_fkey` [f]: `FOREIGN KEY (created_by) REFERENCES profiles(id)`
+- `custom_forms.custom_forms_form_type_check` [c]: `CHECK ((form_type = ANY (ARRAY['normal'::text, 'parent'::text])))`
+- `custom_forms.custom_forms_hierarchy_check` [c]: `CHECK ((((form_type = 'parent'::text) AND (parent_form_id IS NULL)) OR (form_type = 'normal'::text)))`
+- `custom_forms.custom_forms_parent_form_id_fkey` [f]: `FOREIGN KEY (parent_form_id) REFERENCES custom_forms(id) ON DELETE CASCADE`
+- `custom_forms.custom_forms_pkey` [p]: `PRIMARY KEY (id)`
+- `custom_forms.custom_forms_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE`
+- `discount_codes.discount_codes_code_key` [u]: `UNIQUE (code)`
+- `discount_codes.discount_codes_discount_id_fkey` [f]: `FOREIGN KEY (discount_id) REFERENCES discounts(id) ON DELETE CASCADE`
+- `discount_codes.discount_codes_pkey` [p]: `PRIMARY KEY (id)`
+- `discount_services.discount_services_discount_id_fkey` [f]: `FOREIGN KEY (discount_id) REFERENCES discounts(id) ON DELETE CASCADE`
+- `discount_services.discount_services_pkey` [p]: `PRIMARY KEY (discount_id, service_id)`
+- `discount_services.discount_services_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE`
+- `discount_tag_rules.discount_tag_rules_discount_id_fkey` [f]: `FOREIGN KEY (discount_id) REFERENCES discounts(id) ON DELETE CASCADE`
+- `discount_tag_rules.discount_tag_rules_discount_id_tag_id_key` [u]: `UNIQUE (discount_id, tag_id)`
+- `discount_tag_rules.discount_tag_rules_pkey` [p]: `PRIMARY KEY (id)`
+- `discount_tag_rules.discount_tag_rules_tag_id_fkey` [f]: `FOREIGN KEY (tag_id) REFERENCES member_tags(id) ON DELETE CASCADE`
+- `discount_usages.discount_usages_discount_code_id_fkey` [f]: `FOREIGN KEY (discount_code_id) REFERENCES discount_codes(id)`
+- `discount_usages.discount_usages_discount_id_fkey` [f]: `FOREIGN KEY (discount_id) REFERENCES discounts(id)`
+- `discount_usages.discount_usages_discount_id_order_id_key` [u]: `UNIQUE (discount_id, order_id)`
+- `discount_usages.discount_usages_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id)`
+- `discount_usages.discount_usages_pkey` [p]: `PRIMARY KEY (id)`
+- `discount_usages.discount_usages_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES services(id)`
+- `discount_usages.discount_usages_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id)`
+- `discounts.discounts_discount_type_check` [c]: `CHECK ((discount_type = ANY (ARRAY['percent'::text, 'fixed'::text])))`
+- `discounts.discounts_pkey` [p]: `PRIMARY KEY (id)`
+- `discounts.discounts_value_check` [c]: `CHECK ((value >= (0)::numeric))`
+- `financial_transactions.financial_transactions_pkey` [p]: `PRIMARY KEY (id)`
+- `form_versions.form_versions_created_by_fkey` [f]: `FOREIGN KEY (created_by) REFERENCES auth.users(id)`
+- `form_versions.form_versions_form_id_fkey` [f]: `FOREIGN KEY (form_id) REFERENCES custom_forms(id) ON DELETE CASCADE`
+- `form_versions.form_versions_form_id_version_number_key` [u]: `UNIQUE (form_id, version_number)`
+- `form_versions.form_versions_pkey` [p]: `PRIMARY KEY (id)`
+- `goals.goals_budget_check` [c]: `CHECK ((budget >= 0))`
+- `goals.goals_created_by_fkey` [f]: `FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL`
+- `goals.goals_pkey` [p]: `PRIMARY KEY (id)`
+- `goals.goals_progress_check` [c]: `CHECK (((progress >= 0) AND (progress <= 100)))`
+- `goals.goals_spent_check` [c]: `CHECK ((spent >= 0))`
+- `goals.goals_status_check` [c]: `CHECK ((status = ANY (ARRAY['planning'::text, 'active'::text, 'completed'::text])))`
+- `member_tag_assignments.member_tag_assignments_pkey` [p]: `PRIMARY KEY (id)`
+- `member_tag_assignments.member_tag_assignments_referral_link_fk` [f]: `FOREIGN KEY (referral_link_id) REFERENCES tag_referral_links(id) ON DELETE SET NULL`
+- `member_tag_assignments.member_tag_assignments_tag_id_fkey` [f]: `FOREIGN KEY (tag_id) REFERENCES member_tags(id) ON DELETE CASCADE`
+- `member_tag_assignments.member_tag_assignments_tag_id_user_id_key` [u]: `UNIQUE (tag_id, user_id)`
+- `member_tag_assignments.member_tag_assignments_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `member_tags.member_tags_pkey` [p]: `PRIMARY KEY (id)`
+- `member_tags.member_tags_slug_key` [u]: `UNIQUE (slug)`
+- `messages.messages_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `messages.messages_pkey` [p]: `PRIMARY KEY (id)`
+- `messages.messages_sender_id_fkey` [f]: `FOREIGN KEY (sender_id) REFERENCES profiles(id)`
+- `news_announcements.news_announcements_pkey` [p]: `PRIMARY KEY (id)`
+- `news_announcements.news_announcements_slug_key` [u]: `UNIQUE (slug)`
+- `news_announcements.news_announcements_status_check` [c]: `CHECK ((status = ANY (ARRAY['draft'::text, 'review'::text, 'published'::text, 'archived'::text])))`
+- `news_announcements.news_registration_dates_valid` [c]: `CHECK (((registration_start_at IS NULL) OR (registration_end_at IS NULL) OR (registration_end_at >= registration_start_at)))`
+- `news_sources.news_sources_check_interval_hours_check` [c]: `CHECK (((check_interval_hours >= 1) AND (check_interval_hours <= 168)))`
+- `news_sources.news_sources_pkey` [p]: `PRIMARY KEY (id)`
+- `news_sources.news_sources_source_type_check` [c]: `CHECK ((source_type = ANY (ARRAY['rss'::text, 'website'::text, 'api'::text])))`
+- `news_sources.news_sources_url_key` [u]: `UNIQUE (url)`
+- `notifications.notifications_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `notifications.notifications_pkey` [p]: `PRIMARY KEY (id)`
+- `notifications.notifications_recipient_id_fkey` [f]: `FOREIGN KEY (recipient_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `order_cancellation_requests.order_cancellation_requests_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `order_cancellation_requests.order_cancellation_requests_order_id_key` [u]: `UNIQUE (order_id)`
+- `order_cancellation_requests.order_cancellation_requests_pkey` [p]: `PRIMARY KEY (id)`
+- `order_cancellation_requests.order_cancellation_requests_reason_check` [c]: `CHECK (((char_length(btrim(reason)) >= 3) AND (char_length(btrim(reason)) <= 2000)))`
+- `order_cancellation_requests.order_cancellation_requests_reviewed_by_fkey` [f]: `FOREIGN KEY (reviewed_by) REFERENCES profiles(id)`
+- `order_cancellation_requests.order_cancellation_requests_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))`
+- `order_cancellation_requests.order_cancellation_requests_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `order_commission_ledger.order_commission_ledger_commission_amount_check` [c]: `CHECK ((commission_amount >= 0))`
+- `order_commission_ledger.order_commission_ledger_commission_percent_check` [c]: `CHECK (((commission_percent >= (0)::numeric) AND (commission_percent <= (100)::numeric)))`
+- `order_commission_ledger.order_commission_ledger_order_amount_check` [c]: `CHECK ((order_amount >= 0))`
+- `order_commission_ledger.order_commission_ledger_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `order_commission_ledger.order_commission_ledger_order_id_staff_user_id_key` [u]: `UNIQUE (order_id, staff_user_id)`
+- `order_commission_ledger.order_commission_ledger_pkey` [p]: `PRIMARY KEY (id)`
+- `order_commission_ledger.order_commission_ledger_staff_user_id_fkey` [f]: `FOREIGN KEY (staff_user_id) REFERENCES profiles(id) ON DELETE RESTRICT`
+- `order_commission_ledger.order_commission_ledger_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'paid'::text, 'void'::text])))`
+- `order_files.order_files_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `order_files.order_files_pkey` [p]: `PRIMARY KEY (id)`
+- `order_files.order_files_uploaded_by_fkey` [f]: `FOREIGN KEY (uploaded_by) REFERENCES auth.users(id) ON DELETE SET NULL`
+- `order_history.order_history_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `order_history.order_history_pkey` [p]: `PRIMARY KEY (id)`
+- `order_refunds.order_refunds_amount_check` [c]: `CHECK ((amount > 0))`
+- `order_refunds.order_refunds_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `order_refunds.order_refunds_order_unique` [u]: `UNIQUE (order_id)`
+- `order_refunds.order_refunds_pkey` [p]: `PRIMARY KEY (id)`
+- `order_refunds.order_refunds_processed_by_fkey` [f]: `FOREIGN KEY (processed_by) REFERENCES profiles(id)`
+- `order_refunds.order_refunds_requested_by_fkey` [f]: `FOREIGN KEY (requested_by) REFERENCES profiles(id)`
+- `order_refunds.order_refunds_status_check` [c]: `CHECK ((status = ANY (ARRAY['requested'::text, 'approved'::text, 'processing'::text, 'completed'::text, 'rejected'::text, 'failed'::text])))`
+- `order_refunds.order_refunds_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `order_staff_requests.order_staff_requests_approved_by_fkey` [f]: `FOREIGN KEY (approved_by) REFERENCES profiles(id) ON DELETE SET NULL`
+- `order_staff_requests.order_staff_requests_commission_percent_check` [c]: `CHECK (((commission_percent >= (0)::numeric) AND (commission_percent <= (100)::numeric)))`
+- `order_staff_requests.order_staff_requests_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `order_staff_requests.order_staff_requests_order_id_staff_user_id_key` [u]: `UNIQUE (order_id, staff_user_id)`
+- `order_staff_requests.order_staff_requests_pkey` [p]: `PRIMARY KEY (id)`
+- `order_staff_requests.order_staff_requests_requested_by_fkey` [f]: `FOREIGN KEY (requested_by) REFERENCES profiles(id) ON DELETE CASCADE`
+- `order_staff_requests.order_staff_requests_staff_user_id_fkey` [f]: `FOREIGN KEY (staff_user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `order_staff_requests.order_staff_requests_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'cancelled'::text])))`
+- `orders.orders_assigned_staff_id_fkey` [f]: `FOREIGN KEY (assigned_staff_id) REFERENCES profiles(id) ON DELETE SET NULL`
+- `orders.orders_assignment_status_check` [c]: `CHECK ((assignment_status = ANY (ARRAY['unassigned'::text, 'pending_approval'::text, 'assigned'::text, 'in_progress'::text, 'completed'::text, 'cancelled'::text])))`
+- `orders.orders_discount_code_id_fkey` [f]: `FOREIGN KEY (discount_code_id) REFERENCES discount_codes(id)`
+- `orders.orders_discount_id_fkey` [f]: `FOREIGN KEY (discount_id) REFERENCES discounts(id)`
+- `orders.orders_form_id_fkey` [f]: `FOREIGN KEY (form_id) REFERENCES custom_forms(id) ON DELETE SET NULL`
+- `orders.orders_form_version_id_fkey` [f]: `FOREIGN KEY (form_version_id) REFERENCES form_versions(id)`
+- `orders.orders_pkey` [p]: `PRIMARY KEY (id)`
+- `orders.orders_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES services(id)`
+- `orders.orders_status_check` [c]: `CHECK (((status)::text = ANY ((ARRAY['registered'::character varying, 'pending_payment'::character varying, 'checking'::character varying, 'need_documents'::character varying, 'processing'::character varying, 'ready'::character varying, 'completed'::character varying, 'cancelled'::character varying, 'rejected'::character varying])::text[]))) NOT VALID`
+- `orders.orders_tracking_code_key` [u]: `UNIQUE (tracking_code)`
+- `orders.orders_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `payments.payments_amount_check` [c]: `CHECK ((amount > 0))`
+- `payments.payments_gateway_check` [c]: `CHECK (((gateway IS NULL) OR (gateway = ANY (ARRAY['zibal'::text, 'zarinpal'::text, 'manual'::text]))))`
+- `payments.payments_method_check` [c]: `CHECK ((method = ANY (ARRAY['online'::text, 'card_to_card'::text])))`
+- `payments.payments_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `payments.payments_pkey` [p]: `PRIMARY KEY (id)`
+- `payments.payments_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'redirected'::text, 'paid'::text, 'failed'::text, 'cancelled'::text, 'refunded'::text, 'awaiting_manual_verification'::text, 'rejected'::text])))`
+- `payments.payments_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `payout_requests.payout_requests_amount_check` [c]: `CHECK ((amount > 0))`
+- `payout_requests.payout_requests_bank_account_id_fkey` [f]: `FOREIGN KEY (bank_account_id) REFERENCES staff_bank_accounts(id)`
+- `payout_requests.payout_requests_pkey` [p]: `PRIMARY KEY (id)`
+- `payout_requests.payout_requests_processed_by_fkey` [f]: `FOREIGN KEY (processed_by) REFERENCES profiles(id)`
+- `payout_requests.payout_requests_staff_user_id_fkey` [f]: `FOREIGN KEY (staff_user_id) REFERENCES profiles(id)`
+- `payout_requests.payout_requests_status_check` [c]: `CHECK ((status = ANY (ARRAY['requested'::text, 'approved'::text, 'processing'::text, 'paid'::text, 'rejected'::text])))`
+- `profiles.profiles_id_fkey` [f]: `FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `profiles.profiles_pkey` [p]: `PRIMARY KEY (id)`
+- `profiles.profiles_role_check` [c]: `CHECK (((role)::text = ANY ((ARRAY['user'::character varying, 'admin'::character varying])::text[])))`
+- `registrations.registrations_pkey` [p]: `PRIMARY KEY (id)`
+- `services.services_delivery_mode_check` [c]: `CHECK ((delivery_mode = ANY (ARRAY['online'::text, 'hybrid'::text, 'in_person'::text])))`
+- `services.services_parent_form_id_fkey` [f]: `FOREIGN KEY (parent_form_id) REFERENCES custom_forms(id) ON DELETE SET NULL`
+- `services.services_parent_service_id_fkey` [f]: `FOREIGN KEY (parent_service_id) REFERENCES services(id) ON DELETE SET NULL`
+- `services.services_pkey` [p]: `PRIMARY KEY (id)`
+- `services.services_service_type_check` [c]: `CHECK ((service_type = ANY (ARRAY['normal'::text, 'parent'::text])))`
+- `services_announcements.service_announcements_date_check` [c]: `CHECK ((end_at > start_at))`
+- `services_announcements.service_announcements_pkey` [p]: `PRIMARY KEY (id)`
+- `services_announcements.service_announcements_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL`
+- `services_announcements.service_announcements_type_check` [c]: `CHECK (((type)::text = ANY ((ARRAY['registration'::character varying, 'announcement'::character varying, 'notice'::character varying, 'regulation'::character varying])::text[])))`
+- `site_settings.site_settings_pkey` [p]: `PRIMARY KEY (id)`
+- `social_categories.social_categories_pkey` [p]: `PRIMARY KEY (id)`
+- `social_categories.social_categories_platform_id_fkey` [f]: `FOREIGN KEY (platform_id) REFERENCES social_platforms(id) ON DELETE CASCADE`
+- `social_categories.social_categories_platform_id_slug_key` [u]: `UNIQUE (platform_id, slug)`
+- `social_orders.social_orders_admin_approved_by_fkey` [f]: `FOREIGN KEY (admin_approved_by) REFERENCES auth.users(id)`
+- `social_orders.social_orders_pkey` [p]: `PRIMARY KEY (id)`
+- `social_orders.social_orders_price_check` [c]: `CHECK ((price >= (0)::numeric))`
+- `social_orders.social_orders_quantity_check` [c]: `CHECK ((quantity > 0))`
+- `social_orders.social_orders_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES social_services(id)`
+- `social_orders.social_orders_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'awaiting_payment'::text, 'paid'::text, 'processing'::text, 'partial'::text, 'completed'::text, 'cancelled'::text, 'failed'::text])))`
+- `social_orders.social_orders_tracking_code_key` [u]: `UNIQUE (tracking_code)`
+- `social_orders.social_orders_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE`
+- `social_platforms.social_platforms_pkey` [p]: `PRIMARY KEY (id)`
+- `social_platforms.social_platforms_slug_key` [u]: `UNIQUE (slug)`
+- `social_services.social_services_category_id_fkey` [f]: `FOREIGN KEY (category_id) REFERENCES social_categories(id) ON DELETE CASCADE`
+- `social_services.social_services_pkey` [p]: `PRIMARY KEY (id)`
+- `social_services.social_services_platform_id_fkey` [f]: `FOREIGN KEY (platform_id) REFERENCES social_platforms(id) ON DELETE CASCADE`
+- `social_services.social_services_profit_type_check` [c]: `CHECK ((profit_type = ANY (ARRAY['percentage'::text, 'fixed'::text, 'none'::text])))`
+- `social_services.social_services_profit_value_check` [c]: `CHECK ((profit_value >= (0)::numeric))`
+- `social_services.social_services_quantity_check` [c]: `CHECK (((min_quantity > 0) AND (max_quantity >= min_quantity)))`
+- `social_sync_logs.social_sync_logs_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_bank_accounts.staff_bank_accounts_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_bank_accounts.staff_bank_accounts_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])))`
+- `staff_bank_accounts.staff_bank_accounts_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `staff_bank_accounts.staff_bank_accounts_verified_by_fkey` [f]: `FOREIGN KEY (verified_by) REFERENCES profiles(id)`
+- `staff_category_access.staff_category_access_approved_by_fkey` [f]: `FOREIGN KEY (approved_by) REFERENCES profiles(id)`
+- `staff_category_access.staff_category_access_commission_percent_check` [c]: `CHECK (((commission_percent >= (0)::numeric) AND (commission_percent <= (100)::numeric)))`
+- `staff_category_access.staff_category_access_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_category_access.staff_category_access_status_check` [c]: `CHECK ((status = ANY (ARRAY['approved'::text, 'revoked'::text])))`
+- `staff_category_access.staff_category_access_user_id_category_key` [u]: `UNIQUE (user_id, category)`
+- `staff_category_access.staff_category_access_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `staff_earnings.staff_earnings_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL`
+- `staff_earnings.staff_earnings_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_earnings.staff_earnings_staff_id_fkey` [f]: `FOREIGN KEY (staff_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `staff_earnings.staff_earnings_status_check` [c]: `CHECK ((status = ANY (ARRAY['available'::text, 'held'::text, 'settled'::text, 'reversed'::text])))`
+- `staff_financial_adjustments.staff_financial_adjustments_amount_check` [c]: `CHECK ((amount <> 0))`
+- `staff_financial_adjustments.staff_financial_adjustments_created_by_fkey` [f]: `FOREIGN KEY (created_by) REFERENCES profiles(id)`
+- `staff_financial_adjustments.staff_financial_adjustments_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL`
+- `staff_financial_adjustments.staff_financial_adjustments_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_financial_adjustments.staff_financial_adjustments_staff_id_fkey` [f]: `FOREIGN KEY (staff_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `staff_reviews.staff_reviews_customer_id_fkey` [f]: `FOREIGN KEY (customer_id) REFERENCES profiles(id) ON DELETE RESTRICT`
+- `staff_reviews.staff_reviews_not_self` [c]: `CHECK ((staff_id <> customer_id))`
+- `staff_reviews.staff_reviews_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE`
+- `staff_reviews.staff_reviews_order_id_key` [u]: `UNIQUE (order_id)`
+- `staff_reviews.staff_reviews_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_reviews.staff_reviews_rating_check` [c]: `CHECK (((rating >= 1) AND (rating <= 5)))`
+- `staff_reviews.staff_reviews_staff_id_fkey` [f]: `FOREIGN KEY (staff_id) REFERENCES profiles(id) ON DELETE RESTRICT`
+- `staff_role_assignments.staff_role_assignments_approved_by_fkey` [f]: `FOREIGN KEY (approved_by) REFERENCES profiles(id) ON DELETE SET NULL`
+- `staff_role_assignments.staff_role_assignments_commission_percent_check` [c]: `CHECK (((commission_percent >= (0)::numeric) AND (commission_percent <= (100)::numeric)))`
+- `staff_role_assignments.staff_role_assignments_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_role_assignments.staff_role_assignments_role_id_fkey` [f]: `FOREIGN KEY (role_id) REFERENCES staff_roles(id) ON DELETE CASCADE`
+- `staff_role_assignments.staff_role_assignments_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'suspended'::text, 'rejected'::text, 'revoked'::text])))`
+- `staff_role_assignments.staff_role_assignments_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `staff_role_assignments.staff_role_assignments_user_id_role_id_key` [u]: `UNIQUE (user_id, role_id)`
+- `staff_roles.staff_roles_code_key` [u]: `UNIQUE (code)`
+- `staff_roles.staff_roles_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_service_access.staff_service_access_approved_by_fkey` [f]: `FOREIGN KEY (approved_by) REFERENCES profiles(id) ON DELETE SET NULL`
+- `staff_service_access.staff_service_access_commission_percent_check` [c]: `CHECK (((commission_percent >= (0)::numeric) AND (commission_percent <= (100)::numeric)))`
+- `staff_service_access.staff_service_access_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_service_access.staff_service_access_service_id_fkey` [f]: `FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE`
+- `staff_service_access.staff_service_access_status_check` [c]: `CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'suspended'::text, 'rejected'::text])))`
+- `staff_service_access.staff_service_access_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `staff_service_access.staff_service_access_user_id_service_id_key` [u]: `UNIQUE (user_id, service_id)`
+- `staff_settlements.staff_settlements_amount_check` [c]: `CHECK (((amount > 1000) AND (fee_amount = 1000) AND (net_amount = (amount - fee_amount)))) NOT VALID`
+- `staff_settlements.staff_settlements_bank_account_id_fkey` [f]: `FOREIGN KEY (bank_account_id) REFERENCES staff_bank_accounts(id)`
+- `staff_settlements.staff_settlements_pkey` [p]: `PRIMARY KEY (id)`
+- `staff_settlements.staff_settlements_processed_by_fkey` [f]: `FOREIGN KEY (processed_by) REFERENCES profiles(id)`
+- `staff_settlements.staff_settlements_staff_id_fkey` [f]: `FOREIGN KEY (staff_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `staff_settlements.staff_settlements_status_check` [c]: `CHECK ((status = ANY (ARRAY['requested'::text, 'approved'::text, 'processing'::text, 'paid'::text, 'rejected'::text]))) NOT VALID`
+- `sub_goals.sub_goals_budget_check` [c]: `CHECK ((budget >= 0))`
+- `sub_goals.sub_goals_goal_id_fkey` [f]: `FOREIGN KEY (goal_id) REFERENCES goals(id) ON DELETE CASCADE`
+- `sub_goals.sub_goals_pkey` [p]: `PRIMARY KEY (id)`
+- `sub_goals.sub_goals_progress_check` [c]: `CHECK (((progress >= 0) AND (progress <= 100)))`
+- `sub_goals.sub_goals_spent_check` [c]: `CHECK ((spent >= 0))`
+- `support_conversation_participants.support_conversation_participants_conversation_id_fkey` [f]: `FOREIGN KEY (conversation_id) REFERENCES support_conversations(id) ON DELETE CASCADE`
+- `support_conversation_participants.support_conversation_participants_conversation_id_user_id_key` [u]: `UNIQUE (conversation_id, user_id)`
+- `support_conversation_participants.support_conversation_participants_participant_type_check` [c]: `CHECK ((participant_type = ANY (ARRAY['customer'::text, 'staff'::text])))`
+- `support_conversation_participants.support_conversation_participants_pkey` [p]: `PRIMARY KEY (id)`
+- `support_conversation_participants.support_conversation_participants_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `support_conversations.support_conversations_assigned_staff_id_fkey` [f]: `FOREIGN KEY (assigned_staff_id) REFERENCES profiles(id) ON DELETE SET NULL`
+- `support_conversations.support_conversations_assignment_mode_check` [c]: `CHECK ((assignment_mode = ANY (ARRAY['order'::text, 'queue'::text])))`
+- `support_conversations.support_conversations_order_id_fkey` [f]: `FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL`
+- `support_conversations.support_conversations_pkey` [p]: `PRIMARY KEY (id)`
+- `support_conversations.support_conversations_status_check` [c]: `CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))`
+- `support_conversations.support_conversations_user_id_fkey` [f]: `FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `support_faqs.support_faqs_pkey` [p]: `PRIMARY KEY (id)`
+- `support_messages.support_messages_conversation_id_fkey` [f]: `FOREIGN KEY (conversation_id) REFERENCES support_conversations(id) ON DELETE CASCADE`
+- `support_messages.support_messages_message_check` [c]: `CHECK (((char_length(TRIM(BOTH FROM message)) >= 1) AND (char_length(TRIM(BOTH FROM message)) <= 4000)))`
+- `support_messages.support_messages_pkey` [p]: `PRIMARY KEY (id)`
+- `support_messages.support_messages_sender_id_fkey` [f]: `FOREIGN KEY (sender_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `support_messages.support_messages_sender_role_check` [c]: `CHECK ((sender_role = ANY (ARRAY['user'::text, 'admin'::text, 'staff'::text])))`
+- `support_reviews.support_reviews_conversation_id_fkey` [f]: `FOREIGN KEY (conversation_id) REFERENCES support_conversations(id) ON DELETE CASCADE`
+- `support_reviews.support_reviews_conversation_id_key` [u]: `UNIQUE (conversation_id)`
+- `support_reviews.support_reviews_customer_id_fkey` [f]: `FOREIGN KEY (customer_id) REFERENCES profiles(id) ON DELETE CASCADE`
+- `support_reviews.support_reviews_pkey` [p]: `PRIMARY KEY (id)`
+- `support_reviews.support_reviews_rating_check` [c]: `CHECK (((rating >= 1) AND (rating <= 5)))`
+- `support_reviews.support_reviews_staff_id_fkey` [f]: `FOREIGN KEY (staff_id) REFERENCES profiles(id) ON DELETE SET NULL`
+- `tag_referral_links.tag_referral_links_assignment_duration_days_check` [c]: `CHECK (((assignment_duration_days IS NULL) OR (assignment_duration_days > 0)))`
+- `tag_referral_links.tag_referral_links_code_key` [u]: `UNIQUE (code)`
+- `tag_referral_links.tag_referral_links_pkey` [p]: `PRIMARY KEY (id)`
+- `tag_referral_links.tag_referral_links_tag_id_fkey` [f]: `FOREIGN KEY (tag_id) REFERENCES member_tags(id) ON DELETE CASCADE`
+- `traxtor_saved_projects.traxtor_saved_projects_pkey` [p]: `PRIMARY KEY (id)`
+
+## Indexes
+
+- `ai_profiles.ai_profiles_anonymous_key_hash_unique_idx`: `CREATE UNIQUE INDEX ai_profiles_anonymous_key_hash_unique_idx ON public.ai_profiles USING btree (key_hash) WHERE (user_id IS NULL)`
+- `ai_profiles.ai_profiles_pkey`: `CREATE UNIQUE INDEX ai_profiles_pkey ON public.ai_profiles USING btree (id)`
+- `ai_profiles.ai_profiles_provider_idx`: `CREATE INDEX ai_profiles_provider_idx ON public.ai_profiles USING btree (provider)`
+- `ai_profiles.ai_profiles_user_id_idx`: `CREATE INDEX ai_profiles_user_id_idx ON public.ai_profiles USING btree (user_id)`
+- `ai_profiles.ai_profiles_user_id_unique_idx`: `CREATE UNIQUE INDEX ai_profiles_user_id_unique_idx ON public.ai_profiles USING btree (user_id) WHERE (user_id IS NOT NULL)`
+- `ai_sessions.ai_sessions_expires_idx`: `CREATE INDEX ai_sessions_expires_idx ON public.ai_sessions USING btree (expires_at)`
+- `ai_sessions.ai_sessions_pkey`: `CREATE UNIQUE INDEX ai_sessions_pkey ON public.ai_sessions USING btree (id)`
+- `ai_sessions.ai_sessions_profile_idx`: `CREATE INDEX ai_sessions_profile_idx ON public.ai_sessions USING btree (ai_profile_id)`
+- `ai_sessions.ai_sessions_token_hash_key`: `CREATE UNIQUE INDEX ai_sessions_token_hash_key ON public.ai_sessions USING btree (token_hash)`
+- `api_rate_limits.api_rate_limits_pkey`: `CREATE UNIQUE INDEX api_rate_limits_pkey ON public.api_rate_limits USING btree (key)`
+- `api_rate_limits.api_rate_limits_updated_at_idx`: `CREATE INDEX api_rate_limits_updated_at_idx ON public.api_rate_limits USING btree (updated_at)`
+- `blog_categories.blog_categories_pkey`: `CREATE UNIQUE INDEX blog_categories_pkey ON public.blog_categories USING btree (id)`
+- `blog_categories.blog_categories_slug_key`: `CREATE UNIQUE INDEX blog_categories_slug_key ON public.blog_categories USING btree (slug)`
+- `blog_comments.blog_comments_pkey`: `CREATE UNIQUE INDEX blog_comments_pkey ON public.blog_comments USING btree (id)`
+- `blog_comments.blog_comments_post_status_created_idx`: `CREATE INDEX blog_comments_post_status_created_idx ON public.blog_comments USING btree (post_id, status, created_at DESC)`
+- `blog_comments.blog_comments_post_status_idx`: `CREATE INDEX blog_comments_post_status_idx ON public.blog_comments USING btree (post_id, status, created_at DESC)`
+- `blog_comments.idx_blog_comments_post_status`: `CREATE INDEX idx_blog_comments_post_status ON public.blog_comments USING btree (post_id, status)`
+- `blog_post_services.blog_post_services_pkey`: `CREATE UNIQUE INDEX blog_post_services_pkey ON public.blog_post_services USING btree (post_id, service_id)`
+- `blog_post_services.blog_post_services_service_idx`: `CREATE INDEX blog_post_services_service_idx ON public.blog_post_services USING btree (service_id)`
+- `blog_posts.blog_posts_author_id_idx`: `CREATE INDEX blog_posts_author_id_idx ON public.blog_posts USING btree (author_id)`
+- `blog_posts.blog_posts_category_idx`: `CREATE INDEX blog_posts_category_idx ON public.blog_posts USING btree (category_id)`
+- `blog_posts.blog_posts_pkey`: `CREATE UNIQUE INDEX blog_posts_pkey ON public.blog_posts USING btree (id)`
+- `blog_posts.blog_posts_slug_key`: `CREATE UNIQUE INDEX blog_posts_slug_key ON public.blog_posts USING btree (slug)`
+- `blog_posts.blog_posts_status_published_idx`: `CREATE INDEX blog_posts_status_published_idx ON public.blog_posts USING btree (status, published_at DESC)`
+- `blog_ratings.blog_ratings_pkey`: `CREATE UNIQUE INDEX blog_ratings_pkey ON public.blog_ratings USING btree (id)`
+- `blog_ratings.blog_ratings_post_id_user_id_key`: `CREATE UNIQUE INDEX blog_ratings_post_id_user_id_key ON public.blog_ratings USING btree (post_id, user_id)`
+- `blog_ratings.blog_ratings_post_idx`: `CREATE INDEX blog_ratings_post_idx ON public.blog_ratings USING btree (post_id)`
+- `blog_ratings.blog_ratings_post_user_uidx`: `CREATE UNIQUE INDEX blog_ratings_post_user_uidx ON public.blog_ratings USING btree (post_id, user_id)`
+- `blog_ratings.idx_blog_ratings_post_id`: `CREATE INDEX idx_blog_ratings_post_id ON public.blog_ratings USING btree (post_id)`
+- `blog_reactions.blog_reactions_pkey`: `CREATE UNIQUE INDEX blog_reactions_pkey ON public.blog_reactions USING btree (id)`
+- `blog_reactions.blog_reactions_post_id_user_id_key`: `CREATE UNIQUE INDEX blog_reactions_post_id_user_id_key ON public.blog_reactions USING btree (post_id, user_id)`
+- `blog_reactions.blog_reactions_post_idx`: `CREATE INDEX blog_reactions_post_idx ON public.blog_reactions USING btree (post_id, reaction)`
+- `blog_reactions.blog_reactions_post_reaction_idx`: `CREATE INDEX blog_reactions_post_reaction_idx ON public.blog_reactions USING btree (post_id, reaction)`
+- `blog_reactions.blog_reactions_post_user_uidx`: `CREATE UNIQUE INDEX blog_reactions_post_user_uidx ON public.blog_reactions USING btree (post_id, user_id)`
+- `blog_reactions.idx_blog_reactions_post_reaction`: `CREATE INDEX idx_blog_reactions_post_reaction ON public.blog_reactions USING btree (post_id, reaction)`
+- `custom_forms.custom_forms_pkey`: `CREATE UNIQUE INDEX custom_forms_pkey ON public.custom_forms USING btree (id)`
+- `custom_forms.idx_custom_forms_active_version_id`: `CREATE INDEX idx_custom_forms_active_version_id ON public.custom_forms USING btree (active_version_id)`
+- `custom_forms.idx_custom_forms_created_by`: `CREATE INDEX idx_custom_forms_created_by ON public.custom_forms USING btree (created_by)`
+- `custom_forms.idx_custom_forms_one_parent_per_service`: `CREATE UNIQUE INDEX idx_custom_forms_one_parent_per_service ON public.custom_forms USING btree (service_id) WHERE ((form_type = 'parent'::text) AND (parent_form_id IS NULL))`
+- `custom_forms.idx_custom_forms_parent_form_id`: `CREATE INDEX idx_custom_forms_parent_form_id ON public.custom_forms USING btree (parent_form_id)`
+- `custom_forms.idx_custom_forms_service_id`: `CREATE INDEX idx_custom_forms_service_id ON public.custom_forms USING btree (service_id)`
+- `custom_forms.idx_custom_forms_service_parent_sort`: `CREATE INDEX idx_custom_forms_service_parent_sort ON public.custom_forms USING btree (service_id, parent_form_id, sort_order)`
+- `custom_forms.idx_custom_forms_unique_child_title`: `CREATE UNIQUE INDEX idx_custom_forms_unique_child_title ON public.custom_forms USING btree (parent_form_id, lower((title)::text)) WHERE (parent_form_id IS NOT NULL)`
+- `discount_codes.discount_codes_code_key`: `CREATE UNIQUE INDEX discount_codes_code_key ON public.discount_codes USING btree (code)`
+- `discount_codes.discount_codes_pkey`: `CREATE UNIQUE INDEX discount_codes_pkey ON public.discount_codes USING btree (id)`
+- `discount_codes.idx_discount_codes_code`: `CREATE INDEX idx_discount_codes_code ON public.discount_codes USING btree (code)`
+- `discount_services.discount_services_pkey`: `CREATE UNIQUE INDEX discount_services_pkey ON public.discount_services USING btree (discount_id, service_id)`
+- `discount_tag_rules.discount_tag_rules_discount_id_tag_id_key`: `CREATE UNIQUE INDEX discount_tag_rules_discount_id_tag_id_key ON public.discount_tag_rules USING btree (discount_id, tag_id)`
+- `discount_tag_rules.discount_tag_rules_pkey`: `CREATE UNIQUE INDEX discount_tag_rules_pkey ON public.discount_tag_rules USING btree (id)`
+- `discount_usages.discount_usages_discount_id_order_id_key`: `CREATE UNIQUE INDEX discount_usages_discount_id_order_id_key ON public.discount_usages USING btree (discount_id, order_id)`
+- `discount_usages.discount_usages_pkey`: `CREATE UNIQUE INDEX discount_usages_pkey ON public.discount_usages USING btree (id)`
+- `discount_usages.idx_discount_usages_code_user`: `CREATE INDEX idx_discount_usages_code_user ON public.discount_usages USING btree (discount_code_id, user_id)`
+- `discount_usages.idx_discount_usages_discount_code`: `CREATE INDEX idx_discount_usages_discount_code ON public.discount_usages USING btree (discount_code_id)`
+- `discount_usages.idx_discount_usages_discount_user`: `CREATE INDEX idx_discount_usages_discount_user ON public.discount_usages USING btree (discount_id, user_id)`
+- `discount_usages.idx_discount_usages_order`: `CREATE INDEX idx_discount_usages_order ON public.discount_usages USING btree (order_id)`
+- `discount_usages.idx_discount_usages_user`: `CREATE INDEX idx_discount_usages_user ON public.discount_usages USING btree (user_id)`
+- `discounts.discounts_pkey`: `CREATE UNIQUE INDEX discounts_pkey ON public.discounts USING btree (id)`
+- `financial_transactions.financial_transactions_pkey`: `CREATE UNIQUE INDEX financial_transactions_pkey ON public.financial_transactions USING btree (id)`
+- `form_versions.custom_forms_one_active_version`: `CREATE UNIQUE INDEX custom_forms_one_active_version ON public.form_versions USING btree (form_id) WHERE (is_active = true)`
+- `form_versions.form_versions_form_id_idx`: `CREATE INDEX form_versions_form_id_idx ON public.form_versions USING btree (form_id)`
+- `form_versions.form_versions_form_id_version_number_key`: `CREATE UNIQUE INDEX form_versions_form_id_version_number_key ON public.form_versions USING btree (form_id, version_number)`
+- `form_versions.form_versions_pkey`: `CREATE UNIQUE INDEX form_versions_pkey ON public.form_versions USING btree (id)`
+- `form_versions.idx_form_versions_created_by`: `CREATE INDEX idx_form_versions_created_by ON public.form_versions USING btree (created_by)`
+- `goals.goals_created_by_idx`: `CREATE INDEX goals_created_by_idx ON public.goals USING btree (created_by)`
+- `goals.goals_pkey`: `CREATE UNIQUE INDEX goals_pkey ON public.goals USING btree (id)`
+- `goals.goals_status_idx`: `CREATE INDEX goals_status_idx ON public.goals USING btree (status)`
+- `member_tag_assignments.idx_member_tag_assignments_tag`: `CREATE INDEX idx_member_tag_assignments_tag ON public.member_tag_assignments USING btree (tag_id)`
+- `member_tag_assignments.idx_member_tag_assignments_user`: `CREATE INDEX idx_member_tag_assignments_user ON public.member_tag_assignments USING btree (user_id)`
+- `member_tag_assignments.member_tag_assignments_pkey`: `CREATE UNIQUE INDEX member_tag_assignments_pkey ON public.member_tag_assignments USING btree (id)`
+- `member_tag_assignments.member_tag_assignments_tag_id_user_id_key`: `CREATE UNIQUE INDEX member_tag_assignments_tag_id_user_id_key ON public.member_tag_assignments USING btree (tag_id, user_id)`
+- `member_tags.member_tags_pkey`: `CREATE UNIQUE INDEX member_tags_pkey ON public.member_tags USING btree (id)`
+- `member_tags.member_tags_slug_key`: `CREATE UNIQUE INDEX member_tags_slug_key ON public.member_tags USING btree (slug)`
+- `messages.idx_messages_order_id`: `CREATE INDEX idx_messages_order_id ON public.messages USING btree (order_id)`
+- `messages.idx_messages_sender_id`: `CREATE INDEX idx_messages_sender_id ON public.messages USING btree (sender_id)`
+- `messages.idx_messages_unread_admin_by_order`: `CREATE INDEX idx_messages_unread_admin_by_order ON public.messages USING btree (order_id) WHERE ((sender_role = 'user'::text) AND (read_by_admin = false))`
+- `messages.idx_messages_unread_user_by_order`: `CREATE INDEX idx_messages_unread_user_by_order ON public.messages USING btree (order_id) WHERE ((sender_role = 'admin'::text) AND (read_by_user = false))`
+- `messages.messages_pkey`: `CREATE UNIQUE INDEX messages_pkey ON public.messages USING btree (id)`
+- `news_announcements.news_announcements_pkey`: `CREATE UNIQUE INDEX news_announcements_pkey ON public.news_announcements USING btree (id)`
+- `news_announcements.news_announcements_public_listing`: `CREATE INDEX news_announcements_public_listing ON public.news_announcements USING btree (published_at DESC) WHERE (status = 'published'::text)`
+- `news_announcements.news_announcements_review_queue`: `CREATE INDEX news_announcements_review_queue ON public.news_announcements USING btree (created_at DESC) WHERE (status = ANY (ARRAY['draft'::text, 'review'::text]))`
+- `news_announcements.news_announcements_slug_key`: `CREATE UNIQUE INDEX news_announcements_slug_key ON public.news_announcements USING btree (slug)`
+- `news_announcements.news_announcements_source_guid_unique`: `CREATE UNIQUE INDEX news_announcements_source_guid_unique ON public.news_announcements USING btree (source_guid) WHERE (source_guid IS NOT NULL)`
+- `news_announcements.news_announcements_source_url_unique`: `CREATE UNIQUE INDEX news_announcements_source_url_unique ON public.news_announcements USING btree (source_url) WHERE (source_url IS NOT NULL)`
+- `news_sources.news_sources_pkey`: `CREATE UNIQUE INDEX news_sources_pkey ON public.news_sources USING btree (id)`
+- `news_sources.news_sources_url_key`: `CREATE UNIQUE INDEX news_sources_url_key ON public.news_sources USING btree (url)`
+- `notifications.notifications_order_idx`: `CREATE INDEX notifications_order_idx ON public.notifications USING btree (order_id)`
+- `notifications.notifications_pkey`: `CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id)`
+- `notifications.notifications_recipient_created_at_idx`: `CREATE INDEX notifications_recipient_created_at_idx ON public.notifications USING btree (recipient_id, created_at DESC)`
+- `notifications.notifications_recipient_created_idx`: `CREATE INDEX notifications_recipient_created_idx ON public.notifications USING btree (recipient_id, created_at DESC)`
+- `notifications.notifications_recipient_unread_created_idx`: `CREATE INDEX notifications_recipient_unread_created_idx ON public.notifications USING btree (recipient_id, created_at DESC) WHERE (read_at IS NULL)`
+- `notifications.notifications_recipient_unread_idx`: `CREATE INDEX notifications_recipient_unread_idx ON public.notifications USING btree (recipient_id, created_at DESC) WHERE (read_at IS NULL)`
+- `notifications.notifications_unread_idx`: `CREATE INDEX notifications_unread_idx ON public.notifications USING btree (recipient_id, created_at DESC) WHERE (read_at IS NULL)`
+- `order_cancellation_requests.order_cancellation_requests_order_id_key`: `CREATE UNIQUE INDEX order_cancellation_requests_order_id_key ON public.order_cancellation_requests USING btree (order_id)`
+- `order_cancellation_requests.order_cancellation_requests_pkey`: `CREATE UNIQUE INDEX order_cancellation_requests_pkey ON public.order_cancellation_requests USING btree (id)`
+- `order_cancellation_requests.order_cancellation_requests_status_idx`: `CREATE INDEX order_cancellation_requests_status_idx ON public.order_cancellation_requests USING btree (status, created_at DESC)`
+- `order_cancellation_requests.order_cancellation_requests_user_idx`: `CREATE INDEX order_cancellation_requests_user_idx ON public.order_cancellation_requests USING btree (user_id, created_at DESC)`
+- `order_commission_ledger.order_commission_ledger_order_id_staff_user_id_key`: `CREATE UNIQUE INDEX order_commission_ledger_order_id_staff_user_id_key ON public.order_commission_ledger USING btree (order_id, staff_user_id)`
+- `order_commission_ledger.order_commission_ledger_pkey`: `CREATE UNIQUE INDEX order_commission_ledger_pkey ON public.order_commission_ledger USING btree (id)`
+- `order_files.idx_order_files_cleanup`: `CREATE INDEX idx_order_files_cleanup ON public.order_files USING btree (order_id, deleted_at)`
+- `order_files.idx_order_files_order_id`: `CREATE INDEX idx_order_files_order_id ON public.order_files USING btree (order_id)`
+- `order_files.idx_order_files_uploaded_by`: `CREATE INDEX idx_order_files_uploaded_by ON public.order_files USING btree (uploaded_by)`
+- `order_files.order_files_pkey`: `CREATE UNIQUE INDEX order_files_pkey ON public.order_files USING btree (id)`
+- `order_history.idx_order_history_order_id`: `CREATE INDEX idx_order_history_order_id ON public.order_history USING btree (order_id)`
+- `order_history.order_history_pkey`: `CREATE UNIQUE INDEX order_history_pkey ON public.order_history USING btree (id)`
+- `order_refunds.idx_order_refunds_status`: `CREATE INDEX idx_order_refunds_status ON public.order_refunds USING btree (status)`
+- `order_refunds.idx_order_refunds_user`: `CREATE INDEX idx_order_refunds_user ON public.order_refunds USING btree (user_id)`
+- `order_refunds.order_refunds_order_unique`: `CREATE UNIQUE INDEX order_refunds_order_unique ON public.order_refunds USING btree (order_id)`
+- `order_refunds.order_refunds_pkey`: `CREATE UNIQUE INDEX order_refunds_pkey ON public.order_refunds USING btree (id)`
+- `order_staff_requests.idx_order_staff_requests_status_created`: `CREATE INDEX idx_order_staff_requests_status_created ON public.order_staff_requests USING btree (status, created_at DESC)`
+- `order_staff_requests.order_staff_requests_order_id_staff_user_id_key`: `CREATE UNIQUE INDEX order_staff_requests_order_id_staff_user_id_key ON public.order_staff_requests USING btree (order_id, staff_user_id)`
+- `order_staff_requests.order_staff_requests_pkey`: `CREATE UNIQUE INDEX order_staff_requests_pkey ON public.order_staff_requests USING btree (id)`
+- `order_staff_requests.order_staff_requests_staff_idx`: `CREATE INDEX order_staff_requests_staff_idx ON public.order_staff_requests USING btree (staff_user_id, status, created_at DESC)`
+- `order_staff_requests.order_staff_requests_status_idx`: `CREATE INDEX order_staff_requests_status_idx ON public.order_staff_requests USING btree (status, created_at DESC)`
+- `orders.idx_orders_assigned_staff_processing`: `CREATE INDEX idx_orders_assigned_staff_processing ON public.orders USING btree (assigned_staff_id, processing_status, updated_at DESC)`
+- `orders.idx_orders_assignment_paid`: `CREATE INDEX idx_orders_assignment_paid ON public.orders USING btree (assignment_status, service_id, created_at DESC)`
+- `orders.idx_orders_assignment_status_updated_at`: `CREATE INDEX idx_orders_assignment_status_updated_at ON public.orders USING btree (assignment_status, updated_at DESC)`
+- `orders.idx_orders_form_id`: `CREATE INDEX idx_orders_form_id ON public.orders USING btree (form_id)`
+- `orders.idx_orders_form_version_id`: `CREATE INDEX idx_orders_form_version_id ON public.orders USING btree (form_version_id)`
+- `orders.idx_orders_processing_status_updated_at`: `CREATE INDEX idx_orders_processing_status_updated_at ON public.orders USING btree (processing_status, updated_at DESC)`
+- `orders.idx_orders_service_id`: `CREATE INDEX idx_orders_service_id ON public.orders USING btree (service_id)`
+- `orders.idx_orders_user_id_created_at`: `CREATE INDEX idx_orders_user_id_created_at ON public.orders USING btree (user_id, created_at DESC)`
+- `orders.orders_assigned_staff_idx`: `CREATE INDEX orders_assigned_staff_idx ON public.orders USING btree (assigned_staff_id, assignment_status, updated_at DESC)`
+- `orders.orders_pkey`: `CREATE UNIQUE INDEX orders_pkey ON public.orders USING btree (id)`
+- `orders.orders_tracking_code_key`: `CREATE UNIQUE INDEX orders_tracking_code_key ON public.orders USING btree (tracking_code)`
+- `orders.orders_user_id_idempotency_key_uq`: `CREATE UNIQUE INDEX orders_user_id_idempotency_key_uq ON public.orders USING btree (user_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)`
+- `payments.idx_payments_authority`: `CREATE INDEX idx_payments_authority ON public.payments USING btree (authority) WHERE (authority IS NOT NULL)`
+- `payments.idx_payments_gateway`: `CREATE INDEX idx_payments_gateway ON public.payments USING btree (gateway)`
+- `payments.idx_payments_order_id`: `CREATE INDEX idx_payments_order_id ON public.payments USING btree (order_id)`
+- `payments.idx_payments_status`: `CREATE INDEX idx_payments_status ON public.payments USING btree (status)`
+- `payments.idx_payments_transaction_id`: `CREATE INDEX idx_payments_transaction_id ON public.payments USING btree (transaction_id) WHERE (transaction_id IS NOT NULL)`
+- `payments.idx_payments_unique_authority`: `CREATE UNIQUE INDEX idx_payments_unique_authority ON public.payments USING btree (gateway, authority) WHERE (authority IS NOT NULL)`
+- `payments.idx_payments_unique_transaction`: `CREATE UNIQUE INDEX idx_payments_unique_transaction ON public.payments USING btree (gateway, transaction_id) WHERE (transaction_id IS NOT NULL)`
+- `payments.idx_payments_user_id`: `CREATE INDEX idx_payments_user_id ON public.payments USING btree (user_id)`
+- `payments.payments_one_active_per_order_uq`: `CREATE UNIQUE INDEX payments_one_active_per_order_uq ON public.payments USING btree (order_id) WHERE (status = ANY (ARRAY['pending'::text, 'redirected'::text]))`
+- `payments.payments_pkey`: `CREATE UNIQUE INDEX payments_pkey ON public.payments USING btree (id)`
+- `payout_requests.payout_requests_pkey`: `CREATE UNIQUE INDEX payout_requests_pkey ON public.payout_requests USING btree (id)`
+- `profiles.profiles_pkey`: `CREATE UNIQUE INDEX profiles_pkey ON public.profiles USING btree (id)`
+- `registrations.registrations_pkey`: `CREATE UNIQUE INDEX registrations_pkey ON public.registrations USING btree (id)`
+- `services.idx_services_active_parent_created`: `CREATE INDEX idx_services_active_parent_created ON public.services USING btree (is_active, parent_service_id, created_at DESC)`
+- `services.idx_services_parent_form_id`: `CREATE INDEX idx_services_parent_form_id ON public.services USING btree (parent_form_id)`
+- `services.idx_services_parent_service_id`: `CREATE INDEX idx_services_parent_service_id ON public.services USING btree (parent_service_id)`
+- `services.idx_services_service_type`: `CREATE INDEX idx_services_service_type ON public.services USING btree (service_type)`
+- `services.services_local_only_idx`: `CREATE INDEX services_local_only_idx ON public.services USING btree (local_only) WHERE (local_only = true)`
+- `services.services_pkey`: `CREATE UNIQUE INDEX services_pkey ON public.services USING btree (id)`
+- `services.services_popular_active_idx`: `CREATE INDEX services_popular_active_idx ON public.services USING btree (is_popular, is_active, created_at DESC)`
+- `services.services_slug_unique`: `CREATE UNIQUE INDEX services_slug_unique ON public.services USING btree (slug) WHERE ((slug IS NOT NULL) AND (slug <> ''::text))`
+- `services_announcements.idx_service_announcements_active`: `CREATE INDEX idx_service_announcements_active ON public.services_announcements USING btree (is_active)`
+- `services_announcements.idx_service_announcements_dates`: `CREATE INDEX idx_service_announcements_dates ON public.services_announcements USING btree (start_at, end_at)`
+- `services_announcements.idx_service_announcements_priority`: `CREATE INDEX idx_service_announcements_priority ON public.services_announcements USING btree (priority)`
+- `services_announcements.idx_service_announcements_service`: `CREATE INDEX idx_service_announcements_service ON public.services_announcements USING btree (service_id)`
+- `services_announcements.service_announcements_pkey`: `CREATE UNIQUE INDEX service_announcements_pkey ON public.services_announcements USING btree (id)`
+- `site_settings.site_settings_pkey`: `CREATE UNIQUE INDEX site_settings_pkey ON public.site_settings USING btree (id)`
+- `social_categories.idx_social_categories_platform`: `CREATE INDEX idx_social_categories_platform ON public.social_categories USING btree (platform_id, sort_order)`
+- `social_categories.social_categories_pkey`: `CREATE UNIQUE INDEX social_categories_pkey ON public.social_categories USING btree (id)`
+- `social_categories.social_categories_platform_id_slug_key`: `CREATE UNIQUE INDEX social_categories_platform_id_slug_key ON public.social_categories USING btree (platform_id, slug)`
+- `social_orders.idx_social_orders_admin_approval`: `CREATE INDEX idx_social_orders_admin_approval ON public.social_orders USING btree (admin_approved, status, created_at DESC)`
+- `social_orders.idx_social_orders_payment_reference`: `CREATE INDEX idx_social_orders_payment_reference ON public.social_orders USING btree (payment_reference) WHERE (payment_reference IS NOT NULL)`
+- `social_orders.idx_social_orders_provider`: `CREATE INDEX idx_social_orders_provider ON public.social_orders USING btree (provider, provider_order_id)`
+- `social_orders.idx_social_orders_status`: `CREATE INDEX idx_social_orders_status ON public.social_orders USING btree (status, created_at DESC)`
+- `social_orders.idx_social_orders_user_created_at`: `CREATE INDEX idx_social_orders_user_created_at ON public.social_orders USING btree (user_id, created_at DESC)`
+- `social_orders.social_orders_admin_approved_by_idx`: `CREATE INDEX social_orders_admin_approved_by_idx ON public.social_orders USING btree (admin_approved_by)`
+- `social_orders.social_orders_pkey`: `CREATE UNIQUE INDEX social_orders_pkey ON public.social_orders USING btree (id)`
+- `social_orders.social_orders_service_id_idx`: `CREATE INDEX social_orders_service_id_idx ON public.social_orders USING btree (service_id)`
+- `social_orders.social_orders_tracking_code_key`: `CREATE UNIQUE INDEX social_orders_tracking_code_key ON public.social_orders USING btree (tracking_code)`
+- `social_orders.social_orders_user_id_idempotency_key_uq`: `CREATE UNIQUE INDEX social_orders_user_id_idempotency_key_uq ON public.social_orders USING btree (user_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)`
+- `social_orders.uq_social_orders_payment_track_id`: `CREATE UNIQUE INDEX uq_social_orders_payment_track_id ON public.social_orders USING btree (payment_track_id) WHERE (payment_track_id IS NOT NULL)`
+- `social_platforms.social_platforms_pkey`: `CREATE UNIQUE INDEX social_platforms_pkey ON public.social_platforms USING btree (id)`
+- `social_platforms.social_platforms_slug_key`: `CREATE UNIQUE INDEX social_platforms_slug_key ON public.social_platforms USING btree (slug)`
+- `social_services.idx_social_services_category`: `CREATE INDEX idx_social_services_category ON public.social_services USING btree (category_id, sort_order)`
+- `social_services.idx_social_services_platform`: `CREATE INDEX idx_social_services_platform ON public.social_services USING btree (platform_id, sort_order)`
+- `social_services.social_services_pkey`: `CREATE UNIQUE INDEX social_services_pkey ON public.social_services USING btree (id)`
+- `social_services.uq_social_services_provider_service_id`: `CREATE UNIQUE INDEX uq_social_services_provider_service_id ON public.social_services USING btree (provider, provider_service_id)`
+- `social_sync_logs.social_sync_logs_created_at_idx`: `CREATE INDEX social_sync_logs_created_at_idx ON public.social_sync_logs USING btree (created_at DESC)`
+- `social_sync_logs.social_sync_logs_pkey`: `CREATE UNIQUE INDEX social_sync_logs_pkey ON public.social_sync_logs USING btree (id)`
+- `staff_bank_accounts.staff_bank_accounts_pkey`: `CREATE UNIQUE INDEX staff_bank_accounts_pkey ON public.staff_bank_accounts USING btree (id)`
+- `staff_bank_accounts.staff_bank_accounts_user_iban_uq`: `CREATE UNIQUE INDEX staff_bank_accounts_user_iban_uq ON public.staff_bank_accounts USING btree (user_id, iban)`
+- `staff_category_access.staff_category_access_pkey`: `CREATE UNIQUE INDEX staff_category_access_pkey ON public.staff_category_access USING btree (id)`
+- `staff_category_access.staff_category_access_user_id_category_key`: `CREATE UNIQUE INDEX staff_category_access_user_id_category_key ON public.staff_category_access USING btree (user_id, category)`
+- `staff_category_access.staff_category_access_user_status_idx`: `CREATE INDEX staff_category_access_user_status_idx ON public.staff_category_access USING btree (user_id, status)`
+- `staff_earnings.staff_earnings_pkey`: `CREATE UNIQUE INDEX staff_earnings_pkey ON public.staff_earnings USING btree (id)`
+- `staff_earnings.staff_earnings_staff_status_idx`: `CREATE INDEX staff_earnings_staff_status_idx ON public.staff_earnings USING btree (staff_id, status)`
+- `staff_financial_adjustments.staff_adjustments_staff_idx`: `CREATE INDEX staff_adjustments_staff_idx ON public.staff_financial_adjustments USING btree (staff_id, created_at DESC)`
+- `staff_financial_adjustments.staff_financial_adjustments_pkey`: `CREATE UNIQUE INDEX staff_financial_adjustments_pkey ON public.staff_financial_adjustments USING btree (id)`
+- `staff_financial_adjustments.staff_financial_adjustments_reference_uq`: `CREATE UNIQUE INDEX staff_financial_adjustments_reference_uq ON public.staff_financial_adjustments USING btree (reference_key) WHERE (reference_key IS NOT NULL)`
+- `staff_reviews.idx_staff_reviews_staff`: `CREATE INDEX idx_staff_reviews_staff ON public.staff_reviews USING btree (staff_id, created_at DESC)`
+- `staff_reviews.staff_reviews_order_id_key`: `CREATE UNIQUE INDEX staff_reviews_order_id_key ON public.staff_reviews USING btree (order_id)`
+- `staff_reviews.staff_reviews_pkey`: `CREATE UNIQUE INDEX staff_reviews_pkey ON public.staff_reviews USING btree (id)`
+- `staff_reviews.staff_reviews_staff_idx`: `CREATE INDEX staff_reviews_staff_idx ON public.staff_reviews USING btree (staff_id, created_at DESC)`
+- `staff_role_assignments.staff_role_assignments_pkey`: `CREATE UNIQUE INDEX staff_role_assignments_pkey ON public.staff_role_assignments USING btree (id)`
+- `staff_role_assignments.staff_role_assignments_staff_code_uq`: `CREATE UNIQUE INDEX staff_role_assignments_staff_code_uq ON public.staff_role_assignments USING btree (staff_code) WHERE (staff_code IS NOT NULL)`
+- `staff_role_assignments.staff_role_assignments_user_id_role_id_key`: `CREATE UNIQUE INDEX staff_role_assignments_user_id_role_id_key ON public.staff_role_assignments USING btree (user_id, role_id)`
+- `staff_role_assignments.staff_role_assignments_user_status_idx`: `CREATE INDEX staff_role_assignments_user_status_idx ON public.staff_role_assignments USING btree (user_id, status)`
+- `staff_roles.staff_roles_code_key`: `CREATE UNIQUE INDEX staff_roles_code_key ON public.staff_roles USING btree (code)`
+- `staff_roles.staff_roles_pkey`: `CREATE UNIQUE INDEX staff_roles_pkey ON public.staff_roles USING btree (id)`
+- `staff_service_access.staff_service_access_pkey`: `CREATE UNIQUE INDEX staff_service_access_pkey ON public.staff_service_access USING btree (id)`
+- `staff_service_access.staff_service_access_user_id_service_id_key`: `CREATE UNIQUE INDEX staff_service_access_user_id_service_id_key ON public.staff_service_access USING btree (user_id, service_id)`
+- `staff_service_access.staff_service_access_user_status_idx`: `CREATE INDEX staff_service_access_user_status_idx ON public.staff_service_access USING btree (user_id, status)`
+- `staff_settlements.idx_staff_settlements_status`: `CREATE INDEX idx_staff_settlements_status ON public.staff_settlements USING btree (status, requested_at)`
+- `staff_settlements.staff_settlements_one_open_per_staff`: `CREATE UNIQUE INDEX staff_settlements_one_open_per_staff ON public.staff_settlements USING btree (staff_id) WHERE (status = ANY (ARRAY['requested'::text, 'approved'::text, 'processing'::text]))`
+- `staff_settlements.staff_settlements_pkey`: `CREATE UNIQUE INDEX staff_settlements_pkey ON public.staff_settlements USING btree (id)`
+- `staff_settlements.staff_settlements_staff_status_idx`: `CREATE INDEX staff_settlements_staff_status_idx ON public.staff_settlements USING btree (staff_id, status)`
+- `sub_goals.sub_goals_goal_id_idx`: `CREATE INDEX sub_goals_goal_id_idx ON public.sub_goals USING btree (goal_id)`
+- `sub_goals.sub_goals_pkey`: `CREATE UNIQUE INDEX sub_goals_pkey ON public.sub_goals USING btree (id)`
+- `support_conversation_participants.support_conversation_participants_conversation_id_user_id_key`: `CREATE UNIQUE INDEX support_conversation_participants_conversation_id_user_id_key ON public.support_conversation_participants USING btree (conversation_id, user_id)`
+- `support_conversation_participants.support_conversation_participants_pkey`: `CREATE UNIQUE INDEX support_conversation_participants_pkey ON public.support_conversation_participants USING btree (id)`
+- `support_conversation_participants.support_participants_conversation_idx`: `CREATE INDEX support_participants_conversation_idx ON public.support_conversation_participants USING btree (conversation_id, left_at)`
+- `support_conversations.idx_support_conversations_assigned_status`: `CREATE INDEX idx_support_conversations_assigned_status ON public.support_conversations USING btree (assigned_staff_id, status, updated_at DESC)`
+- `support_conversations.idx_support_conversations_status_updated`: `CREATE INDEX idx_support_conversations_status_updated ON public.support_conversations USING btree (status, updated_at DESC)`
+- `support_conversations.support_conversations_assigned_staff_idx`: `CREATE INDEX support_conversations_assigned_staff_idx ON public.support_conversations USING btree (assigned_staff_id, status, updated_at DESC)`
+- `support_conversations.support_conversations_one_open_general_per_user`: `CREATE UNIQUE INDEX support_conversations_one_open_general_per_user ON public.support_conversations USING btree (user_id) WHERE ((status = 'open'::text) AND (order_id IS NULL))`
+- `support_conversations.support_conversations_one_open_per_user_idx`: `CREATE UNIQUE INDEX support_conversations_one_open_per_user_idx ON public.support_conversations USING btree (user_id) WHERE (status = 'open'::text)`
+- `support_conversations.support_conversations_order_idx`: `CREATE INDEX support_conversations_order_idx ON public.support_conversations USING btree (order_id, updated_at DESC)`
+- `support_conversations.support_conversations_pkey`: `CREATE UNIQUE INDEX support_conversations_pkey ON public.support_conversations USING btree (id)`
+- `support_conversations.support_conversations_status_idx`: `CREATE INDEX support_conversations_status_idx ON public.support_conversations USING btree (status, updated_at DESC)`
+- `support_conversations.support_conversations_user_idx`: `CREATE INDEX support_conversations_user_idx ON public.support_conversations USING btree (user_id, updated_at DESC)`
+- `support_faqs.support_faqs_active_category_idx`: `CREATE INDEX support_faqs_active_category_idx ON public.support_faqs USING btree (is_active, category, sort_order)`
+- `support_faqs.support_faqs_pkey`: `CREATE UNIQUE INDEX support_faqs_pkey ON public.support_faqs USING btree (id)`
+- `support_messages.idx_support_messages_conversation_created`: `CREATE INDEX idx_support_messages_conversation_created ON public.support_messages USING btree (conversation_id, created_at)`
+- `support_messages.support_messages_conversation_idx`: `CREATE INDEX support_messages_conversation_idx ON public.support_messages USING btree (conversation_id, created_at)`
+- `support_messages.support_messages_pkey`: `CREATE UNIQUE INDEX support_messages_pkey ON public.support_messages USING btree (id)`
+- `support_messages.support_messages_sender_idx`: `CREATE INDEX support_messages_sender_idx ON public.support_messages USING btree (sender_id)`
+- `support_messages.support_messages_unread_idx`: `CREATE INDEX support_messages_unread_idx ON public.support_messages USING btree (is_read, created_at)`
+- `support_reviews.support_reviews_conversation_id_key`: `CREATE UNIQUE INDEX support_reviews_conversation_id_key ON public.support_reviews USING btree (conversation_id)`
+- `support_reviews.support_reviews_customer_idx`: `CREATE INDEX support_reviews_customer_idx ON public.support_reviews USING btree (customer_id, created_at DESC)`
+- `support_reviews.support_reviews_pkey`: `CREATE UNIQUE INDEX support_reviews_pkey ON public.support_reviews USING btree (id)`
+- `support_reviews.support_reviews_staff_idx`: `CREATE INDEX support_reviews_staff_idx ON public.support_reviews USING btree (staff_id, created_at DESC)`
+- `tag_referral_links.idx_referral_links_code`: `CREATE INDEX idx_referral_links_code ON public.tag_referral_links USING btree (code)`
+- `tag_referral_links.tag_referral_links_code_key`: `CREATE UNIQUE INDEX tag_referral_links_code_key ON public.tag_referral_links USING btree (code)`
+- `tag_referral_links.tag_referral_links_pkey`: `CREATE UNIQUE INDEX tag_referral_links_pkey ON public.tag_referral_links USING btree (id)`
+- `traxtor_saved_projects.traxtor_saved_projects_pkey`: `CREATE UNIQUE INDEX traxtor_saved_projects_pkey ON public.traxtor_saved_projects USING btree (id)`
+- `traxtor_saved_projects.traxtor_saved_projects_updated_at_idx`: `CREATE INDEX traxtor_saved_projects_updated_at_idx ON public.traxtor_saved_projects USING btree (updated_at DESC)`
+
+## RLS policies
+
+Each entry includes role, command, USING and WITH CHECK expressions as reported by `pg_policies`. Review the predicate semantics, not just the names.
+
+- **`blog_categories.Admins can manage blog categories`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles pr WHERE ((pr.id = ( SELECT auth.uid() AS uid)) AND ((pr.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles pr WHERE ((pr.id = ( SELECT auth.uid() AS uid)) AND ((pr.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`
+- **`blog_categories.Public can read blog categories`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `true`; WITH CHECK: `—`
+- **`blog_comments.blog_comments_admin_delete`** — DELETE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `—`
+- **`blog_comments.blog_comments_admin_update`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`
+- **`blog_comments.blog_comments_auth_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((user_id = auth.uid()) AND (status = 'pending'::text))`
+- **`blog_comments.blog_comments_owner_update`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `((user_id = auth.uid()) AND (status = 'pending'::text))`; WITH CHECK: `((user_id = auth.uid()) AND (status = 'pending'::text))`
+- **`blog_comments.blog_comments_public_read`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `((status = 'approved'::text) OR (user_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text)))))`; WITH CHECK: `—`
+- **`blog_post_services.Admins can manage blog post service links`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles pr WHERE ((pr.id = ( SELECT auth.uid() AS uid)) AND ((pr.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles pr WHERE ((pr.id = ( SELECT auth.uid() AS uid)) AND ((pr.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`
+- **`blog_post_services.Public can read published post service links`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM blog_posts p WHERE ((p.id = blog_post_services.post_id) AND (p.status = 'published'::text))))`; WITH CHECK: `—`
+- **`blog_posts.Admins can manage blog posts`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles pr WHERE ((pr.id = ( SELECT auth.uid() AS uid)) AND ((pr.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles pr WHERE ((pr.id = ( SELECT auth.uid() AS uid)) AND ((pr.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`
+- **`blog_posts.Public can read published blog posts`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `(status = 'published'::text)`; WITH CHECK: `—`
+- **`blog_ratings.blog_ratings_auth_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(user_id = auth.uid())`
+- **`blog_ratings.blog_ratings_owner_delete`** — DELETE; roles `{authenticated}`; PERMISSIVE. USING: `(user_id = auth.uid())`; WITH CHECK: `—`
+- **`blog_ratings.blog_ratings_owner_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(user_id = auth.uid())`; WITH CHECK: `—`
+- **`blog_ratings.blog_ratings_owner_update`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(user_id = auth.uid())`; WITH CHECK: `(user_id = auth.uid())`
+- **`blog_reactions.blog_reactions_auth_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(user_id = auth.uid())`
+- **`blog_reactions.blog_reactions_owner_delete`** — DELETE; roles `{authenticated}`; PERMISSIVE. USING: `(user_id = auth.uid())`; WITH CHECK: `—`
+- **`blog_reactions.blog_reactions_owner_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(user_id = auth.uid())`; WITH CHECK: `—`
+- **`blog_reactions.blog_reactions_owner_update`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(user_id = auth.uid())`; WITH CHECK: `(user_id = auth.uid())`
+- **`custom_forms.Users can view custom forms`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((is_public = true) OR (EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND ((profiles.role)::text = 'admin'::text)))))`; WITH CHECK: `—`
+- **`custom_forms.custom_forms_admin_delete`** — DELETE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `—`
+- **`custom_forms.custom_forms_admin_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`custom_forms.custom_forms_admin_update`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`discount_codes.admins_manage_discount_codes`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`discount_services.admins_manage_discount_services`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`discount_tag_rules.admins_manage_discount_tag_rules`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`discount_usages.admins_read_discount_usages`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `—`
+- **`discount_usages.discount_usages_admin_manage`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`discount_usages.users_read_own_discount_usages`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = user_id)`; WITH CHECK: `—`
+- **`discounts.admins_manage_discounts`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`form_versions.form_versions_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`
+- **`form_versions.form_versions_public_select`** — SELECT; roles `{public}`; PERMISSIVE. USING: `is_public_active_form_version(id)`; WITH CHECK: `—`
+- **`goals.admins can manage goals`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`
+- **`goals.public can read goals`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `true`; WITH CHECK: `—`
+- **`member_tag_assignments.admins_manage_tag_assignments`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`member_tag_assignments.users_read_own_tag_assignments`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = user_id)`; WITH CHECK: `—`
+- **`member_tags.admins_manage_member_tags`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`messages.messages_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`
+- **`messages.messages_staff_insert_assigned`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((sender_id = auth.uid()) AND (sender_role = ANY (ARRAY['order_manager'::text, 'support_operator'::text])) AND (EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = messages.order_id) AND (o.assigned_staff_id = auth.uid())))))`
+- **`messages.messages_staff_select_assigned`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = messages.order_id) AND ((o.assigned_staff_id = auth.uid()) OR is_admin()))))`; WITH CHECK: `—`
+- **`messages.messages_staff_update_read`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = messages.order_id) AND (o.assigned_staff_id = auth.uid()))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = messages.order_id) AND (o.assigned_staff_id = auth.uid()))))`
+- **`messages.messages_user_insert_own`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((sender_id = ( SELECT auth.uid() AS uid)) AND (sender_role = 'user'::text) AND (is_read = false) AND (read_by_user = true) AND (read_by_admin = false) AND (EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = messages.order_id) AND (o.user_id = ( SELECT auth.uid() AS uid))))))`
+- **`messages.messages_user_select_own`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = messages.order_id) AND (o.user_id = auth.uid()))))`; WITH CHECK: `—`
+- **`news_announcements.Admins manage news announcements`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`
+- **`news_announcements.Published news is publicly readable`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `((status = 'published'::text) OR (EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[]))))))`; WITH CHECK: `—`
+- **`news_sources.Admins manage news sources`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = ANY ((ARRAY['admin'::character varying, 'manager'::character varying])::text[])))))`
+- **`notifications.admins can read all notifications`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `—`
+- **`notifications.admins can update all notifications`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`notifications.notifications_insert_own`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(recipient_id = auth.uid())`
+- **`notifications.notifications_select_admin`** — SELECT; roles `{public}`; PERMISSIVE. USING: `is_admin()`; WITH CHECK: `—`
+- **`notifications.notifications_select_own`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(recipient_id = auth.uid())`; WITH CHECK: `—`
+- **`notifications.notifications_update_own`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(recipient_id = auth.uid())`; WITH CHECK: `(recipient_id = auth.uid())`
+- **`notifications.users can mark own notifications read`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = recipient_id)`; WITH CHECK: `(( SELECT auth.uid() AS uid) = recipient_id)`
+- **`notifications.users can read own notifications`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = recipient_id)`; WITH CHECK: `—`
+- **`order_cancellation_requests.admins can view cancellation requests`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `( SELECT is_admin() AS is_admin)`; WITH CHECK: `—`
+- **`order_cancellation_requests.customers can view own cancellation requests`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = user_id)`; WITH CHECK: `—`
+- **`order_commission_ledger.order_commission_staff_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((staff_user_id = auth.uid()) OR is_admin())`; WITH CHECK: `—`
+- **`order_files.order_files_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`
+- **`order_files.order_files_select_authorized`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_files.order_id) AND ((o.user_id = auth.uid()) OR (o.assigned_staff_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))))))`; WITH CHECK: `—`
+- **`order_files.order_files_staff_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((uploaded_by = auth.uid()) AND (EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_files.order_id) AND (o.assigned_staff_id = auth.uid())))))`
+- **`order_files.order_files_staff_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_files.order_id) AND ((o.assigned_staff_id = auth.uid()) OR is_admin()))))`; WITH CHECK: `—`
+- **`order_files.order_files_user_delete_own`** — DELETE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_files.order_id) AND (o.user_id = auth.uid()))))`; WITH CHECK: `—`
+- **`order_files.order_files_user_insert_own`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((uploaded_by = auth.uid()) AND (EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_files.order_id) AND (o.user_id = auth.uid())))))`
+- **`order_files.order_files_user_select_own`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_files.order_id) AND (o.user_id = auth.uid()))))`; WITH CHECK: `—`
+- **`order_history.Admin can insert order history`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`order_history.Admin can view all order history`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `—`
+- **`order_history.Users can view own order history`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_history.order_id) AND (o.user_id = auth.uid()))))`; WITH CHECK: `—`
+- **`order_history.order_history_staff_select_assigned`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM orders o WHERE ((o.id = order_history.order_id) AND ((o.assigned_staff_id = auth.uid()) OR is_admin()))))`; WITH CHECK: `—`
+- **`order_refunds.order_refunds_select_owner`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((( SELECT auth.uid() AS uid) = user_id) OR is_admin())`; WITH CHECK: `—`
+- **`order_staff_requests.order_staff_requests_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(requested_by = auth.uid())`
+- **`order_staff_requests.order_staff_requests_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((staff_user_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`orders.orders_admin_delete`** — DELETE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `—`
+- **`orders.orders_admin_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`orders.orders_admin_update`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`orders.orders_select_own_or_admin`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((user_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text)))))`; WITH CHECK: `—`
+- **`orders.orders_staff_read`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((user_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text) OR (is_staff_member(auth.uid(), 'order_manager'::text) AND ((assigned_staff_id = auth.uid()) OR (EXISTS ( SELECT 1 FROM staff_service_access sa WHERE ((sa.user_id = auth.uid()) AND (sa.service_id = orders.service_id) AND (sa.status = 'approved'::text)))))))`; WITH CHECK: `—`
+- **`orders.orders_user_insert_own`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((auth.uid() = user_id) AND ((status)::text = 'registered'::text) AND (jsonb_typeof(COALESCE(form_data, '{}'::jsonb)) = 'object'::text) AND ((char_length((COALESCE(tracking_code, ''::character varying))::text) >= 8) AND (char_length((COALESCE(tracking_code, ''::character varying))::text) <= 100)) AND (((form_id IS NULL) AND (EXISTS ( SELECT 1 FROM services s WHERE ((s.id = orders.service_id) AND (s.is_active = true)))) AND (NOT (EXISTS ( SELECT 1 FROM services child WHERE ((child.parent_service_id = orders.service_id) AND (child.is_active = true))))) AND (price = calculate_order_price_from_rules((( SELECT COALESCE(s.price, 0) AS "coalesce" FROM services s WHERE ((s.id = orders.service_id) AND (s.is_active = true))))::numeric, ( SELECT COALESCE(s.pricing_rules, '[]'::jsonb) AS "coalesce" FROM services s WHERE ((s.id = orders.service_id) AND (s.is_active = true))), build_order_pricing_data(form_schema_snapshot, COALESCE(form_data, '{}'::jsonb))))) OR ((form_id IS NOT NULL) AND (EXISTS ( SELECT 1 FROM (custom_forms cf JOIN services s ON ((s.id = cf.service_id))) WHERE ((cf.id = orders.form_id) AND (cf.service_id = orders.service_id) AND (cf.form_type = 'normal'::text) AND (cf.is_public = true) AND (s.is_active = true)))) AND (price = calculate_order_price_from_rules(( SELECT COALESCE(cf.price, (s.price)::numeric, (0)::numeric) AS "coalesce" FROM (custom_forms cf JOIN services s ON ((s.id = cf.service_id))) WHERE ((cf.id = orders.form_id) AND (cf.service_id = orders.service_id) AND (cf.form_type = 'normal'::text) AND (cf.is_public = true) AND (s.is_active = true))), ( SELECT COALESCE(s.pricing_rules, '[]'::jsonb) AS "coalesce" FROM (custom_forms cf JOIN services s ON ((s.id = cf.service_id))) WHERE ((cf.id = orders.form_id) AND (cf.service_id = orders.service_id) AND (cf.form_type = 'normal'::text) AND (cf.is_public = true) AND (s.is_active = true))), build_order_pricing_data(form_schema_snapshot, COALESCE(form_data, '{}'::jsonb)))))))`
+- **`orders.users_read_own_orders_discount_fields`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = user_id)`; WITH CHECK: `—`
+- **`payments.payments_select_own_or_admin`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((user_id = auth.uid()) OR is_admin())`; WITH CHECK: `—`
+- **`payments.payments_update_admin`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `is_admin()`; WITH CHECK: `is_admin()`
+- **`payments.payments_user_insert_own`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((auth.uid() = user_id) AND (method = 'card_to_card'::text) AND (gateway = 'manual'::text) AND (status = 'awaiting_manual_verification'::text) AND (amount = ( SELECT (o.price)::bigint AS price FROM orders o WHERE ((o.id = payments.order_id) AND (o.user_id = auth.uid())))) AND (amount > 0))`
+- **`payout_requests.payout_staff_own`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((staff_user_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`profiles.Staff can read customer profiles`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text) OR is_staff_member(auth.uid(), 'support_operator'::text) OR is_staff_member(auth.uid(), 'order_manager'::text))`; WITH CHECK: `—`
+- **`profiles.User can see own profile`** — SELECT; roles `{public}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = id)`; WITH CHECK: `—`
+- **`profiles.User can update own profile fields`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(( SELECT auth.uid() AS uid) = id)`; WITH CHECK: `((( SELECT auth.uid() AS uid) = id) AND (((role)::text = 'user'::text) OR (((role)::text = 'admin'::text) AND private.is_admin())))`
+- **`registrations.registrations_public_active_select`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `(COALESCE(is_active, false) = true)`; WITH CHECK: `—`
+- **`services.Admin can delete services`** — DELETE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `—`
+- **`services.Admin can insert services`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`services.Admin can update services`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`services.Anyone can view active services`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((is_active = true) OR (EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text)))))`; WITH CHECK: `—`
+- **`services.Everyone can view active services`** — SELECT; roles `{public}`; PERMISSIVE. USING: `(is_active = true)`; WITH CHECK: `—`
+- **`services_announcements.Admins can manage announcements`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`services_announcements.Anyone can view active announcements`** — SELECT; roles `{public}`; PERMISSIVE. USING: `(is_active = true)`; WITH CHECK: `—`
+- **`site_settings.Admins can update site settings`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`site_settings.Anyone can read site settings`** — SELECT; roles `{public}`; PERMISSIVE. USING: `true`; WITH CHECK: `—`
+- **`social_categories.social_categories_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`social_categories.social_categories_public_read`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `(is_active = true)`; WITH CHECK: `—`
+- **`social_orders.social_orders_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`social_orders.social_orders_user_read`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((( SELECT auth.uid() AS uid) = user_id) OR (EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND ((profiles.role)::text = 'admin'::text)))))`; WITH CHECK: `—`
+- **`social_platforms.social_platforms_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`social_platforms.social_platforms_public_read`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `(is_active = true)`; WITH CHECK: `—`
+- **`social_services.social_services_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles WHERE ((profiles.id = auth.uid()) AND ((profiles.role)::text = 'admin'::text))))`
+- **`social_services.social_services_public_read`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `(is_active = true)`; WITH CHECK: `—`
+- **`staff_bank_accounts.staff_bank_self`** — ALL; roles `{public}`; PERMISSIVE. USING: `((auth.uid() = user_id) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `((auth.uid() = user_id) OR is_staff_member(auth.uid(), 'admin'::text))`
+- **`staff_category_access.staff_category_access_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `is_admin()`; WITH CHECK: `is_admin()`
+- **`staff_earnings.staff_earnings_self`** — SELECT; roles `{public}`; PERMISSIVE. USING: `((auth.uid() = staff_id) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`staff_financial_adjustments.staff_adjustment_self`** — SELECT; roles `{public}`; PERMISSIVE. USING: `((auth.uid() = staff_id) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`staff_reviews.staff_reviews_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `is_admin()`; WITH CHECK: `is_admin()`
+- **`staff_reviews.staff_reviews_customer_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((customer_id = auth.uid()) OR (staff_id = auth.uid()) OR is_admin())`; WITH CHECK: `—`
+- **`staff_role_assignments.staff_assignments_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((user_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`staff_roles.staff_roles_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `is_staff_member(auth.uid())`; WITH CHECK: `—`
+- **`staff_service_access.staff_service_access_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((user_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`staff_settlements.staff_settlement_self`** — SELECT; roles `{public}`; PERMISSIVE. USING: `((auth.uid() = staff_id) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`sub_goals.admins can manage sub goals`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = auth.uid()) AND ((p.role)::text = 'admin'::text))))`
+- **`sub_goals.public can read sub goals`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `true`; WITH CHECK: `—`
+- **`support_conversation_participants.support_participants_insert`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `((user_id = auth.uid()) AND ((EXISTS ( SELECT 1 FROM support_conversations c WHERE ((c.id = support_conversation_participants.conversation_id) AND (c.user_id = auth.uid())))) OR is_staff_member(auth.uid())))`
+- **`support_conversation_participants.support_participants_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM support_conversations c WHERE ((c.id = support_conversation_participants.conversation_id) AND ((c.user_id = auth.uid()) OR is_staff_member(auth.uid())))))`; WITH CHECK: `—`
+- **`support_conversations.support_conversations_insert_own`** — INSERT; roles `{authenticated}`; PERMISSIVE. USING: `—`; WITH CHECK: `(user_id = auth.uid())`
+- **`support_conversations.support_conversations_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((user_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text) OR (is_staff_member(auth.uid(), 'support_operator'::text) AND (status = 'open'::text)) OR (assigned_staff_id = auth.uid()))`; WITH CHECK: `—`
+- **`support_conversations.support_conversations_update_admin`** — UPDATE; roles `{authenticated}`; PERMISSIVE. USING: `is_admin()`; WITH CHECK: `is_admin()`
+- **`support_faqs.support_faqs_public_read`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(is_active = true)`; WITH CHECK: `—`
+- **`support_messages.support_messages_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM support_conversations c WHERE ((c.id = support_messages.conversation_id) AND ((c.user_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text) OR (is_staff_member(auth.uid(), 'support_operator'::text) AND (c.status = 'open'::text)) OR (c.assigned_staff_id = auth.uid())))))`; WITH CHECK: `—`
+- **`support_reviews.support_reviews_admin_all`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `is_staff_member(auth.uid(), 'admin'::text)`; WITH CHECK: `is_staff_member(auth.uid(), 'admin'::text)`
+- **`support_reviews.support_reviews_customer_select`** — SELECT; roles `{authenticated}`; PERMISSIVE. USING: `((customer_id = auth.uid()) OR is_staff_member(auth.uid(), 'admin'::text))`; WITH CHECK: `—`
+- **`tag_referral_links.admins_manage_referral_links`** — ALL; roles `{authenticated}`; PERMISSIVE. USING: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`; WITH CHECK: `(EXISTS ( SELECT 1 FROM profiles p WHERE ((p.id = ( SELECT auth.uid() AS uid)) AND ((p.role)::text = 'admin'::text))))`
+- **`tag_referral_links.public_read_active_referral_links`** — SELECT; roles `{anon,authenticated}`; PERMISSIVE. USING: `((is_active = true) AND ((expires_at IS NULL) OR (expires_at > now())))`; WITH CHECK: `—`
+
+## Public routines and execution flags
+
+Routine definitions are not copied into this document. `SECURITY DEFINER` runs with owner privileges and requires a per-routine authorization review.
+
+- `add_staff_bank_account(p_account_title text, p_iban text, p_account_number text, p_is_default boolean)` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `admin_assign_order(p_order_id uuid, p_staff_user_id uuid, p_commission numeric)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `admin_list_order_cancellation_requests(p_status text)` → `TABLE(id uuid, order_id uuid, user_id uuid, status text, reason text, admin_note text, requested_at timestamp with time zone, reviewed_at timestamp with time zone, tracking_code character varying, order_status character varying, price integer, customer_name character varying, customer_phone character varying, service_title character varying, service_icon character varying)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `admin_list_payout_requests()` → `TABLE(id uuid, staff_id uuid, staff_name text, amount bigint, iban text, status text, requested_at timestamp with time zone)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `admin_list_staff_settlements(p_status text)` → `TABLE(id uuid, staff_id uuid, bank_account_id uuid, amount bigint, fee_amount bigint, net_amount bigint, status text, admin_note text, requested_at timestamp with time zone, processed_at timestamp with time zone, processed_by uuid, staff_name text, staff_email text, iban text, payment_amount bigint, payment_reference text, payment_paid_at timestamp with time zone, payment_receipt_path text, payment_note text)`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public`
+- `admin_request_order_refund(p_order_id uuid, p_reason text)` → `order_refunds`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `admin_review_order_cancellation(p_request_id uuid, p_action text, p_note text)` → `order_cancellation_requests`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `admin_review_payment(p_payment_id uuid, p_action text, p_note text)` → `payments`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `admin_set_bank_account_status(p_account_id uuid, p_status text, p_rejection_reason text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public`
+- `admin_set_payout_status(p_payout_id uuid, p_status text, p_note text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `admin_update_order_refund(p_refund_id uuid, p_action text, p_transaction_id text, p_note text)` → `order_refunds`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `admin_update_staff_settlement(p_settlement_id uuid, p_action text, p_note text, p_payment_amount bigint, p_payment_reference text, p_payment_paid_at timestamp with time zone, p_payment_receipt_path text, p_payment_note text)` → `staff_settlements`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public`
+- `advance_order_after_zibal_payment()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `approve_order_assignment(p_request_id uuid, p_approve boolean, p_commission numeric)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `approve_staff_role(p_user_id uuid, p_role_code text, p_approve boolean, p_commission numeric)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `blog_admin_analytics(p_days integer)` → `jsonb`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public, private, pg_catalog`
+- `blog_post_engagement(p_post_id uuid)` → `jsonb`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public, private`
+- `blog_post_record_view(p_post_id uuid, p_visitor_id uuid)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public, private`
+- `blog_post_view_counts()` → `TABLE(post_id uuid, view_count bigint)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=pg_catalog, public, private`
+- `build_order_pricing_data(p_schema jsonb, p_data jsonb)` → `jsonb`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `calculate_order_price_from_rules(p_base numeric, p_rules jsonb, p_data jsonb)` → `bigint`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `claim_discount_usages(p_order_id uuid, p_user_id uuid, p_items jsonb)` → `jsonb`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `claim_support_conversation(p_conversation_id uuid)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `close_support_conversation(p_conversation_id uuid)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `consume_api_rate_limit(p_key text, p_limit integer, p_window_seconds integer)` → `TABLE(allowed boolean, retry_after_seconds integer, remaining integer)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public, pg_catalog`
+- `create_form_version_for_custom_form()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `create_profile()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `generate_service_slug(input_title text)` → `text`; SECURITY DEFINER=false; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `get_customer_order_detail(p_order_id uuid)` → `jsonb`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `get_my_staff_bank_accounts()` → `TABLE(id uuid, account_title text, iban text, account_number text, is_default boolean, status text, is_active boolean)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `get_order_files_for_current_user(p_order_id uuid)` → `SETOF order_files`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `get_staff_candidates()` → `TABLE(id uuid, full_name text, phone text, role text, created_at timestamp with time zone)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `get_staff_financial_summary()` → `TABLE(available_balance bigint, pending_settlement bigint, settled_total bigint, debt bigint, total_earned bigint)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `get_staff_order_detail(p_order_id uuid)` → `jsonb`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `get_staff_orders()` → `jsonb`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `get_staff_ratings()` → `TABLE(staff_id uuid, full_name text, avatar_url text, review_count bigint, average_rating numeric, strengths jsonb, weaknesses jsonb)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `get_support_agent(p_staff_id uuid)` → `TABLE(staff_id uuid, full_name text, staff_code text, role_code text)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `get_support_unread_count(p_conversation_id uuid)` → `integer`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `handle_message_notification()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `handle_order_notification()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `handle_payment_notification()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `has_staff_permission(p_permission text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `is_admin()` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `is_public_active_form_version(p_form_version_id uuid)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public`
+- `is_staff_member(target_user_id uuid, target_role text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `list_my_staff_bank_accounts()` → `TABLE(id uuid, account_title text, iban text, account_number text, is_default boolean, is_active boolean, status text, verified_at timestamp with time zone)`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `mark_support_messages_read(p_conversation_id uuid)` → `integer`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `normalize_new_order_payment_state()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `notify_admin_of_support_review()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `notify_admins(p_type text, p_title text, p_message text, p_order_id uuid, p_metadata jsonb)` → `void`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `notify_all_admins(p_type text, p_title text, p_message text, p_order_id uuid, p_metadata jsonb)` → `void`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `notify_new_message()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `notify_order_created()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `notify_order_status_changed()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `notify_user(p_recipient uuid, p_type text, p_title text, p_message text, p_order_id uuid, p_metadata jsonb)` → `void`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `prevent_user_message_tampering()` → `trigger`; SECURITY DEFINER=false; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `record_order_history()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `record_order_refund_debt(p_order_id uuid, p_reason text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `request_order_assignment(p_order_id uuid)` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `request_order_cancellation(p_order_id uuid, p_reason text)` → `order_cancellation_requests`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `request_staff_settlement(p_bank_account_id uuid, p_amount bigint)` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `search_support_faqs(p_query text, p_category text)` → `TABLE(id uuid, category text, question text, answer text, score real)`; SECURITY DEFINER=false; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `send_staff_order_message(p_order_id uuid, p_message text)` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `send_support_message(p_conversation_id uuid, p_message text)` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `set_news_announcement_updated_at()` → `trigger`; SECURITY DEFINER=false; anon EXECUTE=true; authenticated EXECUTE=true; config=`—`
+- `set_order_canonical_price()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=pg_catalog, public`
+- `set_order_form_price()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `set_order_processing_status(p_order_id uuid, p_status text, p_note text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `set_payments_updated_at()` → `trigger`; SECURITY DEFINER=false; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `set_staff_category_access(p_user_id uuid, p_category text, p_approve boolean, p_commission numeric)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `set_staff_service_access(p_user_id uuid, p_service_id uuid, p_approve boolean, p_commission numeric)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=public`
+- `set_updated_at()` → `trigger`; SECURITY DEFINER=false; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `staff_update_bank_account(p_account_id uuid, p_account_title text, p_iban text, p_account_number text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public`
+- `start_support_conversation(p_order_id uuid)` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `submit_staff_review(p_order_id uuid, p_rating smallint, p_comment text, p_strengths text[], p_weaknesses text[])` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `submit_support_review(p_conversation_id uuid, p_rating smallint, p_comment text, p_strengths text[], p_weaknesses text[])` → `uuid`; SECURITY DEFINER=true; anon EXECUTE=true; authenticated EXECUTE=true; config=`search_path=public`
+- `sync_child_service_parent_form()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `sync_processing_status_after_payment()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `sync_service_parent_form_from_custom_form()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `sync_service_to_custom_form_version()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `sync_staff_earning_from_commission()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `sync_support_on_order_assignment()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `touch_support_conversation()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `trg_notifications_order_files()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `update_order_cancellation_updated_at()` → `trigger`; SECURITY DEFINER=false; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=pg_catalog, public`
+- `update_service_announcements_updated_at()` → `trigger`; SECURITY DEFINER=false; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `update_social_updated_at()` → `trigger`; SECURITY DEFINER=false; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=public`
+- `update_staff_order_status(p_order_id uuid, p_status text, p_note text)` → `boolean`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=true; config=`search_path=pg_catalog, public`
+- `validate_manual_payment_transition()` → `trigger`; SECURITY DEFINER=true; anon EXECUTE=false; authenticated EXECUTE=false; config=`search_path=pg_catalog, public`
+
+### SECURITY DEFINER routines executable by anon
+
+These are the highest-priority review list. A true `anon EXECUTE` flag is a permission fact, not by itself proof of an exploitable vulnerability.
+
+- `admin_assign_order(p_order_id uuid, p_staff_user_id uuid, p_commission numeric)` → `boolean`
+- `admin_list_staff_settlements(p_status text)` → `TABLE(id uuid, staff_id uuid, bank_account_id uuid, amount bigint, fee_amount bigint, net_amount bigint, status text, admin_note text, requested_at timestamp with time zone, processed_at timestamp with time zone, processed_by uuid, staff_name text, staff_email text, iban text, payment_amount bigint, payment_reference text, payment_paid_at timestamp with time zone, payment_receipt_path text, payment_note text)`
+- `admin_set_bank_account_status(p_account_id uuid, p_status text, p_rejection_reason text)` → `boolean`
+- `admin_update_staff_settlement(p_settlement_id uuid, p_action text, p_note text, p_payment_amount bigint, p_payment_reference text, p_payment_paid_at timestamp with time zone, p_payment_receipt_path text, p_payment_note text)` → `staff_settlements`
+- `blog_post_engagement(p_post_id uuid)` → `jsonb`
+- `blog_post_record_view(p_post_id uuid, p_visitor_id uuid)` → `boolean`
+- `build_order_pricing_data(p_schema jsonb, p_data jsonb)` → `jsonb`
+- `calculate_order_price_from_rules(p_base numeric, p_rules jsonb, p_data jsonb)` → `bigint`
+- `claim_discount_usages(p_order_id uuid, p_user_id uuid, p_items jsonb)` → `jsonb`
+- `is_public_active_form_version(p_form_version_id uuid)` → `boolean`
+- `staff_update_bank_account(p_account_id uuid, p_account_title text, p_iban text, p_account_number text)` → `boolean`
+- `submit_support_review(p_conversation_id uuid, p_rating smallint, p_comment text, p_strengths text[], p_weaknesses text[])` → `uuid`
+
+### SECURITY DEFINER routines executable by authenticated
+
+Review whether each function checks the caller's identity/role and whether its search_path is fixed safely.
+
+- `add_staff_bank_account(p_account_title text, p_iban text, p_account_number text, p_is_default boolean)` → `uuid` (config: `search_path=public`)
+- `admin_assign_order(p_order_id uuid, p_staff_user_id uuid, p_commission numeric)` → `boolean` (config: `search_path=pg_catalog, public`)
+- `admin_list_order_cancellation_requests(p_status text)` → `TABLE(id uuid, order_id uuid, user_id uuid, status text, reason text, admin_note text, requested_at timestamp with time zone, reviewed_at timestamp with time zone, tracking_code character varying, order_status character varying, price integer, customer_name character varying, customer_phone character varying, service_title character varying, service_icon character varying)` (config: `search_path=pg_catalog, public`)
+- `admin_list_staff_settlements(p_status text)` → `TABLE(id uuid, staff_id uuid, bank_account_id uuid, amount bigint, fee_amount bigint, net_amount bigint, status text, admin_note text, requested_at timestamp with time zone, processed_at timestamp with time zone, processed_by uuid, staff_name text, staff_email text, iban text, payment_amount bigint, payment_reference text, payment_paid_at timestamp with time zone, payment_receipt_path text, payment_note text)` (config: `search_path=public`)
+- `admin_request_order_refund(p_order_id uuid, p_reason text)` → `order_refunds` (config: `search_path=pg_catalog, public`)
+- `admin_review_order_cancellation(p_request_id uuid, p_action text, p_note text)` → `order_cancellation_requests` (config: `search_path=pg_catalog, public`)
+- `admin_review_payment(p_payment_id uuid, p_action text, p_note text)` → `payments` (config: `search_path=pg_catalog, public`)
+- `admin_set_bank_account_status(p_account_id uuid, p_status text, p_rejection_reason text)` → `boolean` (config: `search_path=public`)
+- `admin_update_order_refund(p_refund_id uuid, p_action text, p_transaction_id text, p_note text)` → `order_refunds` (config: `search_path=pg_catalog, public`)
+- `admin_update_staff_settlement(p_settlement_id uuid, p_action text, p_note text, p_payment_amount bigint, p_payment_reference text, p_payment_paid_at timestamp with time zone, p_payment_receipt_path text, p_payment_note text)` → `staff_settlements` (config: `search_path=public`)
+- `approve_order_assignment(p_request_id uuid, p_approve boolean, p_commission numeric)` → `boolean` (config: `search_path=public`)
+- `approve_staff_role(p_user_id uuid, p_role_code text, p_approve boolean, p_commission numeric)` → `boolean` (config: `search_path=public`)
+- `blog_post_engagement(p_post_id uuid)` → `jsonb` (config: `search_path=public, private`)
+- `blog_post_record_view(p_post_id uuid, p_visitor_id uuid)` → `boolean` (config: `search_path=public, private`)
+- `build_order_pricing_data(p_schema jsonb, p_data jsonb)` → `jsonb` (config: `search_path=pg_catalog, public`)
+- `calculate_order_price_from_rules(p_base numeric, p_rules jsonb, p_data jsonb)` → `bigint` (config: `search_path=pg_catalog, public`)
+- `claim_discount_usages(p_order_id uuid, p_user_id uuid, p_items jsonb)` → `jsonb` (config: `search_path=pg_catalog, public`)
+- `claim_support_conversation(p_conversation_id uuid)` → `boolean` (config: `search_path=pg_catalog, public`)
+- `close_support_conversation(p_conversation_id uuid)` → `boolean` (config: `search_path=pg_catalog, public`)
+- `get_customer_order_detail(p_order_id uuid)` → `jsonb` (config: `search_path=pg_catalog, public`)
+- `get_my_staff_bank_accounts()` → `TABLE(id uuid, account_title text, iban text, account_number text, is_default boolean, status text, is_active boolean)` (config: `search_path=pg_catalog, public`)
+- `get_order_files_for_current_user(p_order_id uuid)` → `SETOF order_files` (config: `search_path=pg_catalog, public`)
+- `get_staff_financial_summary()` → `TABLE(available_balance bigint, pending_settlement bigint, settled_total bigint, debt bigint, total_earned bigint)` (config: `search_path=public`)
+- `get_staff_order_detail(p_order_id uuid)` → `jsonb` (config: `search_path=pg_catalog, public`)
+- `get_staff_orders()` → `jsonb` (config: `search_path=public`)
+- `get_support_agent(p_staff_id uuid)` → `TABLE(staff_id uuid, full_name text, staff_code text, role_code text)` (config: `search_path=pg_catalog, public`)
+- `get_support_unread_count(p_conversation_id uuid)` → `integer` (config: `search_path=pg_catalog, public`)
+- `is_admin()` → `boolean` (config: `search_path=public`)
+- `is_public_active_form_version(p_form_version_id uuid)` → `boolean` (config: `search_path=public`)
+- `is_staff_member(target_user_id uuid, target_role text)` → `boolean` (config: `search_path=public`)
+- `list_my_staff_bank_accounts()` → `TABLE(id uuid, account_title text, iban text, account_number text, is_default boolean, is_active boolean, status text, verified_at timestamp with time zone)` (config: `search_path=public`)
+- `mark_support_messages_read(p_conversation_id uuid)` → `integer` (config: `search_path=pg_catalog, public`)
+- `record_order_refund_debt(p_order_id uuid, p_reason text)` → `boolean` (config: `search_path=pg_catalog, public`)
+- `request_order_assignment(p_order_id uuid)` → `uuid` (config: `search_path=public`)
+- `request_order_cancellation(p_order_id uuid, p_reason text)` → `order_cancellation_requests` (config: `search_path=pg_catalog, public`)
+- `request_staff_settlement(p_bank_account_id uuid, p_amount bigint)` → `uuid` (config: `search_path=pg_catalog, public`)
+- `send_staff_order_message(p_order_id uuid, p_message text)` → `uuid` (config: `search_path=pg_catalog, public`)
+- `send_support_message(p_conversation_id uuid, p_message text)` → `uuid` (config: `search_path=pg_catalog, public`)
+- `set_order_processing_status(p_order_id uuid, p_status text, p_note text)` → `boolean` (config: `search_path=pg_catalog, public`)
+- `set_staff_category_access(p_user_id uuid, p_category text, p_approve boolean, p_commission numeric)` → `boolean` (config: `search_path=public`)
+- `set_staff_service_access(p_user_id uuid, p_service_id uuid, p_approve boolean, p_commission numeric)` → `boolean` (config: `search_path=public`)
+- `staff_update_bank_account(p_account_id uuid, p_account_title text, p_iban text, p_account_number text)` → `boolean` (config: `search_path=public`)
+- `start_support_conversation(p_order_id uuid)` → `uuid` (config: `search_path=pg_catalog, public`)
+- `submit_staff_review(p_order_id uuid, p_rating smallint, p_comment text, p_strengths text[], p_weaknesses text[])` → `uuid` (config: `search_path=pg_catalog, public`)
+- `submit_support_review(p_conversation_id uuid, p_rating smallint, p_comment text, p_strengths text[], p_weaknesses text[])` → `uuid` (config: `search_path=public`)
+- `update_staff_order_status(p_order_id uuid, p_status text, p_note text)` → `boolean` (config: `search_path=pg_catalog, public`)
+
+## Trigger event entries
+
+- `custom_forms.custom_forms_version_trigger`: AFTER INSERT / ROW; `EXECUTE FUNCTION create_form_version_for_custom_form()`
+- `custom_forms.custom_forms_version_trigger`: AFTER UPDATE / ROW; `EXECUTE FUNCTION create_form_version_for_custom_form()`
+- `custom_forms.trg_sync_service_parent_form_from_custom_form`: AFTER INSERT / ROW; `EXECUTE FUNCTION sync_service_parent_form_from_custom_form()`
+- `custom_forms.trg_sync_service_parent_form_from_custom_form`: AFTER UPDATE / ROW; `EXECUTE FUNCTION sync_service_parent_form_from_custom_form()`
+- `goals.goals_set_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION set_updated_at()`
+- `messages.notifications_message_event`: AFTER INSERT / ROW; `EXECUTE FUNCTION private.notify_message_event()`
+- `messages.trg_prevent_user_message_tampering`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION prevent_user_message_tampering()`
+- `news_announcements.news_announcements_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION set_news_announcement_updated_at()`
+- `news_sources.news_sources_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION set_news_announcement_updated_at()`
+- `order_cancellation_requests.trg_order_cancellation_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION update_order_cancellation_updated_at()`
+- `order_commission_ledger.trg_sync_staff_earning`: AFTER INSERT / ROW; `EXECUTE FUNCTION sync_staff_earning_from_commission()`
+- `order_commission_ledger.trg_sync_staff_earning`: AFTER UPDATE / ROW; `EXECUTE FUNCTION sync_staff_earning_from_commission()`
+- `order_files.trg_notifications_order_files`: AFTER INSERT / ROW; `EXECUTE FUNCTION trg_notifications_order_files()`
+- `orders.notifications_order_events`: AFTER INSERT / ROW; `EXECUTE FUNCTION private.notify_order_events()`
+- `orders.notifications_order_events`: AFTER UPDATE / ROW; `EXECUTE FUNCTION private.notify_order_events()`
+- `orders.trg_order_processing_history`: AFTER UPDATE / ROW; `EXECUTE FUNCTION record_order_history()`
+- `orders.trg_orders_canonical_price`: BEFORE INSERT / ROW; `EXECUTE FUNCTION set_order_canonical_price()`
+- `orders.trg_orders_canonical_price`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION set_order_canonical_price()`
+- `orders.trg_orders_pending_payment_state`: BEFORE INSERT / ROW; `EXECUTE FUNCTION normalize_new_order_payment_state()`
+- `orders.trg_sync_support_order_assignment`: AFTER UPDATE / ROW; `EXECUTE FUNCTION sync_support_on_order_assignment()`
+- `payments.notifications_payment_event`: AFTER INSERT / ROW; `EXECUTE FUNCTION private.notify_payment_event()`
+- `payments.notifications_payment_event`: AFTER UPDATE / ROW; `EXECUTE FUNCTION private.notify_payment_event()`
+- `payments.payments_set_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION set_payments_updated_at()`
+- `payments.trg_advance_order_after_zibal_payment`: AFTER INSERT / ROW; `EXECUTE FUNCTION advance_order_after_zibal_payment()`
+- `payments.trg_advance_order_after_zibal_payment`: AFTER UPDATE / ROW; `EXECUTE FUNCTION advance_order_after_zibal_payment()`
+- `payments.trg_sync_processing_after_payment`: AFTER INSERT / ROW; `EXECUTE FUNCTION sync_processing_status_after_payment()`
+- `payments.trg_sync_processing_after_payment`: AFTER UPDATE / ROW; `EXECUTE FUNCTION sync_processing_status_after_payment()`
+- `payments.trg_validate_manual_payment_transition`: BEFORE INSERT / ROW; `EXECUTE FUNCTION validate_manual_payment_transition()`
+- `payments.trg_validate_manual_payment_transition`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION validate_manual_payment_transition()`
+- `services.services_form_version_trigger`: AFTER UPDATE / ROW; `EXECUTE FUNCTION sync_service_to_custom_form_version()`
+- `services.trg_sync_child_service_parent_form`: AFTER INSERT / ROW; `EXECUTE FUNCTION sync_child_service_parent_form()`
+- `services.trg_sync_child_service_parent_form`: AFTER UPDATE / ROW; `EXECUTE FUNCTION sync_child_service_parent_form()`
+- `services_announcements.service_announcements_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION update_service_announcements_updated_at()`
+- `social_categories.social_categories_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION update_social_updated_at()`
+- `social_orders.social_orders_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION update_social_updated_at()`
+- `social_platforms.social_platforms_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION update_social_updated_at()`
+- `social_services.social_services_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION update_social_updated_at()`
+- `sub_goals.sub_goals_set_updated_at`: BEFORE UPDATE / ROW; `EXECUTE FUNCTION set_updated_at()`
+- `support_messages.support_messages_touch_conversation`: AFTER INSERT / ROW; `EXECUTE FUNCTION touch_support_conversation()`
+- `support_reviews.support_review_admin_notification`: AFTER INSERT / ROW; `EXECUTE FUNCTION notify_admin_of_support_review()`
+
+## Public views
+
+### `social_services_public`
+```sql
+SELECT id,
+    platform_id,
+    category_id,
+    name,
+    description,
+    service_type,
+    min_quantity,
+    max_quantity,
+    is_active,
+    sort_order,
+    round((COALESCE(provider_rate, (0)::numeric) * (2)::numeric), 2) AS customer_unit_price
+   FROM social_services
+  WHERE (is_active = true);
+```
+
+## Porting requirements
+
+- Rebuild constraints and indexes in MySQL with explicit dependency order; verify every FK's delete/update behavior and unique/check semantics.
+- Replace each policy with server-side authorization checks and integration tests for anonymous, ordinary user, staff, manager, and admin contexts as applicable. MySQL does not provide a direct equivalent to PostgreSQL RLS for this app.
+- Translate each routine to a server-side service/transaction or a MySQL routine only when justified; preserve atomicity and idempotency for payment, discount-usage, refund, staff finance, and order state changes.
+- Recreate trigger behavior deliberately. Do not mechanically port PostgreSQL trigger bodies; document whether the behavior belongs in the app service layer.
+- Review `social_services_public` definition and data exposure; it derives `customer_unit_price` from `provider_rate` and filters `is_active=true`.
+- Confirm MySQL version support for CHECK constraints and JSON behavior; test generated columns/partial-index equivalents where PostgreSQL partial indexes exist.
+- No source table rows, user records, function source code, credentials, or Auth secrets are included in this document.
