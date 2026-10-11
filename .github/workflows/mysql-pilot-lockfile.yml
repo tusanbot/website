@@ -1,0 +1,70 @@
+name: MySQL pilot install and build check
+
+on:
+  push:
+    branches:
+      - migration/blog-mysql-pilot
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/mysql-pilot-lockfile.yml
+      - app/(main)/mysql-test/page.tsx
+      - scripts/migrate-blog-to-mysql.mjs
+      - database/mysql/blog-pilot-schema.sql
+      - components/admin/DiscountManagement.tsx
+  pull_request:
+    branches:
+      - main
+    paths:
+      - package.json
+      - package-lock.json
+      - .github/workflows/mysql-pilot-lockfile.yml
+      - app/(main)/mysql-test/page.tsx
+      - scripts/migrate-blog-to-mysql.mjs
+      - database/mysql/blog-pilot-schema.sql
+      - components/admin/DiscountManagement.tsx
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mysql-pilot-check-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  install-lint-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pilot branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify lockfile and clean dependency installation
+        run: npm ci
+
+      - name: Verify mysql2 can be imported
+        run: node --input-type=module -e "import('mysql2/promise').then(() => console.log('mysql2 import OK'))"
+
+      - name: Lint pilot files
+        run: npx eslint 'app/(main)/mysql-test/page.tsx' scripts/migrate-blog-to-mysql.mjs
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: pilot-build-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: pilot-build-placeholder
+          MYSQL_HOST: 127.0.0.1
+          MYSQL_PORT: 3306
+          MYSQL_USER: pilot
+          MYSQL_PASSWORD: pilot
+          MYSQL_DATABASE: pilot
