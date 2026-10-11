@@ -143,3 +143,23 @@ The public view is `social_services_public`. Supabase-managed schemas such as `a
 ## Immediate next task
 
 Complete a source-code dependency inventory and export the full schema metadata. Then prepare a table-by-table migration matrix with: source object, target object, row count, key/relationship mapping, read/write code locations, security model, and test cases. No schema changes or data writes to the production Supabase project are required for this discovery step.
+
+
+## Completed read-only schema artifacts (2026-10-11)
+
+The following detailed inventories have now been committed to this branch:
+
+- [Public table/column inventory](./mysql-table-inventory.md): 60 tables, 646 reported columns, primary keys, column types/nullability/defaults/selected checks, and 108 distinct foreign-key constraints.
+- [Database behavior inventory](./mysql-database-behavior-inventory.md): 265 constraints, 231 indexes, 126 RLS policies including USING/WITH CHECK expressions, 89 routines with execution/security flags, 40 trigger event entries, and the SQL definition of the one public view.
+- [Feature migration matrix](./mysql-migration-matrix.md): feature ordering, validation gates, Auth/Storage decisions, and execution checklist.
+
+### Security review findings from catalog metadata
+
+- All 60 public tables report RLS enabled, but 6 have no policy listed. Those tables must remain server/admin-only unless an explicitly reviewed access policy is designed.
+- 80 of the 89 public routines are marked SECURITY DEFINER in the current catalog snapshot; 12 of those report EXECUTE permission for anon, and 46 report EXECUTE permission for authenticated. This is a review queue, not a claim that every routine is vulnerable. Review each routine's authorization checks, grants, and search path before replacing the data-access layer.
+- The view social_services_public selects active social services and calculates customer_unit_price from provider_rate; validate both intended price exposure and view security when porting it.
+- The inventory is schema metadata only. It intentionally excludes table row contents, Auth credential data, and function source bodies. Catalog row estimates are not exact counts.
+
+## Next execution step
+
+Compare the full source inventory with the current isolated MySQL schema without dropping or overwriting anything. Then prepare additive DDL and repeatable transfer tooling for the isolated target, including exact row counts, primary-key/hash checks, foreign-key orphan checks, and per-feature acceptance tests. Auth and Storage remain separate explicit decisions; the production site and Supabase stay authoritative until cutover is approved.
