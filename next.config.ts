@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { NextConfig } from "next";
 
 const securityHeaders = [
@@ -43,6 +44,11 @@ const contentSecurityPolicy = [
 ].join("; ");
 
 const nextConfig: NextConfig = {
+    webpack(config) {
+        // Explicit root alias for webpack builds; keeps @/ imports rooted at the repository.
+        config.resolve.alias["@"] = path.resolve(process.cwd());
+        return config;
+    },
     async headers() {
         return [
             {
