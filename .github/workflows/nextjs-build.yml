@@ -42,6 +42,9 @@ jobs:
           fi
           echo "Required public build configuration is present."
 
+      - name: Configure npm peer dependency handling
+        run: npm config set legacy-peer-deps true
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund --legacy-peer-deps
 
