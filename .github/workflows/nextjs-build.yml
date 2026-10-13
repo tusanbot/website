@@ -1,0 +1,80 @@
+name: Build Tusan Website
+
+on:
+  push:
+    branches:
+      - cloudflare-migration
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tusan-website-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Next.js (validation only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify public build configuration
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$NEXT_PUBLIC_SUPABASE_URL" ] || [ -z "$NEXT_PUBLIC_SUPABASE_ANON_KEY" ]; then
+            echo "::error::Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY as GitHub Actions repository secrets before running this workflow."
+            exit 1
+          fi
+          echo "Required public build configuration is present."
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build Next.js
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Write build metadata
+        if: success()
+        run: |
+          mkdir -p .release-metadata
+          {
+            echo "repository=$GITHUB_REPOSITORY"
+            echo "branch=$GITHUB_REF_NAME"
+            echo "commit=$GITHUB_SHA"
+            echo "run_id=$GITHUB_RUN_ID"
+            echo "run_number=$GITHUB_RUN_NUMBER"
+            echo "built_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          } > .release-metadata/build-info.txt
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tusan-next-build-${{ github.run_number }}-${{ github.sha }}
+          path: |
+            .next/
+            !.next/cache/
+            public/
+            package.json
+            next.config.ts
+            .release-metadata/build-info.txt
+          if-no-files-found: error
+          retention-days: 14
