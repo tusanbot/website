@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build Next.js (validation only)
+    name: Build and package for cPanel (validation only)
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -42,9 +42,6 @@ jobs:
           fi
           echo "Required public build configuration is present."
 
-      - name: Configure npm peer dependency handling
-        run: npm config set legacy-peer-deps true
-
       - name: Install dependencies
         run: npm install --no-audit --no-fund --legacy-peer-deps
 
@@ -52,25 +49,32 @@ jobs:
         run: |
           echo "Commit: $(git rev-parse HEAD)"
           echo "Working directory: $(pwd)"
-          echo "Tracked source files:"
-          git ls-files 'lib/supabase.ts' 'components/admin/AnnouncementForm.tsx' 'components/ui/index.ts'
-          echo "Filesystem checks:"
-          test -f lib/supabase.ts && echo "FOUND lib/supabase.ts" || echo "MISSING lib/supabase.ts"
-          test -f components/admin/AnnouncementForm.tsx && echo "FOUND AnnouncementForm.tsx" || echo "MISSING AnnouncementForm.tsx"
-          test -f components/ui/index.ts && echo "FOUND components/ui/index.ts" || echo "MISSING components/ui/index.ts"
-          echo "TypeScript path configuration:"
-          cat tsconfig.json
+          test -f lib/supabase.ts && echo "FOUND lib/supabase.ts" || (echo "::error::Missing lib/supabase.ts"; exit 1)
+          test -f components/admin/AnnouncementForm.tsx && echo "FOUND AnnouncementForm.tsx" || (echo "::error::Missing AnnouncementForm.tsx"; exit 1)
+          test -f components/ui/index.ts && echo "FOUND components/ui/index.ts" || (echo "::error::Missing components/ui/index.ts"; exit 1)
+          node --version
+          npm --version
 
-      - name: Build Next.js
+      - name: Build Next.js standalone output
         env:
+          CPANEL_BUILD: '1'
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      - name: Write build metadata
-        if: success()
+      - name: Assemble and validate cPanel release
         run: |
-          mkdir -p .release-metadata
+          set -euo pipefail
+          test -f .next/standalone/server.js || { echo "::error::Next.js standalone server.js was not generated"; exit 1; }
+          test -d .next/static || { echo "::error::Next.js static assets are missing"; exit 1; }
+          mkdir -p .next/standalone/.next
+          cp -a .next/static .next/standalone/.next/static
+          if [ -d public ]; then
+            cp -a public .next/standalone/public
+          fi
+          # cPanel's Node application manager is configured to start app.js.
+          # This wrapper delegates to Next.js' generated standalone server.
+          printf '"use strict";\nrequire("./server.js");\n' > .next/standalone/app.js
           {
             echo "repository=$GITHUB_REPOSITORY"
             echo "branch=$GITHUB_REF_NAME"
@@ -78,19 +82,23 @@ jobs:
             echo "run_id=$GITHUB_RUN_ID"
             echo "run_number=$GITHUB_RUN_NUMBER"
             echo "built_at_utc=$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          } > .release-metadata/build-info.txt
+            echo "node_major=22"
+            echo "deployment_target=cPanel Node.js application"
+          } > .next/standalone/RELEASE-INFO.txt
+          tar -czf release-cpanel.tar.gz -C .next/standalone .
+          test -s release-cpanel.tar.gz
+          tar -tzf release-cpanel.tar.gz | grep -q '^./server.js$'
+          tar -tzf release-cpanel.tar.gz | grep -q '^./app.js$'
+          tar -tzf release-cpanel.tar.gz | grep -q '^./.next/static/'
+          echo "cPanel release archive assembled:"
+          ls -lh release-cpanel.tar.gz
+          echo "Archive entries: $(tar -tzf release-cpanel.tar.gz | wc -l)"
 
-      - name: Upload build artifact
+      - name: Upload cPanel release artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: tusan-next-build-${{ github.run_number }}-${{ github.sha }}
-          path: |
-            .next/
-            !.next/cache/
-            public/
-            package.json
-            next.config.ts
-            .release-metadata/build-info.txt
+          name: tusan-cpanel-release-${{ github.run_number }}-${{ github.sha }}
+          path: release-cpanel.tar.gz
           if-no-files-found: error
           retention-days: 14
