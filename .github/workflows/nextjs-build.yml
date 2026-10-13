@@ -48,6 +48,19 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund --legacy-peer-deps
 
+      - name: Diagnose announcement import paths
+        run: |
+          echo "Commit: $(git rev-parse HEAD)"
+          echo "Working directory: $(pwd)"
+          echo "Tracked source files:"
+          git ls-files 'lib/supabase.ts' 'components/admin/AnnouncementForm.tsx' 'components/ui/index.ts'
+          echo "Filesystem checks:"
+          test -f lib/supabase.ts && echo "FOUND lib/supabase.ts" || echo "MISSING lib/supabase.ts"
+          test -f components/admin/AnnouncementForm.tsx && echo "FOUND AnnouncementForm.tsx" || echo "MISSING AnnouncementForm.tsx"
+          test -f components/ui/index.ts && echo "FOUND components/ui/index.ts" || echo "MISSING components/ui/index.ts"
+          echo "TypeScript path configuration:"
+          cat tsconfig.json
+
       - name: Build Next.js
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
