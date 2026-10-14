@@ -128,12 +128,13 @@ jobs:
             exit 1
           fi
           test -s /tmp/tusan-home.html
-          asset_path="$(grep -oE '/_next/static/[^" ]+\\.(js|css)' /tmp/tusan-home.html | head -n 1 || true)"
+          asset_path="$(grep -oE '/_next/static/[^" ]+\.(js|css)' /tmp/tusan-home.html | head -n 1 || true)"
           if [ -n "$asset_path" ]; then
             asset_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:4317$asset_path")"
             [ "$asset_status" = "200" ] || { echo "::error::Static asset smoke test failed: $asset_path returned $asset_status"; exit 1; }
           else
-            echo "::warning::No direct JS/CSS asset reference found in home HTML; skipped asset request check."
+            echo "::error::No JS/CSS asset reference found in home HTML; cannot validate static asset delivery."
+            exit 1
           fi
           echo "Standalone server smoke test passed (HTTP $status)."
 
