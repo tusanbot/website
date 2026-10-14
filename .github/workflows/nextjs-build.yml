@@ -87,12 +87,13 @@ jobs:
           } > .next/standalone/RELEASE-INFO.txt
           tar -czf release-cpanel.tar.gz -C .next/standalone .
           test -s release-cpanel.tar.gz
-          tar -tzf release-cpanel.tar.gz | grep -q '^./server.js$'
-          tar -tzf release-cpanel.tar.gz | grep -q '^./app.js$'
-          tar -tzf release-cpanel.tar.gz | grep -q '^./.next/static/'
+          tar -tzf release-cpanel.tar.gz > release-cpanel-contents.txt
+          grep -Fqx './server.js' release-cpanel-contents.txt
+          grep -Fqx './app.js' release-cpanel-contents.txt
+          grep -Fq './.next/static/' release-cpanel-contents.txt
           echo "cPanel release archive assembled:"
           ls -lh release-cpanel.tar.gz
-          echo "Archive entries: $(tar -tzf release-cpanel.tar.gz | wc -l)"
+          echo "Archive entries: $(wc -l < release-cpanel-contents.txt)"
 
       - name: Upload cPanel release artifact
         if: success()
