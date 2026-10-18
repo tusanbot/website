@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType, type DragEvent } from "react";
 import Link from "next/link";
 import {
   Search, CarFront, GraduationCap, ShieldCheck, Scale, Wallet, House,
@@ -149,9 +149,10 @@ export default function BookmarkMakerClient() {
 
   const activeRegistrations = announcements.filter((item) => item.type === "registration");
   const tickerItems = announcements.slice(0, 12);
+  const tickerDisplayItems: Announcement[] = tickerItems.length ? tickerItems : [{ id: "empty", title: "برای مشاهده تازه‌ترین اطلاعیه‌ها و ثبت‌نام‌ها، بخش اطلاعیه‌های سایت توسن را بررسی کنید.", summary: null, content: null, type: "notice", start_at: null, end_at: null, extended_end_at: null, button_label: null, service_id: null, service: null }];
   const allToolsCount = [...tools, ...extraTools].filter((tool) => tool.enabled && tool.href).length;
 
-  function handleBookmarkDrag(event: React.DragEvent<HTMLAnchorElement>) {
+  function handleBookmarkDrag(event: DragEvent<HTMLAnchorElement>) {
     event.dataTransfer.setData("text/uri-list", DASHBOARD_URL);
     event.dataTransfer.setData("text/plain", DASHBOARD_URL);
     event.dataTransfer.effectAllowed = "copy";
@@ -257,7 +258,7 @@ export default function BookmarkMakerClient() {
           <div className="flex shrink-0 items-center gap-2 rounded-lg bg-amber-300 px-3 py-2 text-xs font-black text-slate-950"><Newspaper size={16} /> اخبار و اطلاعیه‌ها</div>
           <div className="min-w-0 flex-1 overflow-hidden">
             <div className="tusan-ticker-track gap-8 whitespace-nowrap py-1">
-              {(tickerItems.length ? tickerItems : [{ id: "empty", title: "برای مشاهده تازه‌ترین اطلاعیه‌ها و ثبت‌نام‌ها، بخش اطلاعیه‌های سایت توسن را بررسی کنید.", type: "notice" } as Announcement]).concat(tickerItems).map((item, index) => <Link key={item.id + "-" + index} href={item.type === "registration" ? "#registrations" : "/"} className="inline-flex items-center gap-2 text-xs font-bold text-slate-200 transition hover:text-teal-200"><span className="h-1.5 w-1.5 rounded-full bg-teal-300" />{item.title}<span className="text-slate-500">•</span></Link>)}
+              {tickerDisplayItems.concat(tickerDisplayItems).map((item, index) => <Link key={item.id + "-" + index} href={item.type === "registration" ? "#registrations" : "/"} className="inline-flex items-center gap-2 text-xs font-bold text-slate-200 transition hover:text-teal-200"><span className="h-1.5 w-1.5 rounded-full bg-teal-300" />{item.title}<span className="text-slate-500">•</span></Link>)}
             </div>
           </div>
         </div>
