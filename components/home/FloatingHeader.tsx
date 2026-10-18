@@ -12,7 +12,7 @@ type NavItem = { label: string; href: string };
 const sectionLinks: NavItem[] = [
     { label: "خدمات پرطرفدار", href: "#popular-services" }, { label: "ابزارهای آنلاین", href: "#online-tools" },
     { label: "شبکه‌های اجتماعی", href: "#social-services" }, { label: "روند سفارش", href: "#order-process" },
-    { label: "سوالات متداول", href: "#faq" }, { label: "قوانین و مقررات", href: "#rules" },
+    { label: "سوالات متداول", href: "#faq" }, { label: "قوانین و مقررات", href: "#rules" }, { label: "میز کار کافی‌نت", href: "/bookmark-maker" },
 ];
 const importantCategories = [
     ["vehicle", "خدمات خودرو", "🚗"], ["real-estate", "خدمات املاک و اسکان", "🏠"], ["education", "خدمات دانشجویی و دانشگاهی", "🎓"],
