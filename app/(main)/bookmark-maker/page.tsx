@@ -2,12 +2,12 @@ import type { Metadata } from "next";
 import BookmarkMakerClient from "./BookmarkMakerClient";
 
 export const metadata: Metadata = {
-  title: "نشانک‌ساز کافی‌نت توسن | دریافت بوکمارک خدمات",
-  description: "دریافت فایل بوکمارک دسته‌بندی‌شده خدمات کافی‌نت، سامانه‌های پرکاربرد و ابزارهای آنلاین توسن برای واردکردن در Chrome.",
+  title: "میز کار کافی‌نت توسن | سامانه‌ها، ثبت‌نام‌ها و ابزارها",
+  description: "داشبورد سریع کافی‌نت توسن؛ دسترسی یکجا به سامانه‌های رسمی، ثبت‌نام‌های فعال و ابزارهای کاربردی PDF، عکس، فاکتور و طراحی پوستر.",
   alternates: { canonical: "https://www.tusancn.ir/bookmark-maker" },
   openGraph: {
-    title: "نشانک‌ساز کافی‌نت توسن",
-    description: "همه لینک‌های کاربردی کافی‌نت و ابزارهای آنلاین توسن را یک‌جا به نشانک‌های Chrome اضافه کنید.",
+    title: "میز کار کافی‌نت توسن",
+    description: "سامانه‌های پرکاربرد، ثبت‌نام‌های فعال و ابزارهای کافی‌نت در یک صفحه؛ بدون نصب افزونه.",
     url: "https://www.tusancn.ir/bookmark-maker",
     siteName: "کافی نت توسن",
     locale: "fa_IR",
