@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ComponentType, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import Link from "next/link";
 import {
   Search, CarFront, GraduationCap, ShieldCheck, Scale, Wallet, House,
   ReceiptText, Landmark, HeartPulse, BriefcaseBusiness, Building2, FileText,
   Wrench, ExternalLink, BookmarkPlus, Clock3, Newspaper, CalendarDays,
   ArrowUpLeft, Sparkles, Globe2, CircleHelp, ChevronLeft, BadgeCheck,
-  Image as ImageIcon, FileOutput, ClipboardList, Vote, Calculator,
+  Image as ImageIcon, FileOutput, ClipboardList, Vote, Calculator, type LucideIcon,
 } from "lucide-react";
 import { tools } from "@/lib/tools";
 import { extraTools } from "@/lib/extra-tools";
@@ -16,7 +16,7 @@ const SITE = "https://www.tusancn.ir";
 const DASHBOARD_URL = SITE + "/bookmark-maker";
 
 type SystemLink = { title: string; url: string; note?: string };
-type SystemGroup = { id: string; title: string; description: string; icon: ComponentType<{ size?: number; className?: string }>; links: SystemLink[] };
+type SystemGroup = { id: string; title: string; description: string; icon: LucideIcon; links: SystemLink[] };
 
 const systemGroups: SystemGroup[] = [
   { id: "popular", title: "سامانه‌های پرکاربرد", description: "دسترسی سریع به خدماتی که بیشتر مراجعه می‌شوند", icon: Sparkles, links: [
