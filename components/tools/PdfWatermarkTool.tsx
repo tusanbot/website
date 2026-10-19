@@ -3,11 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, FileUp, LoaderCircle, ScanSearch, RotateCcw } from "lucide-react";
 
-declare global {
-  interface Window {
-    PDFLib?: any;
-    pdfjsLib?: any;
-  }
+type PdfJs = {
+  GlobalWorkerOptions: { workerSrc: string };
+  getDocument: (source: { data: ArrayBuffer }) => { promise: Promise<any> };
+};
+function getPdfJs(): PdfJs | undefined {
+  return (window as unknown as { pdfjsLib?: PdfJs }).pdfjsLib;
+}
+function getPdfLib(): any {
+  return (window as unknown as { PDFLib?: any }).PDFLib;
 }
 
 const PDFLIB_URL = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
@@ -70,7 +74,7 @@ function getAnnotationLabel(dict: any, PDFName: any): string {
 }
 
 function downloadPdf(bytes: Uint8Array, fileName: string) {
-  const blob = new Blob([bytes], { type: "application/pdf" });
+  const blob = new Blob([(() => { const copy = new Uint8Array(bytes.byteLength); copy.set(bytes); return copy.buffer; })()], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -99,8 +103,9 @@ export default function PdfWatermarkTool() {
       if (!file || !canvasRef.current) return;
 
       try {
-        await loadScript("tusan-pdfjs-watermark", PDFJS_URL, () => !!window.pdfjsLib);
-        const pdfjs = window.pdfjsLib;
+        await loadScript("tusan-pdfjs-watermark", PDFJS_URL, () => !!getPdfJs());
+        const pdfjs = getPdfJs();
+        if (!pdfjs) throw new Error("کتابخانه PDF.js آماده نیست.");
         pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
         const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
 
@@ -157,8 +162,8 @@ export default function PdfWatermarkTool() {
     setError("");
     setStatus("در حال بررسی ساختار PDF و annotationهای واترمارک...");
     try {
-      await loadScript("tusan-pdflib-watermark", PDFLIB_URL, () => !!window.PDFLib);
-      const { PDFDocument, PDFName } = window.PDFLib;
+      await loadScript("tusan-pdflib-watermark", PDFLIB_URL, () => !!getPdfLib());
+      const { PDFDocument, PDFName } = getPdfLib();
       const pdf = await PDFDocument.load(await file.arrayBuffer());
       const found: WatermarkAnnotation[] = [];
 
@@ -211,8 +216,8 @@ export default function PdfWatermarkTool() {
     setError("");
     setStatus("در حال حذف annotationهای انتخاب‌شده از ساختار PDF...");
     try {
-      await loadScript("tusan-pdflib-watermark", PDFLIB_URL, () => !!window.PDFLib);
-      const { PDFDocument, PDFName } = window.PDFLib;
+      await loadScript("tusan-pdflib-watermark", PDFLIB_URL, () => !!getPdfLib());
+      const { PDFDocument, PDFName } = getPdfLib();
       const pdf = await PDFDocument.load(await file.arrayBuffer());
       const selected = new Set(selectedKeys);
       let removedCount = 0;
