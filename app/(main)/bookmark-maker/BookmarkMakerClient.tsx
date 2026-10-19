@@ -7,7 +7,7 @@ import {
   ReceiptText, Landmark, HeartPulse, BriefcaseBusiness, Building2, FileText,
   Wrench, ExternalLink, BookmarkPlus, Clock3, Newspaper, CalendarDays,
   ArrowUpLeft, Sparkles, Globe2, CircleHelp, ChevronLeft, BadgeCheck,
-  Image as ImageIcon, FileOutput, ClipboardList, Vote, Calculator, type LucideIcon,
+  Image as ImageIcon, FileOutput, ClipboardList, Vote, Calculator, ScanLine, Eraser, type LucideIcon,
 } from "lucide-react";
 import { tools } from "@/lib/tools";
 import { extraTools } from "@/lib/extra-tools";
@@ -102,6 +102,8 @@ const toolShortcuts = [
   { title: "عکس و PDF به متن", description: "استخراج متن از تصویر و فایل اسکن‌شده", href: "/tools/ocr", icon: ClipboardList, tone: "blue" },
   { title: "رزومه‌ساز", description: "ساخت رزومه حرفه‌ای قابل چاپ", href: "/tools/resume-builder", icon: FileText, tone: "violet" },
   { title: "محاسبه اقساط وام", description: "برآورد اقساط و سود وام", href: "/tools/loan-calculator", icon: Calculator, tone: "teal" },
+  { title: "بهبود اسکن PDF", description: "برش، صاف‌کردن و اصلاح نور اسکن مدارک", href: "/tools/pdf-manager/highlight-pdf", icon: ScanLine, tone: "blue" },
+  { title: "حذف واترمارک PDF", description: "شناسایی واترمارک‌های استاندارد PDF", href: "/tools/pdf-manager/remove-watermark", icon: Eraser, tone: "rose" },
   { title: "همه ابزارهای توسن", description: "مشاهده فهرست کامل ابزارهای آنلاین", href: "/tools", icon: Wrench, tone: "amber" },
 ];
 
