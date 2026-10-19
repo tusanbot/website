@@ -126,3 +126,5 @@ export default function PdfScanEnhancer(){
     <div className="mt-5 rounded-2xl border border-amber-300/60 bg-amber-50/60 p-4 text-xs leading-6 text-amber-900">برای جلوگیری از حذف ناخواسته محتوا، برش خودکار را بررسی کنید. خروجی صفحات پردازش‌شده تصویری است؛ ممکن است متن قابل جست‌وجو، فرم‌های تعاملی و لایه‌های اصلی PDF حفظ نشوند. برای فایل‌های حساس، ابتدا از نسخه پشتیبان استفاده کنید.</div>
   </section>;
 }
+
+// CI validation trigger: run the PDF tool type fixes through the PR workflow.
