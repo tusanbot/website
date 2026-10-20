@@ -10,11 +10,41 @@ type User={id:string;full_name:string|null;email:string|null};
 type LinkRow={id:string;tag_id:string;code:string;is_active:boolean;expires_at:string|null};
 type Service={id:string;title:string;is_active:boolean};
 
-const emptyDiscount={name:"",description:"",discount_type:"percent" as const,value:"",max_discount_amount:"",min_order_amount:"",starts_at:"",ends_at:"",usage_limit:"",per_user_limit:"",priority:"0",stackable:false,is_active:true};
+type DiscountFormState = {
+  name: string;
+  description: string;
+  discount_type: "percent" | "fixed";
+  value: string;
+  max_discount_amount: string;
+  min_order_amount: string;
+  starts_at: string;
+  ends_at: string;
+  usage_limit: string;
+  per_user_limit: string;
+  priority: string;
+  stackable: boolean;
+  is_active: boolean;
+};
+
+const emptyDiscount: DiscountFormState = {
+  name: "",
+  description: "",
+  discount_type: "percent",
+  value: "",
+  max_discount_amount: "",
+  min_order_amount: "",
+  starts_at: "",
+  ends_at: "",
+  usage_limit: "",
+  per_user_limit: "",
+  priority: "0",
+  stackable: false,
+  is_active: true,
+};
 
 export default function DiscountManagement(){
  const [tags,setTags]=useState<Tag[]>([]); const [discounts,setDiscounts]=useState<Discount[]>([]); const [links,setLinks]=useState<LinkRow[]>([]); const [users,setUsers]=useState<User[]>([]); const [services,setServices]=useState<Service[]>([]);
- const [loading,setLoading]=useState(true); const [error,setError]=useState(""); const [tagForm,setTagForm]=useState({name:"",slug:"",description:"",color:"#179d99"}); const [discountForm,setDiscountForm]=useState(emptyDiscount); const [codeForm,setCodeForm]=useState({discount_id:"",code:"",usage_limit:"",per_user_limit:"",starts_at:"",ends_at:""}); const [linkForm,setLinkForm]=useState({tag_id:"",code:"",expires_at:"",assignment_duration_days:""}); const [assignForm,setAssignForm]=useState({userId:"",tagId:"",expires_at:""}); const [bindingForm,setBindingForm]=useState({discountId:"",tagId:"",serviceId:""});
+ const [loading,setLoading]=useState(true); const [error,setError]=useState(""); const [tagForm,setTagForm]=useState({name:"",slug:"",description:"",color:"#179d99"}); const [discountForm,setDiscountForm]=useState<DiscountFormState>(emptyDiscount); const [codeForm,setCodeForm]=useState({discount_id:"",code:"",usage_limit:"",per_user_limit:"",starts_at:"",ends_at:""}); const [linkForm,setLinkForm]=useState({tag_id:"",code:"",expires_at:"",assignment_duration_days:""}); const [assignForm,setAssignForm]=useState({userId:"",tagId:"",expires_at:""}); const [bindingForm,setBindingForm]=useState({discountId:"",tagId:"",serviceId:""});
  async function load(){
   setLoading(true);setError("");
   try{
@@ -112,6 +142,7 @@ export default function DiscountManagement(){
    <div className="border-t pt-4 space-y-3">
     <div className="grid md:grid-cols-4 gap-3"><select value={bindingForm.discountId} onChange={e=>setBindingForm(v=>({...v,discountId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white">{discounts.map(d=><option key={d.id} value={d.id}>{d.name}</option>)}</select><select value={bindingForm.tagId} onChange={e=>setBindingForm(v=>({...v,tagId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white"><option value="">بدون تگ (عمومی)</option>{tags.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><select value={bindingForm.serviceId} onChange={e=>setBindingForm(v=>({...v,serviceId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white"><option value="">همه خدمات</option>{services.map(s=><option key={s.id} value={s.id}>{s.title}</option>)}</select><TusanButton onClick={bindDiscount}>اتصال تخفیف</TusanButton></div>
     <div className="grid md:grid-cols-3 gap-3"><select value={assignForm.userId} onChange={e=>setAssignForm(v=>({...v,userId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white"><option value="">انتخاب کاربر</option>{users.map(u=><option key={u.id} value={u.id}>{u.full_name||u.email||u.id.slice(0,8)}</option>)}</select><select value={assignForm.tagId} onChange={e=>setAssignForm(v=>({...v,tagId:e.target.value}))} className="rounded-xl border border-[var(--border)] px-3 py-2 bg-white">{tags.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select><TusanButton onClick={assignTag}>اختصاص تگ به کاربر</TusanButton></div>
+   </div>
   </GlassPanel>
  </div>;
 }

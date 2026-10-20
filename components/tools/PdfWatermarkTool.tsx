@@ -6,7 +6,6 @@ import { Download, FileUp, LoaderCircle, ScanSearch, RotateCcw } from "lucide-re
 declare global {
   interface Window {
     PDFLib?: any;
-    pdfjsLib?: any;
   }
 }
 
@@ -70,7 +69,7 @@ function getAnnotationLabel(dict: any, PDFName: any): string {
 }
 
 function downloadPdf(bytes: Uint8Array, fileName: string) {
-  const blob = new Blob([bytes], { type: "application/pdf" });
+  const blob = new Blob([bytes as unknown as BlobPart], { type: "application/pdf" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -99,8 +98,8 @@ export default function PdfWatermarkTool() {
       if (!file || !canvasRef.current) return;
 
       try {
-        await loadScript("tusan-pdfjs-watermark", PDFJS_URL, () => !!window.pdfjsLib);
-        const pdfjs = window.pdfjsLib;
+        await loadScript("tusan-pdfjs-watermark", PDFJS_URL, () => !!(window as any).pdfjsLib);
+        const pdfjs = (window as any).pdfjsLib;
         pdfjs.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_URL;
         const pdf = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
 
