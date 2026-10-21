@@ -2,10 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAiCapabilityModel } from "@/lib/ai/server";
 import { requireAiAccess } from "@/lib/ai/access";
 import { generateSpeechWithGeminiApiKey } from "@/lib/ai/gemini";
+import { generateSpeechWithXaiApiKey } from "@/lib/ai/xai";
 import { checkRateLimit, rejectOversizedJsonBody } from "@/lib/security/rateLimit";
 
 const MAX_CHARS = 8000;
 const VOICES = new Set(["Puck", "Fenrir", "Zephyr", "Laomedeia", "Sadachbia", "Leda", "Achird", "Zubenelgenubi", "Kore", "Charon", "Alnilam", "Gacrux", "Aoede", "Callirrhoe", "Sulafat", "Achernar"]);
+const XAI_VOICES = new Set(["ara","eve","leo","rex","sal","carina","zagan","helix","orion","luna","iris","altair","zenith","perseus","helios","lux","kepler","rigel","cosmo","celeste","ursa","sirius","lumen","castor","naksh","atlas"]);
 const STYLES: Record<string, string> = { energetic: "با انرژی بالا، ریتم تند و جذاب، شاد و مناسب اجرای محتوای شبکه‌های اجتماعی", reels: "سریع، گیرا، با تأکید روی کلمات مهم و شروع بسیار جذاب، مناسب ویدئوی کوتاه", advertising: "متقاعدکننده، پرانرژی و حرفه‌ای، با تأکید طبیعی روی مزایا و دعوت به اقدام", friendly: "طبیعی، گرم، دوستانه و محاوره‌ای؛ مثل صحبت مستقیم با مخاطب", educational: "شفاف، منظم و قابل‌فهم، با مکث‌های طبیعی و تأکید روی نکات مهم", news: "جدی، دقیق و حرفه‌ای با بیان واضح و کنترل‌شده", podcast: "طبیعی، داستان‌گو، گرم و شنیدنی با ریتم متعادل", story: "احساسی، داستان‌گو و پویا، با تغییر طبیعی در تأکید و ریتم" };
 
 export async function POST(req: NextRequest) {
@@ -20,17 +22,20 @@ export async function POST(req: NextRequest) {
     const voice = typeof body.voice === "string" && VOICES.has(body.voice) ? body.voice : "Puck";
     const style = typeof body.style === "string" && STYLES[body.style] ? STYLES[body.style] : STYLES.energetic;
     const speed = typeof body.speed === "number" ? body.speed : 1;
+    const language = typeof body.language === "string" ? body.language : "auto";
     if (!text) return NextResponse.json({ error: "متنی برای تبدیل به صوت وارد نشده است." }, { status: 400 });
     if (text.length > MAX_CHARS) return NextResponse.json({ error: `متن نمی‌تواند بیشتر از ${MAX_CHARS.toLocaleString("fa-IR")} کاراکتر باشد.` }, { status: 400 });
     if (speed < 0.5 || speed > 2) return NextResponse.json({ error: "سرعت باید بین ۰٫۵ تا ۲ باشد." }, { status: 400 });
     const model = await getAiCapabilityModel(access.profileId, "tts", access.apiKey, access.modelConfig);
-    const result = await generateSpeechWithGeminiApiKey(access.apiKey, text, voice, speed, style, model);
+    const result = access.provider === "xai"
+      ? await generateSpeechWithXaiApiKey(access.apiKey, text, XAI_VOICES.has(voice.toLowerCase()) ? voice.toLowerCase() : "eve", speed, language)
+      : await generateSpeechWithGeminiApiKey(access.apiKey, text, voice, speed, style, model);
     return NextResponse.json({ audioBase64: result.audioBase64, mimeType: result.mimeType, model: result.model, source: access.source });
   } catch (error) {
     const status = typeof error === "object" && error && "status" in error ? Number((error as { status?: number }).status) : 500;
     if (error instanceof Error && error.message === "AI_ACCESS_REQUIRED") return NextResponse.json({ error: "برای استفاده از هوش مصنوعی با حساب Google وارد شوید یا کلید API شخصی خود را وارد کنید." }, { status: 401 });
-    if (status === 401 || status === 403) return NextResponse.json({ error: "کلید Gemini معتبر نیست یا دسترسی صوتی فعال نیست." }, { status: 401 });
-    if (status === 429) return NextResponse.json({ error: "سهمیه Gemini پر شده است. برای این ابزار یک کلید Gemini دیگر تنظیم کنید." }, { status: 429 });
+    if (status === 401 || status === 403) return NextResponse.json({ error: "کلید سرویس هوش مصنوعی معتبر نیست یا دسترسی صوتی فعال نیست." }, { status: 401 });
+    if (status === 429) return NextResponse.json({ error: "سهمیه سرویس هوش مصنوعی پر شده است. یک Provider یا کلید دیگر تنظیم کنید." }, { status: 429 });
     if (status === 504) return NextResponse.json({ error: "زمان پردازش تمام شد. دوباره تلاش کنید." }, { status: 504 });
     console.error("text-to-speech:", error);
     return NextResponse.json({ error: error instanceof Error ? error.message : "تبدیل متن به صوت انجام نشد." }, { status: 502 });

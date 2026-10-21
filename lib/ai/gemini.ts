@@ -73,7 +73,7 @@ export async function generateWithGeminiApiKey(apiKey: string, prompt: string, m
   return generateWithGeminiKey(apiKey, prompt, model, options);
 }
 
-async function generateSpeechWithGeminiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = "", model = "gemini-2.5-flash-preview-tts"): Promise<GeminiSpeechResult> {
+async function generateSpeechWithGeminiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = "", model = "gemini-3.8-flash-tts"): Promise<GeminiSpeechResult> {
   const styleInstruction = style ? `\nDelivery style: ${style}.` : "";
   const response = await fetch(`${getBaseUrl()}/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST", headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -95,7 +95,7 @@ export async function generateSpeechWithGemini(profileId: string, text: string, 
   return generateSpeechWithGeminiKey(await getProfileApiKey(profileId), text, voice, speed, style, model);
 }
 
-export async function generateSpeechWithGeminiApiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = "", model = "gemini-2.5-flash-preview-tts") {
+export async function generateSpeechWithGeminiApiKey(apiKey: string, text: string, voice = "Kore", speed = 1, style = "", model = "gemini-3.8-flash-tts") {
   return generateSpeechWithGeminiKey(apiKey, text, voice, speed, style, model);
 }
 

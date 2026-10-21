@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 type Props = { orderId: string };
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const UPLOAD_TIMEOUT_MS = 60_000;
 const ALLOWED_EXTENSIONS = new Set(["pdf", "json", "jpg", "jpeg", "png", "webp"]);
 const ALLOWED_MIME_TYPES = new Set([
     "application/pdf",
@@ -42,6 +43,23 @@ export default function OrderFileUpload({ orderId }: Props) {
     const [uploading, setUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+    function isAbortError(error: unknown) {
+        return error instanceof DOMException && error.name === "AbortError";
+    }
+
+    async function reconcileUpload(selectedFile: File, title: string) {
+        const response = await fetch(`/api/orders/files?orderId=${encodeURIComponent(orderId)}`, {
+            method: "GET", cache: "no-store", credentials: "include",
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) return false;
+        const files = Array.isArray(result?.files) ? result.files : [];
+        return files.some((item: { file_name?: string; file_title?: string | null; file_size?: number | null; created_at?: string }) => {
+            if (item.file_name !== selectedFile.name || item.file_title !== title || Number(item.file_size) !== selectedFile.size) return false;
+            return !item.created_at || Date.now() - new Date(item.created_at).getTime() < 5 * 60 * 1000;
+        });
+    }
+
     const normalizedTitle = fileTitle.trim();
     const fileValidationError = file ? validateFile(file) : "";
     const canSubmit = Boolean(orderId && file && normalizedTitle && !fileValidationError && !uploading);
@@ -57,6 +75,8 @@ export default function OrderFileUpload({ orderId }: Props) {
         if (!orderId) return setError("شناسه سفارش معتبر نیست.");
 
         setUploading(true);
+        const selectedFile = file;
+        const selectedTitle = normalizedTitle;
         try {
             const { data: { session }, error: sessionError } = await supabase.auth.getSession();
             if (sessionError || !session?.access_token) throw new Error("برای ارسال فایل باید وارد حساب کاربری خود شوید.");
@@ -65,11 +85,29 @@ export default function OrderFileUpload({ orderId }: Props) {
             body.append("orderId", orderId);
             body.append("fileTitle", normalizedTitle);
             body.append("file", file, file.name);
-            const response = await fetch("/api/orders/upload-file", {
-                method: "POST",
-                headers: { Authorization: `Bearer ${session.access_token}` },
-                body,
-            });
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+            let response: Response;
+            try {
+                response = await fetch("/api/orders/upload-file", {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${session.access_token}` },
+                    body,
+                    signal: controller.signal,
+                });
+            } catch (err) {
+                if (!isAbortError(err)) throw err;
+                if (await reconcileUpload(selectedFile, selectedTitle)) {
+                    setFile(null);
+                    setFileTitle("");
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                    setMessage("مدرک با موفقیت ارسال شد.");
+                    return;
+                }
+                throw new Error("پاسخ سرور برای ارسال فایل دریافت نشد. لطفاً دوباره تلاش کنید.");
+            } finally {
+                window.clearTimeout(timeoutId);
+            }
             const result = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(result?.error || "خطایی هنگام ارسال فایل رخ داد.");
             setFile(null);

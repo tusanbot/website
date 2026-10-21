@@ -13,6 +13,7 @@ type Config = {
   announcements: { maxHomeItems?: number; showUndated?: boolean };
   pricing: { defaultMultiplier?: number; currency?: string };
   maintenance: { enabled?: boolean; title?: string; message?: string; eta?: string };
+  manual_payment: { enabled?: boolean; cardNumber?: string; accountOwner?: string; bankName?: string; instructions?: string };
 };
 
 const defaults: Config = {
@@ -29,6 +30,7 @@ const defaults: Config = {
     message: "در حال انجام چند به‌روزرسانی و بهبود هستیم. به‌زودی دوباره در خدمت شما خواهیم بود.",
     eta: "",
   },
+  manual_payment: { enabled: true, cardNumber: "", accountOwner: "", bankName: "", instructions: "پس از واریز، رسید پرداخت را از بخش سفارش‌های من برای همین سفارش ارسال کنید." },
 };
 
 export default function AdminSettingsPage() {
@@ -65,6 +67,7 @@ export default function AdminSettingsPage() {
             assets: { ...defaults.assets, ...(data.settings.config?.assets || {}) },
             social: { ...defaults.social, ...(data.settings.config?.social || {}), icons: { ...defaults.social.icons, ...(data.settings.config?.social?.icons || {}) } },
             maintenance: { ...defaults.maintenance, ...(data.settings.config?.maintenance || {}) },
+            manual_payment: { ...defaults.manual_payment, ...(data.settings.config?.manual_payment || {}) },
           });
         }
       } catch (error) {
@@ -160,6 +163,8 @@ export default function AdminSettingsPage() {
           <label className="font-bold text-sm block">حداکثر آیتم صفحه اصلی<input type="number" min={1} max={12} value={config.announcements.maxHomeItems || 4} onChange={(e) => setConfig({ ...config, announcements: { ...config.announcements, maxHomeItems: Math.max(1, Math.min(12, Number(e.target.value) || 4)) } })} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label>
           <label className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-[var(--surface-muted)]"><span>نمایش اطلاعیه‌های بدون تاریخ</span><input type="checkbox" checked={config.announcements.showUndated !== false} onChange={(e) => setConfig({ ...config, announcements: { ...config.announcements, showUndated: e.target.checked } })} /></label>
         </GlassPanel>
+
+        <GlassPanel className="p-6 space-y-5 border border-[var(--primary)]/20"><div><h2 className="text-xl font-black">تنظیمات پرداخت دستی (کارت به کارت)</h2><p className="mt-2 text-sm text-[var(--text-muted)]">اطلاعات پرداخت کارت به کارت مشتری از این بخش مدیریت می‌شود.</p></div><label className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-[var(--surface-muted)]"><span className="font-bold">فعال بودن پرداخت کارت به کارت</span><input type="checkbox" checked={config.manual_payment.enabled !== false} onChange={(e) => setConfig({ ...config, manual_payment: { ...config.manual_payment, enabled: e.target.checked } })} /></label><div className="grid md:grid-cols-2 gap-4"><label className="font-bold text-sm block">شماره کارت<input inputMode="numeric" dir="ltr" value={config.manual_payment.cardNumber || ""} onChange={(e) => setConfig({ ...config, manual_payment: { ...config.manual_payment, cardNumber: e.target.value.replace(/\D/g, "").slice(0, 16) } })} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label><label className="font-bold text-sm block">نام دارنده حساب<input value={config.manual_payment.accountOwner || ""} onChange={(e) => setConfig({ ...config, manual_payment: { ...config.manual_payment, accountOwner: e.target.value } })} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label><label className="font-bold text-sm block">نام بانک<input value={config.manual_payment.bankName || ""} onChange={(e) => setConfig({ ...config, manual_payment: { ...config.manual_payment, bankName: e.target.value } })} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)]" /></label></div><label className="font-bold text-sm block">راهنمای پرداخت<textarea value={config.manual_payment.instructions || ""} onChange={(e) => setConfig({ ...config, manual_payment: { ...config.manual_payment, instructions: e.target.value } })} rows={4} className="mt-2 w-full rounded-xl border p-3 bg-[var(--surface)] resize-y" /></label></GlassPanel>
 
         <GlassPanel className="p-6 space-y-5">
           <h2 className="text-xl font-black">قیمت‌گذاری</h2>
