@@ -75,13 +75,12 @@ export async function validateGeminiKey(apiKey: string, capability: AiCapability
 
 async function getSiteUserId() {
   const site = await createSupabaseServerClient();
-  const { data, error } = await site.auth.getClaims();
+  const { data: { user }, error } = await site.auth.getUser();
   if (error) {
-    console.error("AI profile auth claims lookup failed", error);
+    console.error("AI profile auth lookup failed", error);
     return null;
   }
-  const sub = data?.claims?.sub;
-  return typeof sub === "string" ? sub : null;
+  return user?.id || null;
 }
 
 const keyColumn: Record<AiCapability, string> = { text: "text_encrypted_api_key", image: "image_encrypted_api_key", video: "video_encrypted_api_key", music: "music_encrypted_api_key", tts: "tts_encrypted_api_key" };

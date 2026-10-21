@@ -21,7 +21,7 @@ async function generate(prompt:string){
   for(const {name,key} of ks){
    try{
     const r=provider==="xai"
-      ? await generateWithXaiApiKey(key,prompt,process.env.SUPPORT_XAI_MODEL||"grok-4.7",{temperature:.2,maxOutputTokens:900,timeoutMs:25000})
+      ? await generateWithXaiApiKey(key,prompt,process.env.SUPPORT_XAI_MODEL||"grok-2-latest",{temperature:.2,maxOutputTokens:900,timeoutMs:25000})
       : await generateWithGeminiApiKey(key,prompt,process.env.SUPPORT_GEMINI_MODEL||"gemini-3.6-flash",{temperature:.2,maxOutputTokens:900,timeoutMs:25000});
     console.info("support-ai provider succeeded",{provider,key:name,model:r.model}); return r;
    }catch(e){
