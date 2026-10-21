@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import AnnouncementForm from "@/components/admin/AnnouncementForm";
+import { supabase } from "../../../../../lib/supabase";
+import AnnouncementForm from "../../../../../components/admin/AnnouncementForm";
 
 import {
     GlassPanel,

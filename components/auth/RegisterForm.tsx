@@ -59,7 +59,12 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
             });
 
             if (error) {
-                throw new Error('SIGNUP_FAILED');
+                console.error('Supabase signup error:', {
+                    message: error.message,
+                    code: error.code,
+                    status: error.status,
+                });
+                throw error;
             }
 
             const user = data.user;
@@ -79,8 +84,13 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
                 });
 
                 if (profileError) {
+                    // The profile may already be created by the database trigger,
+                    // and RLS can reject the client-side upsert. This must not
+                    // prevent the referral claim, which is handled server-side.
                     console.error('Profile upsert failed:', profileError);
-                } else if (activeReferralCode && data.session) {
+                }
+
+                if (activeReferralCode && data.session) {
                     try {
                         const claimResponse = await fetch('/api/referral/claim', {
                             method: 'POST',
@@ -102,8 +112,10 @@ export default function RegisterForm({ onLogin, referralCode }: Props) {
             setSuccess(
                 'ثبت‌نام انجام شد. اگر تأیید ایمیل فعال باشد، لطفاً ایمیل خود را بررسی کنید.'
             );
-        } catch {
-            setError('ثبت‌نام انجام نشد. لطفاً اطلاعات را بررسی کرده و دوباره تلاش کنید.');
+        } catch (signupError) {
+            console.error('Registration failed:', signupError);
+            const message = signupError instanceof Error ? signupError.message : '';
+            setError(message || 'ثبت‌نام انجام نشد. لطفاً اطلاعات را بررسی کرده و دوباره تلاش کنید.');
         } finally {
             setLoading(false);
         }

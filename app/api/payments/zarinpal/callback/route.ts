@@ -5,24 +5,26 @@ import { zarinpalGateway } from "@/lib/payments/zarinpal";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || "https://tusancn.ir").replace(/\/+$/, "");
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const authority = url.searchParams.get("Authority") || url.searchParams.get("authority") || "";
   const status = (url.searchParams.get("Status") || "").toUpperCase();
-  if (!authority) return NextResponse.redirect(new URL("/orders?payment=failed&reason=missing_authority", url.origin));
+  if (!authority) return NextResponse.redirect(new URL("/orders?payment=failed&reason=missing_authority", PUBLIC_SITE_URL));
 
   try {
     const supabase = supabaseAdmin();
     const { data: payment, error: paymentError } = await supabase.from("payments")
       .select("id,order_id,user_id,amount,status,authority,gateway")
       .eq("gateway", "zarinpal").eq("authority", authority).single();
-    if (paymentError || !payment) return NextResponse.redirect(new URL("/orders?payment=failed&reason=payment_not_found", url.origin));
-    if (payment.status === "paid") return NextResponse.redirect(new URL(`/orders/${payment.order_id}?payment=success`, url.origin));
+    if (paymentError || !payment) return NextResponse.redirect(new URL("/orders?payment=failed&reason=payment_not_found", PUBLIC_SITE_URL));
+    if (payment.status === "paid") return NextResponse.redirect(new URL(`/orders/${payment.order_id}?payment=success`, PUBLIC_SITE_URL));
 
     if (status !== "OK") {
       await supabase.from("payments").update({ status: "failed", gateway_response: { callback_status: status || "unknown" } })
         .eq("id", payment.id).neq("status", "paid");
-      return NextResponse.redirect(new URL(`/orders/${payment.order_id}?payment=failed`, url.origin));
+      return NextResponse.redirect(new URL(`/orders/${payment.order_id}?payment=failed`, PUBLIC_SITE_URL));
     }
 
     const result = await zarinpalGateway.verifyPayment(authority, Number(payment.amount));
@@ -46,6 +48,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL(`/orders/${payment.order_id}?payment=success`, url.origin));
   } catch (error) {
     console.error("ZarinPal callback error:", error);
-    return NextResponse.redirect(new URL("/orders?payment=failed&reason=server_error", url.origin));
+    return NextResponse.redirect(new URL("/orders?payment=failed&reason=server_error", PUBLIC_SITE_URL));
   }
 }

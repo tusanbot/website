@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
-import AnnouncementForm from "@/components/admin/AnnouncementForm";
+import { supabase } from "../../../../../lib/supabase";
+import AnnouncementForm from "../../../../../components/admin/AnnouncementForm";
 
 export default function NewAnnouncementPage() {
     const router = useRouter();

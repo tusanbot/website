@@ -16,6 +16,7 @@ export async function GET() {
   const business = config.business && typeof config.business === "object" ? config.business as Record<string, unknown> : {};
   const assets = config.assets && typeof config.assets === "object" ? config.assets as Record<string, unknown> : {};
   const social = config.social && typeof config.social === "object" ? config.social as Record<string, unknown> : {};
+  const manualPayment = config.manual_payment && typeof config.manual_payment === "object" ? config.manual_payment as Record<string, unknown> : {};
   const icons = social.icons && typeof social.icons === "object" ? social.icons as Record<string, unknown> : {};
 
   return NextResponse.json({
@@ -26,6 +27,7 @@ export async function GET() {
       business: { address: business.address || "", phone: business.phone || "", email: business.email || "", telegram: business.telegram || "", eitaa: business.eitaa || "", rubika: business.rubika || "" },
       assets: { logoUrl: assets.logoUrl || "", iconUrl: assets.iconUrl || "", faviconUrl: assets.faviconUrl || "" },
       social: { icons: { telegram: icons.telegram || "", eitaa: icons.eitaa || "", rubika: icons.rubika || "" } },
+      manual_payment: { enabled: manualPayment.enabled !== false, cardNumber: String(manualPayment.cardNumber || ""), accountOwner: String(manualPayment.accountOwner || ""), bankName: String(manualPayment.bankName || ""), instructions: String(manualPayment.instructions || "") },
     },
   }, { headers: { "Cache-Control": "no-store, max-age=0" } });
 }

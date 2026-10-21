@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
+  const supabase = createSupabaseServerClient();
   const query = new URL(request.url).searchParams.get("q")?.trim() || "";
   if (!query) return NextResponse.json({ ok: true, items: [] }, { headers: { "Cache-Control": "no-store" } });
 

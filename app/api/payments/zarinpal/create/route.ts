@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ZARINPAL_START_URL = "https://www.zarinpal.com/pg/StartPay";
+const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || "https://tusancn.ir").replace(/\/+$/, "");
 const paymentUrl = (authority: string) => `${ZARINPAL_START_URL}/${encodeURIComponent(authority)}`;
 
 export async function POST(request: NextRequest) {
@@ -55,11 +56,11 @@ export async function POST(request: NextRequest) {
     }).select("id").single();
     if (paymentError || !payment) return NextResponse.json({ error: "ایجاد درخواست پرداخت ناموفق بود." }, { status: 500 });
 
-    const origin = new URL(request.url).origin;
+    const callbackUrl = `${PUBLIC_SITE_URL}/api/payments/zarinpal/callback`;
     try {
       const result = await zarinpalGateway.createPayment({
         paymentId: payment.id, orderId: order.id, amount,
-        callbackUrl: `${origin}/api/payments/zarinpal/callback`,
+        callbackUrl,
         description: `پرداخت سفارش ${order.tracking_code || order.id}`,
       });
       const { error: updateError } = await supabase.from("payments").update({ authority: result.authority, status: "redirected" })
