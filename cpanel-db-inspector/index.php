@@ -75,7 +75,7 @@ if ($loggedIn && $_SERVER['REQUEST_METHOD'] !== 'POST') {
                 $db = $config['mysql'];
                 $dsn = 'mysql:host=' . $db['host'] . ';dbname=' . $db['database'] . ';charset=' . ($db['charset'] ?? 'utf8mb4');
                 $pdo = new PDO($dsn, $db['username'], $db['password'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_TIMEOUT=>5]);
-                $quote = static fn(string $identifier): string => '"' . str_replace('"', '""', $identifier) . '"';
+                $quote = static fn(string $identifier): string => chr(96) . str_replace(chr(96), chr(96) . chr(96), $identifier) . chr(96);
                 $tableSql = $quote($selectedTable);
                 $where = ''; $params = [];
                 if ($search !== '' && $searchColumns) {
