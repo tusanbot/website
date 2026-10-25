@@ -10,12 +10,13 @@ if (!is_array($config) || empty($config['inspector_password_hash']) || empty($co
 
 $isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 session_name('tusan_db_inspector');
-session_set_cookie_params(['lifetime'=>0,'path'=>'/','secure'=>$isHttps,'httponly'=>true,'samesite'=>'Strict']);
+session_set_cookie_params(['lifetime'=>0,'path'=>'/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
 ini_set('session.use_strict_mode','1');
 session_start();
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
+header('Strict-Transport-Security: max-age=31536000');
 header('Cache-Control: no-store, max-age=0');
 header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'");
 
@@ -33,14 +34,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!hash_equals($csrf, (string)($_POST['csrf'] ?? ''))) { http_response_code(403); exit('Invalid request token.'); }
     $action = (string)($_POST['action'] ?? '');
     if ($action === 'login') {
-        if (password_verify((string)($_POST['password'] ?? ''), (string)$config['inspector_password_hash'])) {
+        $now = time();
+        $lockedUntil = (int)($_SESSION['login_locked_until'] ?? 0);
+        if ($lockedUntil > $now) {
+            $error = 'ورود ناموفق بود. کمی بعد دوباره تلاش کنید.';
+        } elseif (password_verify((string)($_POST['password'] ?? ''), (string)$config['inspector_password_hash'])) {
             session_regenerate_id(true);
             $_SESSION['inspector_authenticated'] = true;
+            unset($_SESSION['login_failures'], $_SESSION['login_locked_until']);
             $_SESSION['csrf'] = bin2hex(random_bytes(32));
             header('Location: ' . strtok((string)($_SERVER['REQUEST_URI'] ?? '/'), '?')); exit;
+        } else {
+            $failures = (int)($_SESSION['login_failures'] ?? 0) + 1;
+            $_SESSION['login_failures'] = $failures;
+            if ($failures >= 5) {
+                $_SESSION['login_locked_until'] = $now + 900;
+                $_SESSION['login_failures'] = 0;
+            }
+            usleep(500000);
+            $error = 'ورود ناموفق بود.';
         }
-        usleep(350000);
-        $error = 'ورود ناموفق بود.';
     } elseif ($action === 'logout' && $loggedIn) {
         $_SESSION = [];
         if (ini_get('session.use_cookies')) {
@@ -86,9 +99,11 @@ if ($loggedIn && $_SERVER['REQUEST_METHOD'] !== 'POST') {
                 $countStmt = $pdo->prepare('SELECT COUNT(*) FROM ' . $tableSql . $where);
                 foreach ($params as $key=>$value) $countStmt->bindValue($key,$value,PDO::PARAM_STR);
                 $countStmt->execute(); $total = (int)$countStmt->fetchColumn();
+                $page = min($page, max(1, (int)ceil($total / $pageSize)));
                 $offset = ($page - 1) * $pageSize;
                 $select = implode(', ', array_map($quote, $allowedColumns));
-                $stmt = $pdo->prepare('SELECT ' . $select . ' FROM ' . $tableSql . $where . ' LIMIT ' . $pageSize . ' OFFSET ' . $offset);
+                $orderBy = $quote($allowedColumns[0]);
+                $stmt = $pdo->prepare('SELECT ' . $select . ' FROM ' . $tableSql . $where . ' ORDER BY ' . $orderBy . ' LIMIT ' . $pageSize . ' OFFSET ' . $offset);
                 foreach ($params as $key=>$value) $stmt->bindValue($key,$value,PDO::PARAM_STR);
                 $stmt->execute(); $rows = $stmt->fetchAll(); $columns = $allowedColumns;
             } catch (Throwable $e) {
