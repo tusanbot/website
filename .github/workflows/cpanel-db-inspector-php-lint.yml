@@ -1,0 +1,33 @@
+name: cPanel DB Inspector PHP Lint
+
+on:
+  pull_request:
+    branches:
+      - cloudflare-migration
+    paths:
+      - "cpanel-db-inspector/**"
+      - ".github/workflows/cpanel-db-inspector-php-lint.yml"
+  push:
+    branches:
+      - cpanel-db-inspector-standalone
+    paths:
+      - "cpanel-db-inspector/**"
+      - ".github/workflows/cpanel-db-inspector-php-lint.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: pdo_mysql
+          coverage: none
+      - name: Syntax-check inspector
+        run: php -l cpanel-db-inspector/index.php
