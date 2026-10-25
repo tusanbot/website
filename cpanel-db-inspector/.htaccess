@@ -1,5 +1,8 @@
 Options -Indexes
+RewriteEngine On
+RewriteCond %{HTTPS} !=on
+RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L,NE]
 
-<FilesMatch "^(README\.md|\.env.*|composer\.(json|lock))$">
+<FilesMatch "^(README\\.md|\\.env.*|composer\\.(json|lock))$">
     Require all denied
 </FilesMatch>
