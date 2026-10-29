@@ -51,3 +51,25 @@ test("does not stringify arbitrary objects into unrelated text columns", () => {
 test("keeps ordinary scalar values unchanged", () => {
   assert.equal(convertValue("plain text", textColumn("content"), "blog_posts"), "plain text");
 });
+
+test("normalizes offset timestamps to UTC and preserves microseconds", () => {
+  assert.equal(
+    convertValue("2026-10-29T12:30:00.123456+03:30", { COLUMN_NAME: "created_at", DATA_TYPE: "datetime" }, "blog_posts"),
+    "2026-10-29 09:00:00.123456",
+  );
+});
+
+test("rejects timezone-free datetime strings to avoid ambiguous interpretation", () => {
+  assert.throws(
+    () => convertValue("2026-10-29 12:30:00", { COLUMN_NAME: "created_at", DATA_TYPE: "datetime" }, "blog_posts"),
+    /ISO timestamp with timezone/,
+  );
+});
+
+test("validates calendar dates with YYYY-MM-DD", () => {
+  assert.equal(convertValue("2026-10-29", { COLUMN_NAME: "some_date", DATA_TYPE: "date" }, "example"), "2026-10-29");
+  assert.throws(
+    () => convertValue("2026-02-30", { COLUMN_NAME: "some_date", DATA_TYPE: "date" }, "example"),
+    /Invalid date/,
+  );
+});
