@@ -80,6 +80,25 @@ The following direct paths were confirmed during the initial repository review a
 
 This is an initial confirmed inventory, not a claim that every table writer in the repository has been found. GitHub code search is not indexed for this repository, and the writer for `news_sources.url` has not yet been identified. Continue searching by enumerating and reviewing all Supabase table/RPC mutations and external scheduled jobs before enabling synchronization.
 
+## Outbox and dispatcher status
+
+The pilot implementation now includes:
+
+- `supabase/migrations/20261029160000_dual_database_outbox.sql`: creates a private outbox, captures insert/update/delete events for the initial blog/announcement content tables, and provides a serialized claim/release RPC. It is a repository migration only; it has not been applied to Supabase.
+- `app/api/internal/data-sync/dispatch/route.ts`: an authenticated dispatcher that claims queued events and forwards them to a separately hosted HTTPS bridge. It marks events delivered only after the bridge returns HTTP success and echoes the exact `event_id`; failures are recorded with bounded exponential retry delays.
+- `MYSQL_SYNC_BRIDGE_URL`, `MYSQL_SYNC_BRIDGE_TOKEN`, and `DATA_SYNC_DISPATCH_SECRET` are server-only configuration variables. Do not add a `NEXT_PUBLIC_` prefix.
+
+The bridge must implement the following contract before the dispatcher can be enabled:
+
+- Accept only HTTPS POSTs authenticated with the configured bearer token.
+- Accept one event per request with `event_id`, `schema_name`, `table_name`, `record_key`, `operation`, and `row_data`.
+- Enforce a strict table and column allowlist; reject unknown table names/columns and never accept arbitrary SQL or identifiers from the request.
+- Apply each event transactionally and idempotently by `event_id`. Return JSON `{ "event_id": "<same id>" }` only after the destination transaction commits.
+- For delete events, use `record_key` to delete the matching row. For insert/update, map known PostgreSQL values to the reviewed MariaDB schema; do not guess conversions.
+- Verify an event replay cannot revert a newer change. The dispatcher preserves per-record event order, but the bridge must still be idempotent because a network failure can occur after a destination commit and before the source queue is acknowledged.
+
+**Important:** the dispatcher is not a complete sync system by itself. The external MariaDB bridge, schema mapping, secrets, scheduled invocation, and test-database validation are still required. Until these exist, leave the dispatcher disabled and do not apply the migration.
+
 ## Required verification before expanding the pilot
 
 - Existing rows are preserved and IDs match.
