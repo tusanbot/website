@@ -38,9 +38,15 @@ export function convertValue(value, column, tableName) {
 
   if (["datetime", "timestamp"].includes(type)) {
     if (typeof value !== "string") throw new Error(`Datetime value requires an ISO string for column ${name}.`);
-    const parsed = new Date(value);
+    // MariaDB DATETIME has no timezone. Normalize source timestamptz values to
+    // UTC while preserving up to six fractional digits (JS Date alone loses µs).
+    const match = /^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2})(?:\\.(\\d+))?(Z|[+-]\\d{2}:\\d{2})$/i.exec(value);
+    if (!match) throw new Error(`Datetime value must be an ISO timestamp with timezone for column ${name}.`);
+    const parsed = new Date(`${match[1]}${match[3]}`);
     if (Number.isNaN(parsed.getTime())) throw new Error(`Invalid datetime value for column ${name}.`);
-    return parsed.toISOString().replace("T", " ").replace("Z", "");
+    const utc = parsed.toISOString().slice(0, 19).replace("T", " ");
+    const fraction = (match[2] || "").slice(0, 6).padEnd(6, "0");
+    return fraction ? `${utc}.${fraction}` : utc;
   }
   if (type === "date") {
     if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
