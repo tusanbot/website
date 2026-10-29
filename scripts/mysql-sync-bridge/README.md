@@ -21,9 +21,10 @@ This is a separate Node.js service intended for a cPanel Node.js app or another 
    - `MYSQL_SYNC_BRIDGE_TOKEN` (random secret of at least 32 characters; must match the dispatcher's `MYSQL_SYNC_BRIDGE_TOKEN`)
    - `MYSQL_SSL=1` only when the MySQL endpoint supports certificate-validated TLS.
 3. Point `MYSQL_DATABASE` at `tusancni_test` only during validation. Use a database user scoped to that database with only the required SELECT/INSERT/UPDATE/DELETE permissions on pilot tables and the two metadata tables.
-4. Review and run `schema-test-only.sql` manually in phpMyAdmin with the selected database explicitly set to `tusancni_test`.
-5. Run `npm install`, then `npm run check`, then start behind an HTTPS reverse proxy.
-6. Check `GET /healthz` and send test events from a controlled test source. Do not apply the Supabase outbox migration or configure a scheduled dispatcher until the schema mapping and retry tests pass.
+4. Select `tusancni_test` explicitly in phpMyAdmin and run `validate-destination-test-only.sql` first. Verify the first result says `tusancni_test`, inspect all duplicate/length issue counts (they should be zero), and compare the row counts with Supabase. This validation script is read-only.
+5. Only after review, run `schema-test-only.sql` manually in phpMyAdmin with `tusancni_test` selected; it creates the two sync-metadata tables.
+6. Run `npm install`, then `npm run check`, then start behind an HTTPS reverse proxy.
+7. Check `GET /healthz` and send test events from a controlled test source. Do not apply the Supabase outbox migration or configure a scheduled dispatcher until the schema mapping and retry tests pass.
 
 ## Event behavior
 
@@ -38,7 +39,7 @@ This is a separate Node.js service intended for a cPanel Node.js app or another 
 
 ## Known constraints before use
 
-- Actual source/destination schema parity has not been verified; expected failures are preferable to silently losing data.
+- Actual source/destination schema parity has not been verified end to end. The read-only `validate-destination-test-only.sql` script checks duplicate/invalid slugs, composite-key duplicates, relevant column definitions, and row counts; it must be run by an operator in `tusancni_test` before schema changes or write tests.
 - Explicit JSON-to-text mappings are implemented only for `blog_posts.seo_keywords` (Supabase `text[]` serialized as JSON text) and `services_announcements.documents` (Supabase `jsonb` serialized as JSON text). These mappings have unit tests; arbitrary objects/arrays in other non-JSON columns are still rejected.
 - `npm run check` runs Node syntax checks and unit tests for the explicit field mappings. This does not test real MariaDB writes, outbox SQL, timezone semantics, or end-to-end delivery.
 - The allowlist must be narrowed or expanded only after table-by-table schema validation.
