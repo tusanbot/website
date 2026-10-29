@@ -88,6 +88,16 @@ The pilot implementation now includes:
 - `app/api/internal/data-sync/dispatch/route.ts`: an authenticated dispatcher that claims queued events and forwards them to a separately hosted HTTPS bridge. It marks events delivered only after the bridge returns HTTP success and echoes the exact `event_id`; failures are recorded with bounded exponential retry delays.
 - `MYSQL_SYNC_BRIDGE_URL`, `MYSQL_SYNC_BRIDGE_TOKEN`, and `DATA_SYNC_DISPATCH_SECRET` are server-only configuration variables. Do not add a `NEXT_PUBLIC_` prefix.
 
+The initial bridge draft is now present under `scripts/mysql-sync-bridge/`:
+
+- `server.mjs`: a separate Node.js HTTP service with bearer authentication, HTTPS-proxy deployment assumptions, request-size limits, a static table allowlist, destination-column/primary-key validation, transactional apply, replay receipts, and per-record source-outbox ordering.
+- `schema-test-only.sql`: metadata tables for idempotency/version tracking. It is explicitly marked for manual execution in `tusancni_test` only; it must not be run against `tusancni_main`.
+- `README.md`: setup and safety notes.
+
+The dispatcher now forwards `source_outbox_id`, applies a bridge request timeout, and acknowledges/requeues only while it still owns the outbox event lease.
+
+This is implementation code only: it has not been syntax-checked or run against the actual MariaDB schema in this environment, the test-only SQL has not been executed, and no bridge has been deployed or configured.
+
 The bridge must implement the following contract before the dispatcher can be enabled:
 
 - Accept only HTTPS POSTs authenticated with the configured bearer token.
