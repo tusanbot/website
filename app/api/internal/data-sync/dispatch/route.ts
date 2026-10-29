@@ -69,8 +69,10 @@ export async function POST(request: Request) {
             "content-type": "application/json",
             "idempotency-key": event.event_id,
           },
+          signal: AbortSignal.timeout(12_000),
           body: JSON.stringify({
             event_id: event.event_id,
+            source_outbox_id: event.id,
             source_database: event.source_database,
             schema_name: event.schema_name,
             table_name: event.table_name,
@@ -99,8 +101,11 @@ export async function POST(request: Request) {
 
         const marked = await db.from("data_sync_outbox")
           .update({ processed_at: new Date().toISOString(), locked_at: null, locked_by: null, last_error: null })
-          .eq("id", event.id);
-        if (marked.error) throw new Error("Bridge accepted event, but queue acknowledgement failed; retry will rely on bridge idempotency.");
+          .eq("id", event.id)
+          .eq("locked_by", workerId)
+          .select("id")
+          .maybeSingle();
+        if (marked.error || !marked.data) throw new Error("Bridge accepted event, but queue acknowledgement failed or the lease was lost; retry will rely on bridge idempotency.");
 
         delivered++;
       } catch (error) {
@@ -110,7 +115,8 @@ export async function POST(request: Request) {
         const retryAt = new Date(Date.now() + delaySeconds * 1000).toISOString();
         const queued = await db.from("data_sync_outbox")
           .update({ locked_at: null, locked_by: null, next_attempt_at: retryAt, last_error: message })
-          .eq("id", event.id);
+          .eq("id", event.id)
+          .eq("locked_by", workerId);
         failures.push({
           event_id: event.event_id,
           error: queued.error ? "Delivery failed and retry metadata could not be saved." : message,
