@@ -41,7 +41,8 @@ This is a separate Node.js service intended for a cPanel Node.js app or another 
 
 - Actual source/destination schema parity has not been verified end to end. The read-only `validate-destination-test-only.sql` script checks duplicate/invalid slugs, composite-key duplicates, relevant column definitions, and row counts; it must be run by an operator in `tusancni_test` before schema changes or write tests.
 - Explicit JSON-to-text mappings are implemented only for `blog_posts.seo_keywords` (Supabase `text[]` serialized as JSON text) and `services_announcements.documents` (Supabase `jsonb` serialized as JSON text). These mappings have unit tests; arbitrary objects/arrays in other non-JSON columns are still rejected.
-- `npm run check` runs Node syntax checks and unit tests for the explicit field mappings. This does not test real MariaDB writes, outbox SQL, timezone semantics, or end-to-end delivery.
+- Timestamp policy: source ISO timestamps must include a timezone; the bridge normalizes them to UTC before writing to MariaDB `DATETIME`, preserving up to six fractional digits. Application reads must interpret these `DATETIME` values as UTC. Unit tests cover offset normalization and microseconds.
+- `npm run check` runs Node syntax checks and unit tests for the explicit field mappings. This does not test real MariaDB writes, outbox SQL, or end-to-end delivery.
 - The allowlist must be narrowed or expanded only after table-by-table schema validation.
 - Network/TLS proxy, least-privilege DB user, process supervision, and request timeouts must be tested on the target host.
 - Do not switch data authority or enable production sync from this draft.
