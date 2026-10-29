@@ -39,7 +39,8 @@ This is a separate Node.js service intended for a cPanel Node.js app or another 
 ## Known constraints before use
 
 - Actual source/destination schema parity has not been verified; expected failures are preferable to silently losing data.
-- Values with arrays/objects in non-JSON columns and boolean values in non-boolean destination columns are rejected until explicit mappings are reviewed.
+- Explicit JSON-to-text mappings are implemented only for `blog_posts.seo_keywords` (Supabase `text[]` serialized as JSON text) and `services_announcements.documents` (Supabase `jsonb` serialized as JSON text). These mappings have unit tests; arbitrary objects/arrays in other non-JSON columns are still rejected.
+- `npm run check` runs Node syntax checks and unit tests for the explicit field mappings. This does not test real MariaDB writes, outbox SQL, timezone semantics, or end-to-end delivery.
 - The allowlist must be narrowed or expanded only after table-by-table schema validation.
 - Network/TLS proxy, least-privilege DB user, process supervision, and request timeouts must be tested on the target host.
 - Do not switch data authority or enable production sync from this draft.
