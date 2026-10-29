@@ -164,7 +164,7 @@ function convertValue(value, column) {
     return parsed.toISOString().replace("T", " ").replace("Z", "");
   }
   if (type === "date") {
-    if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+    if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
       throw new Error(`Date value must use YYYY-MM-DD for column ${column.COLUMN_NAME}.`);
     }
     const parsed = new Date(`${value}T00:00:00.000Z`);
