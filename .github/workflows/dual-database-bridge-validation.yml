@@ -1,0 +1,31 @@
+name: Dual database bridge validation
+
+on:
+  pull_request:
+    branches:
+      - cloudflare-migration
+    paths:
+      - "scripts/mysql-sync-bridge/**"
+      - ".github/workflows/dual-database-bridge-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge-syntax:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/mysql-sync-bridge
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/mysql-sync-bridge/package.json
+      - name: Install bridge dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Check JavaScript syntax
+        run: npm run check
