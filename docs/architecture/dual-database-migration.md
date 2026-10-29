@@ -62,6 +62,24 @@ Suggested rollout:
 
 Do not add a prefix-only unique index and assume it guarantees full URL uniqueness. First inventory every writer, decide whether uniqueness is based on exact URL or canonicalized URL, and inspect actual URL lengths. If a canonical URL hash is used as an indexable key, keep the full canonical URL and verify it on hash conflict.
 
+## Initial code-path inventory
+
+The following direct paths were confirmed during the initial repository review and must be included in the pilot or tracked as explicit follow-up work:
+
+- `app/api/admin/blog/route.ts`: server-side create/update/delete of `blog_posts`; create/delete of `blog_post_services`; reads of posts, categories, services and service associations.
+- `app/admin/blog/BlogAdmin.tsx`: browser UI that calls the blog admin API.
+- `components/blog/BlogInteractions.tsx`: browser-side Supabase operations for blog views/engagement, comments, reactions and ratings, including RPC calls. These cannot be synchronized by changing only the admin blog API.
+- `components/blog/BlogViewTracker.tsx`: browser-side view-recording RPC.
+- `app/(main)/admin/announcements/new/page.tsx`: browser-side insert into `services_announcements`.
+- `app/(main)/admin/announcements/[id]/page.tsx`: browser-side read/update of `services_announcements`.
+- `app/(main)/admin/announcements/page.tsx`: browser-side read, active toggle and delete for `services_announcements`.
+- `app/api/home/announcements/route.ts`: server-side read of announcements and services.
+- `app/api/admin/blog/comments/route.ts`: server-side read/update/delete of `blog_comments`.
+- `app/api/admin/blog/analytics/route.ts`: uses a Supabase RPC for analytics.
+- `lib/supabase.ts`, `lib/supabase-server.ts`, `lib/supabaseServer.ts`, and `lib/supabaseAdmin.ts`: existing client factories. They do not provide a MariaDB adapter.
+
+This is an initial confirmed inventory, not a claim that every table writer in the repository has been found. GitHub code search is not indexed for this repository, and the writer for `news_sources.url` has not yet been identified. Continue searching by enumerating and reviewing all Supabase table/RPC mutations and external scheduled jobs before enabling synchronization.
+
 ## Required verification before expanding the pilot
 
 - Existing rows are preserved and IDs match.
