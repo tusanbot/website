@@ -75,7 +75,10 @@ begin
   values
     (tg_table_schema, tg_table_name, v_key, v_operation, v_row);
 
-  return case when tg_op = 'DELETE' then old else new end;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
 $$;
 
@@ -148,14 +151,23 @@ begin
 
   return query
   with picked as (
-    select id
-    from public.data_sync_outbox
-    where processed_at is null
-      and next_attempt_at <= now()
-      and (locked_at is null or locked_at < now() - interval '10 minutes')
-    order by id
+    select o.id
+    from public.data_sync_outbox o
+    where o.processed_at is null
+      and o.next_attempt_at <= now()
+      and (o.locked_at is null or o.locked_at < now() - interval '10 minutes')
+      and not exists (
+        select 1
+        from public.data_sync_outbox earlier
+        where earlier.processed_at is null
+          and earlier.schema_name = o.schema_name
+          and earlier.table_name = o.table_name
+          and earlier.record_key = o.record_key
+          and earlier.id < o.id
+      )
+    order by o.id
     limit greatest(1, least(coalesce(p_limit, 10), 50))
-    for update
+    for update of o
   )
   update public.data_sync_outbox o
   set locked_at = now(), locked_by = p_worker_id, attempts = attempts + 1
