@@ -157,6 +157,22 @@ function convertValue(value, column) {
     }
     throw new Error(`Value for JSON column ${column.COLUMN_NAME} is not JSON-compatible.`);
   }
+  if (["datetime", "timestamp"].includes(type)) {
+    if (typeof value !== "string") throw new Error(`Datetime value requires an ISO string for column ${column.COLUMN_NAME}.`);
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) throw new Error(`Invalid datetime value for column ${column.COLUMN_NAME}.`);
+    return parsed.toISOString().replace("T", " ").replace("Z", "");
+  }
+  if (type === "date") {
+    if (typeof value !== "string" || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+      throw new Error(`Date value must use YYYY-MM-DD for column ${column.COLUMN_NAME}.`);
+    }
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value) {
+      throw new Error(`Invalid date value for column ${column.COLUMN_NAME}.`);
+    }
+    return value;
+  }
   if (Array.isArray(value) || isPlainObject(value)) {
     throw new Error(`Object/array value requires an explicit mapping for column ${column.COLUMN_NAME} (${type}).`);
   }
@@ -198,10 +214,10 @@ async function applyEvent(event) {
     }
 
     const row = event.row_data;
-    for (const key of Object.keys(row)) {
-      if (!metadata.columnMap.has(key)) throw new Error(`Source column is not present in destination table: ${tableName}.${key}`);
-    }
     if (event.operation !== "delete") {
+      for (const key of Object.keys(row)) {
+        if (!metadata.columnMap.has(key)) throw new Error(`Source column is not present in destination table: ${tableName}.${key}`);
+      }
       for (const keyName of metadata.primaryKeys) {
         if (!(keyName in row) || stableJson(row[keyName]) !== stableJson(event.record_key[keyName])) {
           throw new Error(`row_data primary key mismatch for ${tableName}.${keyName}`);
