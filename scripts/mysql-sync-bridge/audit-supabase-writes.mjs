@@ -31,11 +31,14 @@ function lineAt(source, offset) {
 
 function inspectSource(source, file) {
   const findings = [];
-  const fromPattern = /\.from\(\s*(['"`])([^'"`]+)\1\s*\)/g;
+  const fromPattern = /\.from\(\s*(['"])([^'"]+)\1\s*\)/g;
   let match;
 
   while ((match = fromPattern.exec(source))) {
-    const tail = source.slice(fromPattern.lastIndex, fromPattern.lastIndex + 1200);
+    // Limit the search to the current semicolon-delimited statement so a later
+    // unrelated mutation cannot be incorrectly attributed to this table.
+    const statementEnd = source.indexOf(";", fromPattern.lastIndex);
+    const tail = source.slice(fromPattern.lastIndex, statementEnd === -1 ? source.length : statementEnd);
     const mutation = /\.\s*(insert|upsert|update|delete)\s*\(/.exec(tail);
     if (mutation) {
       findings.push({
@@ -48,7 +51,7 @@ function inspectSource(source, file) {
     }
   }
 
-  const rpcPattern = /\.rpc\(\s*(['"`])([^'"`]+)\1/g;
+  const rpcPattern = /\.rpc\(\s*(['"])([^'"]+)\1/g;
   while ((match = rpcPattern.exec(source))) {
     findings.push({
       file,
@@ -69,12 +72,15 @@ files.sort();
 const findings = [];
 for (const file of files) {
   const source = await readFile(file, "utf8");
-  findings.push(...inspectSource(source, file.replaceAll(path.sep, "/")));
+  findings.push(...inspectSource(source, file.split(path.sep).join("/")));
 }
 
+const tableMutations = findings.filter((item) => item.kind === "table-mutation").length;
+const rpcCandidates = findings.filter((item) => item.kind === "rpc-call-review").length;
+
 console.log("Supabase write-path static audit (candidate inventory; review findings manually)");
-const tableMutations = findings.filter((item) => item.kind === "table-mutation").length;\nconst rpcCandidates = findings.filter((item) => item.kind === "rpc-call-review").length;\nconsole.log(`Scanned ${files.length} source files; found ${tableMutations} table-mutation candidates and ${rpcCandidates} RPC candidates for manual classification.`);
+console.log("Scanned " + files.length + " source files; found " + tableMutations + " table-mutation candidates and " + rpcCandidates + " RPC candidates for manual classification.");
 for (const item of findings) {
-  console.log(`${item.file}:${item.line}\t${item.kind}\t${item.operation}\t${item.target}`);
+  console.log(item.file + ":" + item.line + "\t" + item.kind + "\t" + item.operation + "\t" + item.target);
 }
 console.log("Limitations: this regex audit may miss aliased query builders, dynamic table names, indirect helper calls, SQL strings, and external writers. It is not proof of complete coverage.");
