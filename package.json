@@ -8,6 +8,7 @@
     "cloudflare:build": "opennextjs-cloudflare build",
     "start": "next start",
     "lint": "eslint",
+    "audit:supabase-writes": "node scripts/mysql-sync-bridge/audit-supabase-writes.mjs",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && wrangler deploy"
   },
