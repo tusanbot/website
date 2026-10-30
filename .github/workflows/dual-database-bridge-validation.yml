@@ -6,6 +6,14 @@ on:
       - cloudflare-migration
     paths:
       - "scripts/mysql-sync-bridge/**"
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "admin/**"
+      - "hooks/**"
+      - "contexts/**"
+      - "pages/**"
+      - "package.json"
       - ".github/workflows/dual-database-bridge-validation.yml"
   workflow_dispatch:
 
@@ -23,6 +31,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Audit direct Supabase write paths
+        working-directory: .
+        run: npm run audit:supabase-writes
       - name: Install bridge dependencies
         run: npm install --ignore-scripts --no-audit --no-fund
       - name: Check JavaScript syntax
