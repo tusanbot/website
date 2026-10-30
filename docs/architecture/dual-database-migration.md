@@ -135,3 +135,14 @@ The first CI scan of the current PR head reviewed 395 source files and reported 
 This confirms that the current outbox migration does **not** mirror all application writes. It captures only the seven allowlisted pilot tables. The remaining write paths and RPCs must be classified by domain and added to the migration only after their schemas, dependencies, and side effects are reviewed. Browser-side Supabase access is still in use; the PostgreSQL trigger is what captures pilot-table writes regardless of whether they originate in a browser or server route.
 
 The audit command and bridge syntax/unit checks passed in GitHub Actions run 17 on the feature branch. This is a static candidate inventory, not an AST-complete proof. The next repository-layer work should start with one bounded domain and preserve Supabase Auth separately; do not add a global `DATA_PRIMARY=mysql` switch or route all queries through an unimplemented MariaDB read adapter.
+
+## First server-side repository boundary
+
+The first bounded repository seam is now implemented for blog administration:
+
+- `lib/data-access/blog-admin.ts` defines the domain-level `BlogAdminRepository` contract and its current Supabase implementation.
+- `app/api/admin/blog/route.ts` now uses that repository for admin blog listing, slug checks, post mutations, and service associations.
+- `app/api/admin/blog/comments/route.ts` now uses the same repository for comment listing, pending counts, moderation, and deletion.
+- Authentication and role checks remain on the existing Supabase Auth/server-client path. The repository is server-only and does not expose service-role credentials to browser code.
+
+This is an incremental boundary, not a database switch: only these two server API routes have been moved behind the interface. Public blog reads, browser-side reactions/ratings/comments, announcement management, analytics RPCs, and other application domains still have direct Supabase paths. There is not yet a MariaDB implementation of this interface, so Supabase remains the only implementation and authority.
