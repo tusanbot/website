@@ -73,7 +73,7 @@ for (const file of files) {
 }
 
 console.log("Supabase write-path static audit (candidate inventory; review findings manually)");
-console.log(`Scanned ${files.length} source files; found ${findings.length} mutation/RPC candidates.`);
+const tableMutations = findings.filter((item) => item.kind === "table-mutation").length;\nconst rpcCandidates = findings.filter((item) => item.kind === "rpc-call-review").length;\nconsole.log(`Scanned ${files.length} source files; found ${tableMutations} table-mutation candidates and ${rpcCandidates} RPC candidates for manual classification.`);
 for (const item of findings) {
   console.log(`${item.file}:${item.line}\t${item.kind}\t${item.operation}\t${item.target}`);
 }
