@@ -119,3 +119,11 @@ The bridge must implement the following contract before the dispatcher can be en
 - Queue lag and failed events are observable.
 - No client bundle contains database secrets.
 - The current Cloudflare and cPanel execution paths are both accounted for.
+
+## Static Supabase write-path audit
+
+The repository now includes `scripts/mysql-sync-bridge/audit-supabase-writes.mjs`, exposed as `npm run audit:supabase-writes`. It scans application source directories for literal-table Supabase `.from(...).insert/upsert/update/delete(...)` chains and literal `.rpc(...)` calls. The bridge validation workflow runs this audit for changes to application source and reports candidate file/line/table/operation entries.
+
+Treat this as a review aid, not a complete static analysis: it can miss aliased query builders, dynamic table names, indirect helper calls, SQL strings, and writes performed by external services or scheduled jobs. Every reported RPC must be classified as read-only or mutating. The audit does not rewrite existing clients and does not change runtime database behavior.
+
+A shared adapter should be introduced domain-by-domain only after the relevant read/write contract is documented. In particular, Supabase Auth must remain separate, browser components must not receive MySQL credentials, and Cloudflare routes must not import a raw MySQL driver. The current MariaDB bridge is a write-only event consumer; it is not yet a read API or a complete MySQL repository. Therefore `DATA_PRIMARY=mysql` must remain unsupported until a server-side read adapter and route-runtime strategy are implemented and tested.
