@@ -1,12 +1,10 @@
--- READ-ONLY audit of the cPanel TEST database against the checked-in Supabase schema snapshot.
--- IMPORTANT: In phpMyAdmin, select tusancni_test before running this script.
--- NEVER run this against tusancni_main.
--- Persistent tables and rows are not modified. Only session-scoped TEMPORARY tables are created and dropped.
--- Compares base-table names/columns, ordered primary-key structure, index structure where portable,
--- and foreign-key structure (not merely PostgreSQL-generated object names).
--- PostgreSQL partial/expression indexes are listed separately for manual translation.
--- The 11 extra columns in columns_detail belong to social_services_public (view metadata);
--- the 61-table base-table snapshot contains 650 columns and is the comparison scope.
+-- READ-ONLY cPanel TEST database schema audit.
+-- Select tusancni_test in phpMyAdmin before running. NEVER run against tusancni_main.
+-- Only session-scoped TEMPORARY tables are created; no persistent schema/data is changed.
+-- Information-schema metadata is snapshotted ONCE into indexed temporary tables.
+-- All comparison reports then operate on those small temporary snapshots to avoid repeated
+-- scans/joins against INFORMATION_SCHEMA under cPanel max_statement_time limits.
+-- 61 base tables / 650 columns. The additional 11 metadata columns are from a view.
 
 SELECT DATABASE() AS selected_database, VERSION() AS mariadb_version;
 SELECT '2026-10-31' AS source_snapshot,
@@ -19,7 +17,10 @@ SELECT '2026-10-31' AS source_snapshot,
        300 AS structurally_auditable_index_columns,
        30 AS indexes_for_manual_review;
 
-CREATE TEMPORARY TABLE tmp_tusan_expected_tables (table_name VARCHAR(128) PRIMARY KEY);
+-- Expected schema snapshot.
+CREATE TEMPORARY TABLE tmp_tusan_expected_tables (
+  table_name VARCHAR(128) PRIMARY KEY
+);
 INSERT INTO tmp_tusan_expected_tables (table_name) VALUES
 ('profiles'),
 ('services'),
@@ -83,7 +84,10 @@ INSERT INTO tmp_tusan_expected_tables (table_name) VALUES
 ('news_announcements'),
 ('news_sources');
 
-CREATE TEMPORARY TABLE tmp_tusan_expected_columns (table_name VARCHAR(128), column_name VARCHAR(128), PRIMARY KEY (table_name,column_name));
+CREATE TEMPORARY TABLE tmp_tusan_expected_columns (
+  table_name VARCHAR(128), column_name VARCHAR(128),
+  PRIMARY KEY (table_name,column_name), KEY idx_expected_columns_name (column_name)
+);
 INSERT INTO tmp_tusan_expected_columns (table_name,column_name) VALUES
 ('profiles', 'id'),
 ('profiles', 'full_name'),
@@ -736,7 +740,10 @@ INSERT INTO tmp_tusan_expected_columns (table_name,column_name) VALUES
 ('news_sources', 'created_at'),
 ('news_sources', 'updated_at');
 
-CREATE TEMPORARY TABLE tmp_tusan_expected_primary_keys (table_name VARCHAR(128), column_name VARCHAR(128), ordinal_position INT, PRIMARY KEY (table_name,column_name));
+CREATE TEMPORARY TABLE tmp_tusan_expected_primary_keys (
+  table_name VARCHAR(128), column_name VARCHAR(128), ordinal_position INT,
+  PRIMARY KEY (table_name,ordinal_position), KEY idx_expected_pk_column (table_name,column_name)
+);
 INSERT INTO tmp_tusan_expected_primary_keys (table_name,column_name,ordinal_position) VALUES
 ('profiles', 'id', 1),
 ('services', 'id', 1),
@@ -802,250 +809,11 @@ INSERT INTO tmp_tusan_expected_primary_keys (table_name,column_name,ordinal_posi
 ('news_announcements', 'id', 1),
 ('news_sources', 'id', 1);
 
-CREATE TEMPORARY TABLE tmp_tusan_expected_indexes (table_name VARCHAR(128), index_name VARCHAR(128), PRIMARY KEY (table_name,index_name));
-INSERT INTO tmp_tusan_expected_indexes (table_name,index_name) VALUES
-('blog_post_views', 'blog_post_views_pkey'),
-('blog_post_views', 'blog_post_views_post_viewed_at_idx'),
-('blog_post_views', 'blog_post_views_post_visitor_uidx'),
-('blog_post_views', 'blog_post_views_visitor_post_viewed_at_idx'),
-('blog_post_views', 'idx_blog_post_views_post_viewed_at'),
-('blog_post_views', 'idx_blog_post_views_viewed_at'),
-('ai_profiles', 'ai_profiles_anonymous_key_hash_unique_idx'),
-('ai_profiles', 'ai_profiles_pkey'),
-('ai_profiles', 'ai_profiles_provider_idx'),
-('ai_profiles', 'ai_profiles_user_id_idx'),
-('ai_profiles', 'ai_profiles_user_id_unique_idx'),
-('ai_sessions', 'ai_sessions_expires_idx'),
-('ai_sessions', 'ai_sessions_pkey'),
-('ai_sessions', 'ai_sessions_profile_idx'),
-('ai_sessions', 'ai_sessions_token_hash_key'),
-('api_rate_limits', 'api_rate_limits_pkey'),
-('api_rate_limits', 'api_rate_limits_updated_at_idx'),
-('blog_categories', 'blog_categories_pkey'),
-('blog_categories', 'blog_categories_slug_key'),
-('blog_comments', 'blog_comments_pkey'),
-('blog_comments', 'blog_comments_post_status_created_idx'),
-('blog_comments', 'blog_comments_post_status_idx'),
-('blog_comments', 'idx_blog_comments_post_status'),
-('blog_post_services', 'blog_post_services_pkey'),
-('blog_post_services', 'blog_post_services_service_idx'),
-('blog_posts', 'blog_posts_author_id_idx'),
-('blog_posts', 'blog_posts_category_idx'),
-('blog_posts', 'blog_posts_pkey'),
-('blog_posts', 'blog_posts_slug_key'),
-('blog_posts', 'blog_posts_status_published_idx'),
-('blog_ratings', 'blog_ratings_pkey'),
-('blog_ratings', 'blog_ratings_post_id_user_id_key'),
-('blog_ratings', 'blog_ratings_post_idx'),
-('blog_ratings', 'blog_ratings_post_user_uidx'),
-('blog_ratings', 'idx_blog_ratings_post_id'),
-('blog_reactions', 'blog_reactions_pkey'),
-('blog_reactions', 'blog_reactions_post_id_user_id_key'),
-('blog_reactions', 'blog_reactions_post_idx'),
-('blog_reactions', 'blog_reactions_post_reaction_idx'),
-('blog_reactions', 'blog_reactions_post_user_uidx'),
-('blog_reactions', 'idx_blog_reactions_post_reaction'),
-('custom_forms', 'custom_forms_pkey'),
-('custom_forms', 'idx_custom_forms_active_version_id'),
-('custom_forms', 'idx_custom_forms_created_by'),
-('custom_forms', 'idx_custom_forms_one_parent_per_service'),
-('custom_forms', 'idx_custom_forms_parent_form_id'),
-('custom_forms', 'idx_custom_forms_service_id'),
-('custom_forms', 'idx_custom_forms_service_parent_sort'),
-('custom_forms', 'idx_custom_forms_unique_child_title'),
-('discount_codes', 'discount_codes_code_key'),
-('discount_codes', 'discount_codes_pkey'),
-('discount_codes', 'idx_discount_codes_code'),
-('discount_services', 'discount_services_pkey'),
-('discount_tag_rules', 'discount_tag_rules_discount_id_tag_id_key'),
-('discount_tag_rules', 'discount_tag_rules_pkey'),
-('discount_usages', 'discount_usages_discount_id_order_id_key'),
-('discount_usages', 'discount_usages_pkey'),
-('discount_usages', 'idx_discount_usages_code_user'),
-('discount_usages', 'idx_discount_usages_discount_code'),
-('discount_usages', 'idx_discount_usages_discount_user'),
-('discount_usages', 'idx_discount_usages_order'),
-('discount_usages', 'idx_discount_usages_user'),
-('discounts', 'discounts_pkey'),
-('financial_transactions', 'financial_transactions_pkey'),
-('form_versions', 'custom_forms_one_active_version'),
-('form_versions', 'form_versions_form_id_idx'),
-('form_versions', 'form_versions_form_id_version_number_key'),
-('form_versions', 'form_versions_pkey'),
-('form_versions', 'idx_form_versions_created_by'),
-('goals', 'goals_created_by_idx'),
-('goals', 'goals_pkey'),
-('goals', 'goals_status_idx'),
-('member_tag_assignments', 'idx_member_tag_assignments_tag'),
-('member_tag_assignments', 'idx_member_tag_assignments_user'),
-('member_tag_assignments', 'member_tag_assignments_pkey'),
-('member_tag_assignments', 'member_tag_assignments_tag_id_user_id_key'),
-('member_tags', 'member_tags_pkey'),
-('member_tags', 'member_tags_slug_key'),
-('messages', 'idx_messages_order_id'),
-('messages', 'idx_messages_sender_id'),
-('messages', 'idx_messages_unread_admin_by_order'),
-('messages', 'idx_messages_unread_user_by_order'),
-('messages', 'messages_pkey'),
-('news_announcements', 'news_announcements_pkey'),
-('news_announcements', 'news_announcements_public_listing'),
-('news_announcements', 'news_announcements_review_queue'),
-('news_announcements', 'news_announcements_slug_key'),
-('news_announcements', 'news_announcements_source_guid_unique'),
-('news_announcements', 'news_announcements_source_url_unique'),
-('news_sources', 'news_sources_pkey'),
-('news_sources', 'news_sources_url_key'),
-('notifications', 'notifications_order_idx'),
-('notifications', 'notifications_pkey'),
-('notifications', 'notifications_recipient_created_at_idx'),
-('notifications', 'notifications_recipient_created_idx'),
-('notifications', 'notifications_recipient_unread_created_idx'),
-('notifications', 'notifications_recipient_unread_idx'),
-('notifications', 'notifications_unread_idx'),
-('order_cancellation_requests', 'order_cancellation_requests_order_id_key'),
-('order_cancellation_requests', 'order_cancellation_requests_pkey'),
-('order_cancellation_requests', 'order_cancellation_requests_status_idx'),
-('order_cancellation_requests', 'order_cancellation_requests_user_idx'),
-('order_commission_ledger', 'order_commission_ledger_order_id_staff_user_id_key'),
-('order_commission_ledger', 'order_commission_ledger_pkey'),
-('order_files', 'idx_order_files_cleanup'),
-('order_files', 'idx_order_files_order_id'),
-('order_files', 'idx_order_files_uploaded_by'),
-('order_files', 'order_files_pkey'),
-('order_history', 'idx_order_history_order_id'),
-('order_history', 'order_history_pkey'),
-('order_refunds', 'idx_order_refunds_status'),
-('order_refunds', 'idx_order_refunds_user'),
-('order_refunds', 'order_refunds_order_unique'),
-('order_refunds', 'order_refunds_pkey'),
-('order_staff_requests', 'idx_order_staff_requests_status_created'),
-('order_staff_requests', 'order_staff_requests_order_id_staff_user_id_key'),
-('order_staff_requests', 'order_staff_requests_pkey'),
-('order_staff_requests', 'order_staff_requests_staff_idx'),
-('order_staff_requests', 'order_staff_requests_status_idx'),
-('orders', 'idx_orders_assigned_staff_processing'),
-('orders', 'idx_orders_assignment_paid'),
-('orders', 'idx_orders_assignment_status_updated_at'),
-('orders', 'idx_orders_form_id'),
-('orders', 'idx_orders_form_version_id'),
-('orders', 'idx_orders_processing_status_updated_at'),
-('orders', 'idx_orders_service_id'),
-('orders', 'idx_orders_user_id_created_at'),
-('orders', 'orders_assigned_staff_idx'),
-('orders', 'orders_pkey'),
-('orders', 'orders_tracking_code_key'),
-('orders', 'orders_user_id_idempotency_key_uq'),
-('payments', 'idx_payments_authority'),
-('payments', 'idx_payments_gateway'),
-('payments', 'idx_payments_order_id'),
-('payments', 'idx_payments_status'),
-('payments', 'idx_payments_transaction_id'),
-('payments', 'idx_payments_unique_authority'),
-('payments', 'idx_payments_unique_transaction'),
-('payments', 'idx_payments_user_id'),
-('payments', 'payments_one_active_per_order_uq'),
-('payments', 'payments_pkey'),
-('payout_requests', 'payout_requests_pkey'),
-('profiles', 'profiles_pkey'),
-('registrations', 'registrations_pkey'),
-('services', 'idx_services_active_parent_created'),
-('services', 'idx_services_parent_form_id'),
-('services', 'idx_services_parent_service_id'),
-('services', 'idx_services_service_type'),
-('services', 'services_local_only_idx'),
-('services', 'services_pkey'),
-('services', 'services_popular_active_idx'),
-('services', 'services_slug_unique'),
-('services_announcements', 'idx_service_announcements_active'),
-('services_announcements', 'idx_service_announcements_dates'),
-('services_announcements', 'idx_service_announcements_priority'),
-('services_announcements', 'idx_service_announcements_service'),
-('services_announcements', 'service_announcements_pkey'),
-('site_settings', 'site_settings_pkey'),
-('social_categories', 'idx_social_categories_platform'),
-('social_categories', 'social_categories_pkey'),
-('social_categories', 'social_categories_platform_id_slug_key'),
-('social_orders', 'idx_social_orders_admin_approval'),
-('social_orders', 'idx_social_orders_payment_reference'),
-('social_orders', 'idx_social_orders_provider'),
-('social_orders', 'idx_social_orders_status'),
-('social_orders', 'idx_social_orders_user_created_at'),
-('social_orders', 'social_orders_admin_approved_by_idx'),
-('social_orders', 'social_orders_pkey'),
-('social_orders', 'social_orders_service_id_idx'),
-('social_orders', 'social_orders_tracking_code_key'),
-('social_orders', 'social_orders_user_id_idempotency_key_uq'),
-('social_orders', 'uq_social_orders_payment_track_id'),
-('social_platforms', 'social_platforms_pkey'),
-('social_platforms', 'social_platforms_slug_key'),
-('social_services', 'idx_social_services_category'),
-('social_services', 'idx_social_services_platform'),
-('social_services', 'social_services_pkey'),
-('social_services', 'uq_social_services_provider_service_id'),
-('social_sync_logs', 'social_sync_logs_created_at_idx'),
-('social_sync_logs', 'social_sync_logs_pkey'),
-('staff_bank_accounts', 'staff_bank_accounts_pkey'),
-('staff_bank_accounts', 'staff_bank_accounts_user_iban_uq'),
-('staff_category_access', 'staff_category_access_pkey'),
-('staff_category_access', 'staff_category_access_user_id_category_key'),
-('staff_category_access', 'staff_category_access_user_status_idx'),
-('staff_earnings', 'staff_earnings_pkey'),
-('staff_earnings', 'staff_earnings_staff_status_idx'),
-('staff_financial_adjustments', 'staff_adjustments_staff_idx'),
-('staff_financial_adjustments', 'staff_financial_adjustments_pkey'),
-('staff_financial_adjustments', 'staff_financial_adjustments_reference_uq'),
-('staff_reviews', 'idx_staff_reviews_staff'),
-('staff_reviews', 'staff_reviews_order_id_key'),
-('staff_reviews', 'staff_reviews_pkey'),
-('staff_reviews', 'staff_reviews_staff_idx'),
-('staff_role_assignments', 'staff_role_assignments_pkey'),
-('staff_role_assignments', 'staff_role_assignments_staff_code_uq'),
-('staff_role_assignments', 'staff_role_assignments_user_id_role_id_key'),
-('staff_role_assignments', 'staff_role_assignments_user_status_idx'),
-('staff_roles', 'staff_roles_code_key'),
-('staff_roles', 'staff_roles_pkey'),
-('staff_service_access', 'staff_service_access_pkey'),
-('staff_service_access', 'staff_service_access_user_id_service_id_key'),
-('staff_service_access', 'staff_service_access_user_status_idx'),
-('staff_settlements', 'idx_staff_settlements_status'),
-('staff_settlements', 'staff_settlements_one_open_per_staff'),
-('staff_settlements', 'staff_settlements_pkey'),
-('staff_settlements', 'staff_settlements_staff_status_idx'),
-('sub_goals', 'sub_goals_goal_id_idx'),
-('sub_goals', 'sub_goals_pkey'),
-('support_conversation_participants', 'support_conversation_participants_conversation_id_user_id_key'),
-('support_conversation_participants', 'support_conversation_participants_pkey'),
-('support_conversation_participants', 'support_participants_conversation_idx'),
-('support_conversations', 'idx_support_conversations_assigned_status'),
-('support_conversations', 'idx_support_conversations_status_updated'),
-('support_conversations', 'support_conversations_assigned_staff_idx'),
-('support_conversations', 'support_conversations_one_open_general_per_user'),
-('support_conversations', 'support_conversations_one_open_per_user_idx'),
-('support_conversations', 'support_conversations_order_idx'),
-('support_conversations', 'support_conversations_pkey'),
-('support_conversations', 'support_conversations_status_idx'),
-('support_conversations', 'support_conversations_user_idx'),
-('support_faqs', 'support_faqs_active_category_idx'),
-('support_faqs', 'support_faqs_pkey'),
-('support_messages', 'idx_support_messages_conversation_created'),
-('support_messages', 'support_messages_conversation_idx'),
-('support_messages', 'support_messages_pkey'),
-('support_messages', 'support_messages_sender_idx'),
-('support_messages', 'support_messages_unread_idx'),
-('support_reviews', 'support_reviews_conversation_id_key'),
-('support_reviews', 'support_reviews_customer_idx'),
-('support_reviews', 'support_reviews_pkey'),
-('support_reviews', 'support_reviews_staff_idx'),
-('tag_referral_links', 'idx_referral_links_code'),
-('tag_referral_links', 'tag_referral_links_code_key'),
-('tag_referral_links', 'tag_referral_links_pkey'),
-('traxtor_saved_projects', 'traxtor_saved_projects_pkey'),
-('traxtor_saved_projects', 'traxtor_saved_projects_updated_at_idx');
-
 CREATE TEMPORARY TABLE tmp_tusan_expected_index_parts (
   table_name VARCHAR(128), index_name VARCHAR(128), non_unique TINYINT,
   ordinal_position INT, column_name VARCHAR(128), sort_direction VARCHAR(4),
-  PRIMARY KEY (table_name,index_name,ordinal_position)
+  PRIMARY KEY (table_name,index_name,ordinal_position),
+  KEY idx_expected_index_shape (table_name,non_unique,ordinal_position,column_name,sort_direction)
 );
 INSERT INTO tmp_tusan_expected_index_parts
   (table_name,index_name,non_unique,ordinal_position,column_name,sort_direction) VALUES
@@ -1391,7 +1159,9 @@ INSERT INTO tmp_tusan_manual_review_indexes
 CREATE TEMPORARY TABLE tmp_tusan_expected_foreign_keys (
   table_name VARCHAR(128), constraint_name VARCHAR(128), column_name VARCHAR(128),
   ordinal_position INT, referenced_table_name VARCHAR(128), referenced_column_name VARCHAR(128),
-  update_rule VARCHAR(16), delete_rule VARCHAR(16)
+  update_rule VARCHAR(16), delete_rule VARCHAR(16),
+  PRIMARY KEY (table_name,constraint_name,ordinal_position),
+  KEY idx_expected_fk_shape (table_name,column_name,referenced_table_name,referenced_column_name)
 );
 INSERT INTO tmp_tusan_expected_foreign_keys
   (table_name,constraint_name,column_name,ordinal_position,referenced_table_name,referenced_column_name,update_rule,delete_rule) VALUES
@@ -1490,170 +1260,214 @@ INSERT INTO tmp_tusan_expected_foreign_keys
 ('support_reviews', 'support_reviews_staff_id_fkey', 'staff_id', 1, 'profiles', 'id', 'NO ACTION', 'SET NULL'),
 ('tag_referral_links', 'tag_referral_links_tag_id_fkey', 'tag_id', 1, 'member_tags', 'id', 'NO ACTION', 'CASCADE');
 
+-- One-time destination metadata snapshots. These are scoped to the selected database
+-- and the expected base tables; no user table rows are read.
+CREATE TEMPORARY TABLE tmp_tusan_actual_tables (
+  table_name VARCHAR(128) PRIMARY KEY, table_rows BIGINT
+);
+INSERT INTO tmp_tusan_actual_tables (table_name,table_rows)
+SELECT t.TABLE_NAME,t.TABLE_ROWS
+FROM information_schema.TABLES t
+JOIN tmp_tusan_expected_tables e ON e.table_name=t.TABLE_NAME
+WHERE t.TABLE_SCHEMA=DATABASE() AND t.TABLE_TYPE='BASE TABLE';
+
+CREATE TEMPORARY TABLE tmp_tusan_actual_columns (
+  table_name VARCHAR(128), column_name VARCHAR(128),
+  PRIMARY KEY (table_name,column_name)
+);
+INSERT INTO tmp_tusan_actual_columns (table_name,column_name)
+SELECT c.TABLE_NAME,c.COLUMN_NAME
+FROM information_schema.COLUMNS c
+JOIN tmp_tusan_expected_tables e ON e.table_name=c.TABLE_NAME
+WHERE c.TABLE_SCHEMA=DATABASE();
+
+CREATE TEMPORARY TABLE tmp_tusan_actual_primary_keys (
+  table_name VARCHAR(128), column_name VARCHAR(128), ordinal_position INT,
+  PRIMARY KEY (table_name,ordinal_position), KEY idx_actual_pk_column (table_name,column_name)
+);
+INSERT INTO tmp_tusan_actual_primary_keys (table_name,column_name,ordinal_position)
+SELECT k.TABLE_NAME,k.COLUMN_NAME,k.ORDINAL_POSITION
+FROM information_schema.KEY_COLUMN_USAGE k
+JOIN tmp_tusan_expected_tables e ON e.table_name=k.TABLE_NAME
+WHERE k.TABLE_SCHEMA=DATABASE() AND k.CONSTRAINT_NAME='PRIMARY';
+
+CREATE TEMPORARY TABLE tmp_tusan_actual_index_parts (
+  table_name VARCHAR(128), index_name VARCHAR(128), non_unique TINYINT,
+  ordinal_position INT, column_name VARCHAR(128), sort_direction VARCHAR(4),
+  PRIMARY KEY (table_name,index_name,ordinal_position),
+  KEY idx_actual_index_shape (table_name,non_unique,ordinal_position,column_name,sort_direction)
+);
+INSERT INTO tmp_tusan_actual_index_parts
+  (table_name,index_name,non_unique,ordinal_position,column_name,sort_direction)
+SELECT s.TABLE_NAME,s.INDEX_NAME,s.NON_UNIQUE,s.SEQ_IN_INDEX,s.COLUMN_NAME,
+       IF(s.COLLATION='D','DESC','ASC')
+FROM information_schema.STATISTICS s
+JOIN tmp_tusan_expected_tables e ON e.table_name=s.TABLE_NAME
+WHERE s.TABLE_SCHEMA=DATABASE() AND s.COLUMN_NAME IS NOT NULL;
+
+CREATE TEMPORARY TABLE tmp_tusan_actual_foreign_keys (
+  table_name VARCHAR(128), constraint_name VARCHAR(128), column_name VARCHAR(128),
+  ordinal_position INT, referenced_table_name VARCHAR(128), referenced_column_name VARCHAR(128),
+  update_rule VARCHAR(16), delete_rule VARCHAR(16),
+  PRIMARY KEY (table_name,constraint_name,ordinal_position),
+  KEY idx_actual_fk_shape (table_name,column_name,referenced_table_name,referenced_column_name)
+);
+INSERT INTO tmp_tusan_actual_foreign_keys
+  (table_name,constraint_name,column_name,ordinal_position,referenced_table_name,referenced_column_name,update_rule,delete_rule)
+SELECT k.TABLE_NAME,k.CONSTRAINT_NAME,k.COLUMN_NAME,k.ORDINAL_POSITION,
+       k.REFERENCED_TABLE_NAME,k.REFERENCED_COLUMN_NAME,
+       rc.UPDATE_RULE,rc.DELETE_RULE
+FROM information_schema.KEY_COLUMN_USAGE k
+JOIN tmp_tusan_expected_tables e ON e.table_name=k.TABLE_NAME
+JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+  ON rc.CONSTRAINT_SCHEMA=k.CONSTRAINT_SCHEMA
+ AND rc.CONSTRAINT_NAME=k.CONSTRAINT_NAME
+ AND rc.TABLE_NAME=k.TABLE_NAME
+WHERE k.TABLE_SCHEMA=DATABASE()
+  AND k.REFERENCED_TABLE_NAME IS NOT NULL;
+
+-- Small signatures are computed from temporary snapshots, not INFORMATION_SCHEMA.
+CREATE TEMPORARY TABLE tmp_tusan_expected_index_signatures AS
+SELECT table_name,index_name,MAX(non_unique) AS non_unique,COUNT(*) AS part_count,
+       GROUP_CONCAT(CONCAT(column_name,':',sort_direction) ORDER BY ordinal_position SEPARATOR ',') AS index_shape
+FROM tmp_tusan_expected_index_parts
+GROUP BY table_name,index_name;
+ALTER TABLE tmp_tusan_expected_index_signatures
+  ADD PRIMARY KEY (table_name,index_name),
+  ADD KEY idx_expected_index_signature (table_name,non_unique,part_count);
+
+CREATE TEMPORARY TABLE tmp_tusan_actual_index_signatures AS
+SELECT table_name,index_name,MAX(non_unique) AS non_unique,COUNT(*) AS part_count,
+       GROUP_CONCAT(CONCAT(column_name,':',sort_direction) ORDER BY ordinal_position SEPARATOR ',') AS index_shape
+FROM tmp_tusan_actual_index_parts
+GROUP BY table_name,index_name;
+ALTER TABLE tmp_tusan_actual_index_signatures
+  ADD PRIMARY KEY (table_name,index_name),
+  ADD KEY idx_actual_index_signature (table_name,non_unique,part_count);
+
+CREATE TEMPORARY TABLE tmp_tusan_expected_pk_signatures AS
+SELECT table_name,COUNT(*) AS part_count,
+       GROUP_CONCAT(column_name ORDER BY ordinal_position SEPARATOR ',') AS pk_shape
+FROM tmp_tusan_expected_primary_keys GROUP BY table_name;
+ALTER TABLE tmp_tusan_expected_pk_signatures ADD PRIMARY KEY (table_name);
+
+CREATE TEMPORARY TABLE tmp_tusan_actual_pk_signatures AS
+SELECT table_name,COUNT(*) AS part_count,
+       GROUP_CONCAT(column_name ORDER BY ordinal_position SEPARATOR ',') AS pk_shape
+FROM tmp_tusan_actual_primary_keys GROUP BY table_name;
+ALTER TABLE tmp_tusan_actual_pk_signatures ADD PRIMARY KEY (table_name);
+
 -- Result 1: missing base tables.
-SELECT 'MISSING_TABLE' AS issue, e.table_name
+SELECT 'MISSING_TABLE' AS issue,e.table_name
 FROM tmp_tusan_expected_tables e
-LEFT JOIN information_schema.TABLES a
-  ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.TABLE_TYPE='BASE TABLE'
-WHERE a.TABLE_NAME IS NULL
+LEFT JOIN tmp_tusan_actual_tables a ON a.table_name=e.table_name
+WHERE a.table_name IS NULL
 ORDER BY e.table_name;
 
--- Result 2: missing columns in base tables that already exist.
-SELECT 'MISSING_COLUMN' AS issue, e.table_name, e.column_name
+-- Result 2: missing columns.
+SELECT 'MISSING_COLUMN' AS issue,e.table_name,e.column_name
 FROM tmp_tusan_expected_columns e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-LEFT JOIN information_schema.COLUMNS a
-  ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.COLUMN_NAME=e.column_name
-WHERE a.COLUMN_NAME IS NULL
+JOIN tmp_tusan_actual_tables t ON t.table_name=e.table_name
+LEFT JOIN tmp_tusan_actual_columns a
+  ON a.table_name=e.table_name AND a.column_name=e.column_name
+WHERE a.column_name IS NULL
 ORDER BY e.table_name,e.column_name;
 
--- Result 3: exact primary-key structure mismatches (column sequence matters).
-SELECT 'PRIMARY_KEY_STRUCTURE_MISMATCH' AS issue,
-       e.table_name, e.expected_columns,
-       COALESCE(a.actual_columns,'<missing primary key>') AS actual_columns
-FROM (
-  SELECT table_name,
-         GROUP_CONCAT(column_name ORDER BY ordinal_position SEPARATOR ',') AS expected_columns
-  FROM tmp_tusan_expected_primary_keys
-  GROUP BY table_name
-) e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-LEFT JOIN (
-  SELECT TABLE_NAME,
-         GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ',') AS actual_columns
-  FROM information_schema.KEY_COLUMN_USAGE
-  WHERE TABLE_SCHEMA=DATABASE() AND CONSTRAINT_NAME='PRIMARY'
-  GROUP BY TABLE_NAME
-) a ON a.TABLE_NAME=e.table_name
-WHERE a.TABLE_NAME IS NULL OR a.actual_columns<>e.expected_columns
+-- Result 3: ordered primary-key structure mismatches.
+SELECT 'PRIMARY_KEY_STRUCTURE_MISMATCH' AS issue,e.table_name,e.pk_shape AS expected_columns,
+       COALESCE(a.pk_shape,'<missing primary key>') AS actual_columns
+FROM tmp_tusan_expected_pk_signatures e
+JOIN tmp_tusan_actual_tables t ON t.table_name=e.table_name
+LEFT JOIN tmp_tusan_actual_pk_signatures a ON a.table_name=e.table_name
+WHERE a.table_name IS NULL OR a.part_count<>e.part_count OR a.pk_shape<>e.pk_shape
 ORDER BY e.table_name;
 
--- Result 4: genuinely missing portable index structures, independent of index names.
--- Structural signature = uniqueness + ordered column list + ASC/DESC direction.
-SELECT 'MISSING_INDEX_STRUCTURE' AS issue, e.table_name, e.index_name,
-       e.expected_columns, IF(e.non_unique=0,'UNIQUE','NON_UNIQUE') AS expected_uniqueness
-FROM (
-  SELECT table_name,index_name,MAX(non_unique) AS non_unique,
-         GROUP_CONCAT(CONCAT(column_name,':',sort_direction) ORDER BY ordinal_position SEPARATOR ',') AS expected_columns
-  FROM tmp_tusan_expected_index_parts
-  GROUP BY table_name,index_name
-) e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-LEFT JOIN (
-  SELECT TABLE_NAME,INDEX_NAME,MAX(NON_UNIQUE) AS non_unique,
-         GROUP_CONCAT(CONCAT(COLUMN_NAME,':',IF(COLLATION='D','DESC','ASC')) ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS actual_columns
-  FROM information_schema.STATISTICS
-  WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IS NOT NULL
-  GROUP BY TABLE_NAME,INDEX_NAME
-) a ON a.TABLE_NAME=e.table_name
-   AND a.non_unique=e.non_unique
-   AND a.actual_columns=e.expected_columns
-WHERE a.INDEX_NAME IS NULL
+-- Result 4: portable index structures genuinely missing (names are ignored).
+SELECT 'MISSING_INDEX_STRUCTURE' AS issue,e.table_name,e.index_name,
+       e.index_shape AS expected_columns,IF(e.non_unique=0,'UNIQUE','NON_UNIQUE') AS expected_uniqueness
+FROM tmp_tusan_expected_index_signatures e
+JOIN tmp_tusan_actual_tables t ON t.table_name=e.table_name
+LEFT JOIN tmp_tusan_actual_index_signatures a
+  ON a.table_name=e.table_name AND a.non_unique=e.non_unique
+ AND a.part_count=e.part_count AND a.index_shape=e.index_shape
+WHERE a.index_name IS NULL
 ORDER BY e.table_name,e.index_name;
 
--- Result 4b: source index names differ, but an equivalent portable structure exists in MariaDB.
+-- Result 4b: equivalent index exists under a different name.
 SELECT 'INDEX_NAME_DIFFERS_BUT_STRUCTURE_MATCHES' AS issue,
-       e.table_name,e.index_name AS source_index_name,a.index_name AS destination_index_name,
-       e.expected_columns
-FROM (
-  SELECT table_name,index_name,MAX(non_unique) AS non_unique,
-         GROUP_CONCAT(CONCAT(column_name,':',sort_direction) ORDER BY ordinal_position SEPARATOR ',') AS expected_columns
-  FROM tmp_tusan_expected_index_parts
-  GROUP BY table_name,index_name
-) e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-JOIN (
-  SELECT TABLE_NAME,INDEX_NAME,MAX(NON_UNIQUE) AS non_unique,
-         GROUP_CONCAT(CONCAT(COLUMN_NAME,':',IF(COLLATION='D','DESC','ASC')) ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS actual_columns
-  FROM information_schema.STATISTICS
-  WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IS NOT NULL
-  GROUP BY TABLE_NAME,INDEX_NAME
-) a ON a.TABLE_NAME=e.table_name
-   AND a.non_unique=e.non_unique
-   AND a.actual_columns=e.expected_columns
-LEFT JOIN information_schema.STATISTICS same_name
-  ON same_name.TABLE_SCHEMA=DATABASE() AND same_name.TABLE_NAME=e.table_name
- AND same_name.INDEX_NAME=e.index_name
-WHERE same_name.INDEX_NAME IS NULL
+       e.table_name,e.index_name AS source_index_name,a.index_name AS destination_index_name,e.index_shape
+FROM tmp_tusan_expected_index_signatures e
+JOIN tmp_tusan_actual_tables t ON t.table_name=e.table_name
+JOIN tmp_tusan_actual_index_signatures a
+  ON a.table_name=e.table_name AND a.non_unique=e.non_unique
+ AND a.part_count=e.part_count AND a.index_shape=e.index_shape
+LEFT JOIN tmp_tusan_actual_index_signatures same_name
+  ON same_name.table_name=e.table_name AND same_name.index_name=e.index_name
+WHERE same_name.index_name IS NULL
 ORDER BY e.table_name,e.index_name,a.index_name;
 
--- Result 4c: PostgreSQL partial/expression indexes are not auto-classified as missing.
--- Review these definitions manually before deciding how to translate them to MariaDB.
+-- Result 4c: PostgreSQL partial/expression indexes need manual translation review.
 SELECT 'INDEX_REQUIRES_MANUAL_TRANSLATION' AS issue,
        e.table_name,e.index_name,e.review_reason,e.index_definition
 FROM tmp_tusan_manual_review_indexes e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+JOIN tmp_tusan_actual_tables t ON t.table_name=e.table_name
 ORDER BY e.table_name,e.index_name;
 
--- Result 5: genuinely missing foreign-key relationships, ignoring constraint names.
--- The current snapshot contains only single-column foreign keys; rules are compared too.
+-- Result 5: missing foreign-key structures (constraint names are ignored).
 SELECT 'MISSING_FOREIGN_KEY_STRUCTURE' AS issue,
-       e.table_name,e.column_name,e.referenced_table_name,e.referenced_column_name,
-       e.update_rule,e.delete_rule
+       e.table_name,e.column_name,e.referenced_table_name,e.referenced_column_name,e.update_rule,e.delete_rule
 FROM tmp_tusan_expected_foreign_keys e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM information_schema.KEY_COLUMN_USAGE a
-  JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
-    ON rc.CONSTRAINT_SCHEMA=a.CONSTRAINT_SCHEMA
-   AND rc.CONSTRAINT_NAME=a.CONSTRAINT_NAME
-   AND rc.TABLE_NAME=a.TABLE_NAME
-  WHERE a.TABLE_SCHEMA=DATABASE()
-    AND a.TABLE_NAME=e.table_name
-    AND a.COLUMN_NAME=e.column_name
-    AND a.REFERENCED_TABLE_SCHEMA=DATABASE()
-    AND a.REFERENCED_TABLE_NAME=e.referenced_table_name
-    AND a.REFERENCED_COLUMN_NAME=e.referenced_column_name
-    AND (CASE WHEN UPPER(rc.UPDATE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.UPDATE_RULE) END)
-        = (CASE WHEN UPPER(e.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.update_rule) END)
-    AND (CASE WHEN UPPER(rc.DELETE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.DELETE_RULE) END)
-        = (CASE WHEN UPPER(e.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.delete_rule) END)
-)
+JOIN tmp_tusan_actual_tables t ON t.table_name=e.table_name
+LEFT JOIN tmp_tusan_actual_foreign_keys a
+  ON a.table_name=e.table_name AND a.column_name=e.column_name
+ AND a.referenced_table_name=e.referenced_table_name
+ AND a.referenced_column_name=e.referenced_column_name
+ AND (CASE WHEN UPPER(a.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(a.update_rule) END)
+     = (CASE WHEN UPPER(e.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.update_rule) END)
+ AND (CASE WHEN UPPER(a.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(a.delete_rule) END)
+     = (CASE WHEN UPPER(e.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.delete_rule) END)
+WHERE a.constraint_name IS NULL
 ORDER BY e.table_name,e.column_name;
 
--- Result 5b: same foreign-key relationship and actions exist, but the constraint name differs.
+-- Result 5b: equivalent FK exists under a different constraint name.
 SELECT 'FOREIGN_KEY_NAME_DIFFERS_BUT_STRUCTURE_MATCHES' AS issue,
        e.table_name,e.constraint_name AS source_constraint_name,
-       a.CONSTRAINT_NAME AS destination_constraint_name,
+       a.constraint_name AS destination_constraint_name,
        e.column_name,e.referenced_table_name,e.referenced_column_name
 FROM tmp_tusan_expected_foreign_keys e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-JOIN information_schema.KEY_COLUMN_USAGE a
-  ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name
- AND a.COLUMN_NAME=e.column_name
- AND a.REFERENCED_TABLE_SCHEMA=DATABASE()
- AND a.REFERENCED_TABLE_NAME=e.referenced_table_name
- AND a.REFERENCED_COLUMN_NAME=e.referenced_column_name
-JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
-  ON rc.CONSTRAINT_SCHEMA=a.CONSTRAINT_SCHEMA
- AND rc.CONSTRAINT_NAME=a.CONSTRAINT_NAME
- AND rc.TABLE_NAME=a.TABLE_NAME
-WHERE a.CONSTRAINT_NAME<>e.constraint_name
-  AND (CASE WHEN UPPER(rc.UPDATE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.UPDATE_RULE) END)
-      = (CASE WHEN UPPER(e.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.update_rule) END)
-  AND (CASE WHEN UPPER(rc.DELETE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.DELETE_RULE) END)
-      = (CASE WHEN UPPER(e.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.delete_rule) END)
+JOIN tmp_tusan_actual_tables t ON t.table_name=e.table_name
+JOIN tmp_tusan_actual_foreign_keys a
+  ON a.table_name=e.table_name AND a.column_name=e.column_name
+ AND a.referenced_table_name=e.referenced_table_name
+ AND a.referenced_column_name=e.referenced_column_name
+ AND (CASE WHEN UPPER(a.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(a.update_rule) END)
+     = (CASE WHEN UPPER(e.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.update_rule) END)
+ AND (CASE WHEN UPPER(a.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(a.delete_rule) END)
+     = (CASE WHEN UPPER(e.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.delete_rule) END)
+LEFT JOIN tmp_tusan_actual_foreign_keys same_name
+  ON same_name.table_name=e.table_name AND same_name.constraint_name=e.constraint_name
+ AND same_name.column_name=e.column_name
+WHERE a.constraint_name<>e.constraint_name AND same_name.constraint_name IS NULL
 ORDER BY e.table_name,e.constraint_name;
 
--- Result 6: current destination table row estimates, for later migration planning only.
-SELECT t.TABLE_NAME, t.TABLE_ROWS
-FROM tmp_tusan_expected_tables e
-JOIN information_schema.TABLES t
-  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-ORDER BY t.TABLE_NAME;
+-- Result 6: destination table row estimates for migration planning.
+SELECT a.table_name AS TABLE_NAME,a.table_rows AS TABLE_ROWS
+FROM tmp_tusan_actual_tables a
+ORDER BY a.table_name;
 
+-- Cleanup: temporary tables only.
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_pk_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_pk_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_index_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_index_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_foreign_keys;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_index_parts;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_primary_keys;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_columns;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_tables;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_foreign_keys;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_manual_review_indexes;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_index_parts;
-DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_indexes;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_primary_keys;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_columns;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_tables;
