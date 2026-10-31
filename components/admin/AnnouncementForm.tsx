@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import DatePicker from "react-multi-date-picker";
 import TimePicker from "react-multi-date-picker/plugins/time_picker";
 import persian from "react-date-object/calendars/persian";
@@ -66,13 +65,15 @@ export default function AnnouncementForm({
     }, []);
 
     async function loadServices() {
-        const { data } = await supabase
-            .from("services")
-            .select("id, title, icon")
-            .eq("is_active", true)
-            .order("title");
-
-        setServices(data || []);
+        try {
+            const response = await fetch("/api/admin/announcements", { cache: "no-store" });
+            if (!response.ok) throw new Error("دریافت فهرست خدمات انجام نشد.");
+            const result = await response.json();
+            setServices(result.services || []);
+        } catch (error) {
+            console.error(error);
+            setServices([]);
+        }
     }
 
     function update(key: keyof Announcement, value: any) {
