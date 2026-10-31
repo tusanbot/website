@@ -6,6 +6,7 @@ import { getApplicationMySqlPool } from "@/lib/data-access/mysql-pool";
 import type { AnnouncementPayload, AnnouncementRepository } from "@/lib/data-access/announcements";
 
 type DbRow = RowDataPacket & Record<string, unknown>;
+type SqlValue = string | number | bigint | boolean | Date | Buffer | null;
 type DbError = { code?: string; message: string };
 
 function dbError(error: unknown): { message: string; code?: string } {
@@ -18,12 +19,13 @@ function sqlIdentifier(value: string): string {
   return "`" + value + "`";
 }
 
-function sqlValue(value: unknown): unknown {
+function sqlValue(value: unknown): SqlValue {
   if (value === undefined) return null;
   if (Array.isArray(value) || (value !== null && typeof value === "object" && !(value instanceof Date) && !Buffer.isBuffer(value))) {
     return JSON.stringify(value);
   }
-  return value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean" || value instanceof Date || Buffer.isBuffer(value)) return value;
+  throw new Error("Unsupported SQL parameter value.");
 }
 
 async function columnsFor(table: string): Promise<Set<string>> {
