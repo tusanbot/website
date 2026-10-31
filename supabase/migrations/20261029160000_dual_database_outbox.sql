@@ -167,7 +167,7 @@ begin
     execute 'create trigger data_sync_outbox_capture after insert or update or delete on private.blog_post_views for each row execute function public.capture_data_sync_outbox()';
   end if;
 end;
-$;
+$$;
 
 -- A single serialized dispatcher claim prevents concurrent route invocations from
 -- skipping a locked earliest event and delivering later events first.
