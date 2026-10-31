@@ -60,3 +60,9 @@ jobs:
           echo "Created foreign keys: $FKS"
           test "$TABLES" -eq 61
           test "$FKS" -gt 40
+      - name: Upload review-only schema draft
+        uses: actions/upload-artifact@v4
+        with:
+          name: tusan-mariadb-schema-draft
+          path: /tmp/tusan-schema.sql
+          retention-days: 7
