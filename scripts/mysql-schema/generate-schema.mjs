@@ -55,7 +55,7 @@ const normalizeDefault = (value, type) => {
   if (quoted) return "'" + quoted[1].replace(/''/g, "''") + "'";
   const numeric = v.match(/^-?\d+(?:\.\d+)?$/);
   if (numeric) return v;
-  const castNumeric = v.match(/^(-?\\d+(?:\\.\\d+)?)::(?:integer|int4|int8|smallint|numeric)$/i);
+  const castNumeric = v.match(/^(-?\d+(?:\.\d+)?)::(?:integer|int4|int8|smallint|numeric)$/i);
   if (castNumeric) return castNumeric[1];
   if (/^NULL$/i.test(v)) return "NULL";
   warnings.push(`Untranslated default: ${v}`);
@@ -64,14 +64,14 @@ const normalizeDefault = (value, type) => {
 function translateCheck(expression) {
   let value = expression.trim();
   value = value.replace(/::(?:text|character varying|varchar|numeric|integer|int4|int8|smallint|boolean|bool)\b/gi, "");
-  value = value.replace(/TRIM\\(BOTH FROM ([^)]+)\\)/gi, "TRIM($1)");
-  value = value.replace(/\\bbtrim\\(/gi, "TRIM(");
-  value = value.replace(/\\bchar_length\\b/gi, "CHAR_LENGTH");
-  value = value.replace(/([a-z_][a-z0-9_]*)\\s*=\\s*ANY\\s*\\(\\s*\\(*\\s*ARRAY\\[([^\\]]*)\\]\\s*\\)*\\s*\\)/gi, (_all, column, rawValues) => {
-    const values = rawValues.split(",").map((item) => item.trim().replace(/::(?:text|character varying|varchar)\\b/gi, ""));
+  value = value.replace(/TRIM\(BOTH FROM ([^)]+)\)/gi, "TRIM($1)");
+  value = value.replace(/\bbtrim\(/gi, "TRIM(");
+  value = value.replace(/\bchar_length\b/gi, "CHAR_LENGTH");
+  value = value.replace(/([a-z_][a-z0-9_]*)\s*=\s*ANY\s*\(\s*\(*\s*ARRAY\[([^\]]*)\]\s*\)*\s*\)/gi, (_all, column, rawValues) => {
+    const values = rawValues.split(",").map((item) => item.trim().replace(/::(?:text|character varying|varchar)\b/gi, ""));
     return \`\${column} IN (\${values.join(", ")})\`;
   });
-  if (/::|\\bANY\\b|\\bARRAY\\b|TRIM\\(BOTH FROM/i.test(value)) return null;
+  if (/::|\bANY\b|\bARRAY\b|TRIM\(BOTH FROM/i.test(value)) return null;
   return value;
 }
 function mysqlType(table, col) {
