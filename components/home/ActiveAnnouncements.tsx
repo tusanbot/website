@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabase";
 import { GlassPanel, TusanButton, SectionHeader } from "@/components/ui";
 
 type Announcement = {
@@ -135,33 +134,16 @@ export default function ActiveAnnouncements() {
 
   async function loadAnnouncements() {
     setLoading(true);
-    const { data, error } = await supabase
-      .from("services_announcements")
-      .select(`id, title, summary, type, start_at, end_at, extended_end_at, button_label, service_id, priority, created_at, services(title, category, description, icon, price, form_schema)`)
-      .eq("is_active", true)
-      .order("priority", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    if (!error) {
-      const current = Date.now();
-      const visible = ((data || []) as Announcement[]).filter((item) => {
-        const start = item.start_at ? new Date(item.start_at).getTime() : null;
-        const endValue = item.extended_end_at || item.end_at;
-        const end = endValue ? new Date(endValue).getTime() : null;
-
-        // The public UI must only render items that are currently within
-        // their effective registration/announcement window.
-        return (
-          (start === null || !Number.isNaN(start)) &&
-          (start === null || start <= current) &&
-          end !== null &&
-          !Number.isNaN(end) &&
-          end > current
-        );
-      });
+    try {
+      const response = await fetch("/api/home/announcements", { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || "دریافت اطلاعیه‌ها انجام نشد.");
+      const visible = (result.items || []) as Announcement[];
       setItems(visible);
       setPage(0);
+    } catch (error) {
+      console.error("[ActiveAnnouncements]", error);
+      setItems([]);
     }
     setLoading(false);
   }

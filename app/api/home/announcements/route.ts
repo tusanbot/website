@@ -1,47 +1,27 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { createAnnouncementRepository } from "@/lib/data-access/announcements";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const supabase = createSupabaseServerClient();
-  const now = Date.now();
-  const { data: announcements, error } = await supabase
-    .from("services_announcements")
-    .select("id,title,summary,content,type,start_at,end_at,extended_end_at,button_label,service_id,priority,created_at")
-    .eq("is_active", true)
-    .order("priority", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(50);
-
+export async function GET(request: Request) {
+  const requestedMode = new URL(request.url).searchParams.get("mode");
+  const mode = requestedMode === "all-active" || requestedMode === "started" ? requestedMode : "window";
+  const { data, error } = await createAnnouncementRepository().listPublic(mode);
   if (error) {
     console.error("[home/announcements]", error);
-    return NextResponse.json({ ok: false, error: "دریافت اطلاعیه‌ها انجام نشد." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ ok: false, error: "دریافت اطلاعیه‌ها انجام نشد." }, {
+      status: 503,
+      headers: { "Cache-Control": "no-store" },
+    });
   }
 
-  // Time validity is enforced here in addition to is_active so stale rows
-  // can never leak to the public API when an admin flag is left unchanged.
-  // extended_end_at always takes precedence over end_at.
-  const activeAnnouncements = (announcements || []).filter((item) => {
-    const starts = item.start_at ? Date.parse(item.start_at) : null;
-    const endValue = item.extended_end_at || item.end_at;
-    const ends = endValue ? Date.parse(endValue) : null;
-
-    return (
-      (starts === null || !Number.isNaN(starts)) &&
-      (starts === null || starts <= now) &&
-      ends !== null &&
-      !Number.isNaN(ends) &&
-      ends > now
-    );
+  const items = (data || []).map((raw) => {
+    const item = raw as Record<string, unknown> & { services?: unknown };
+    const relation = Array.isArray(item.services) ? item.services[0] || null : item.services || null;
+    return { ...item, services: relation, service: relation };
   });
 
-  const serviceIds = [...new Set(activeAnnouncements.map((item) => item.service_id).filter(Boolean))] as string[];
-  let services: Array<{ id: string; title: string; slug: string | null; description: string | null; icon: string | null; price: number | null }> = [];
-  if (serviceIds.length) {
-    const result = await supabase.from("services").select("id,title,slug,description,icon,price").in("id", serviceIds).eq("is_active", true);
-    if (!result.error) services = result.data || [];
-  }
-  const serviceMap = new Map(services.map((service) => [service.id, service]));
-  return NextResponse.json({ ok: true, items: activeAnnouncements.map((item) => ({ ...item, service: item.service_id ? serviceMap.get(item.service_id) || null : null })) }, { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ok: true, items }, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }

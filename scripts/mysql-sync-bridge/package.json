@@ -1,0 +1,16 @@
+{
+  "name": "tusan-mysql-sync-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "check": "node --check server.mjs && node --check value-mapping.mjs && node --test value-mapping.test.mjs"
+  },
+  "dependencies": {
+    "mysql2": "^3.15.3"
+  }
+}

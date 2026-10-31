@@ -1,0 +1,39 @@
+name: Dual database cPanel validation
+
+on:
+  pull_request:
+    branches:
+      - cloudflare-migration
+    paths:
+      - "scripts/mysql-sync-bridge/**"
+      - "app/**"
+      - "components/**"
+      - "lib/**"
+      - "admin/**"
+      - "hooks/**"
+      - "contexts/**"
+      - "pages/**"
+      - "supabase/**"
+      - "package.json"
+      - ".github/workflows/dual-database-bridge-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpanel-node-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install website dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Audit direct Supabase write paths
+        run: npm run audit:supabase-writes
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Check legacy mapping module syntax and tests
+        run: node --check scripts/mysql-sync-bridge/server.mjs && node --check scripts/mysql-sync-bridge/value-mapping.mjs && node --test scripts/mysql-sync-bridge/value-mapping.test.mjs

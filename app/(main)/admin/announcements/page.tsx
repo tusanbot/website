@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 import { GlassPanel, TusanButton, TusanBadge, TusanTable, SectionHeader } from "@/components/ui";
 
@@ -26,44 +25,37 @@ export default function AdminAnnouncementsPage() {
     const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [loading, setLoading] = useState(true);
 
-    useEffect(() => { checkAdmin(); }, []);
-
-    async function checkAdmin() {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { router.push("/login"); return; }
-
-        const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-        if (profile?.role !== "admin") { router.push("/dashboard"); return; }
-        loadAnnouncements();
-    }
+    useEffect(() => { loadAnnouncements(); }, []);
 
     async function loadAnnouncements() {
         setLoading(true);
-        const { data, error } = await supabase
-            .from("services_announcements")
-            .select("id,title,type,summary,start_at,end_at,is_active,is_extendable,button_label,priority,created_at")
-            .order("priority", { ascending: false })
-            .order("start_at", { ascending: false });
-
-        if (error) {
+        try {
+            const response = await fetch("/api/admin/announcements", { cache: "no-store" });
+            if (response.status === 401) { router.push("/login"); return; }
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "دریافت اطلاعیه‌ها انجام نشد.");
+            setAnnouncements((result.announcements || []) as Announcement[]);
+        } catch (error) {
             console.error(error);
             setAnnouncements([]);
-        } else {
-            setAnnouncements((data || []) as Announcement[]);
         }
         setLoading(false);
     }
 
     async function toggleActive(id: string, current: boolean) {
-        const { error } = await supabase.from("services_announcements").update({ is_active: !current }).eq("id", id);
-        if (error) { alert("خطا در بروزرسانی وضعیت اطلاعیه"); console.error(error); return; }
+        const response = await fetch("/api/admin/announcements/" + id, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ is_active: !current }),
+        });
+        if (!response.ok) { const result = await response.json().catch(() => ({})); alert(result.error || "خطا در بروزرسانی وضعیت اطلاعیه"); return; }
         loadAnnouncements();
     }
 
     async function deleteAnnouncement(id: string) {
         if (!confirm("آیا از حذف این اطلاعیه مطمئن هستید؟ این عملیات قابل بازگشت نیست.")) return;
-        const { error } = await supabase.from("services_announcements").delete().eq("id", id);
-        if (error) { alert("خطا در حذف اطلاعیه"); console.error(error); return; }
+        const response = await fetch("/api/admin/announcements/" + id, { method: "DELETE" });
+        if (!response.ok) { const result = await response.json().catch(() => ({})); alert(result.error || "خطا در حذف اطلاعیه"); return; }
         loadAnnouncements();
     }
 
