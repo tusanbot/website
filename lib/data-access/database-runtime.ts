@@ -32,9 +32,8 @@ function parseProvider(value: string | undefined, fallback: DataProvider): DataP
 
 /**
  * Resolves server-side data routing without opening either database connection.
- * In dual mode each domain has one authoritative provider and a mirror target.
- * The mirror must be implemented with a durable transactional outbox; this
- * resolver deliberately does not perform unsafe synchronous dual writes.
+ * In dual mode both providers are available, but each domain is routed to one
+ * provider. Replication is a separate outbox concern and is not implied here.
  */
 export function resolveDataRuntime(env: RuntimeEnvironment = process.env): DataRuntime {
   const mode = parseMode(env.TUSAN_DATA_MODE);
