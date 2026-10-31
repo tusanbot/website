@@ -35,8 +35,8 @@ export async function proxy(request: NextRequest) {
 
     // Public pages do not need a server-side Supabase round-trip on every request.
     // Browser authentication is handled by the Supabase client; privileged
-    // routes are protected below. This removes Cloudflare -> Supabase latency
-    // from the critical path for public pages such as /services and /orders.
+    // routes are protected below. This avoids an unnecessary Supabase round-trip
+    // on the critical path for public pages such as /services and /orders.
     if (!isAdminRoute) {
         return NextResponse.next();
     }

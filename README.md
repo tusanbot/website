@@ -1,36 +1,31 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tosan Website
 
-## Getting Started
+Tosan is a Persian-language web application built with Next.js, React, and TypeScript.
 
-First, run the development server:
+## Local development
+
+Requirements: Node.js 22 and npm.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Validation and production build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npm run build
+```
 
-## Learn More
+For a self-contained Node.js release suitable for a conventional Node.js application host:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+CPANEL_BUILD=1 npm run build
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive course for Next.js.
+This produces the Next.js standalone server under `.next/standalone`. The production process should run on a supported Node.js host with the required environment variables configured.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your app is with [Vercel](https://vercel.com/).
-
-Check out the [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Deployment configuration for Vercel and Cloudflare has been retired and preserved under `archive/deployment-platforms/`. The archived files are not part of the active build.

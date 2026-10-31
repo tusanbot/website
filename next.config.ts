@@ -27,7 +27,6 @@ const contentSecurityPolicy = [
         "https://accounts.google.com",
         "https://fjpanel.com",
         "https://*.fjpanel.com",
-        "https://vercel.live",
         "https://www.google-analytics.com",
         "https://analytics.google.com",
         "https://cdn.jsdelivr.net",

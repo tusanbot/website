@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       synced: Number(body?.synced ?? 0),
       skipped: Number(body?.skipped ?? 0),
       error_message: response.ok ? null : String(body?.error ?? "Sync failed"),
-      source: "vercel-cron",
+      source: "scheduled-cron",
     });
   }
 

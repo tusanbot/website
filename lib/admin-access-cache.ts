@@ -29,7 +29,6 @@ export function getRequestIp(request: { headers: { get(name: string): string | n
     return normalizeIp(
         request.headers.get("x-forwarded-for") ||
         request.headers.get("x-real-ip") ||
-        request.headers.get("x-vercel-forwarded-for")
     );
 }
 
