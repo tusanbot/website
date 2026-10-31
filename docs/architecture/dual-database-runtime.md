@@ -8,7 +8,7 @@ The application can run with Supabase only, MySQL only, or both providers availa
 
 - TUSAN_DATA_MODE=supabase: Supabase is the only active application provider.
 - TUSAN_DATA_MODE=mysql: MySQL is the only active application provider.
-- TUSAN_DATA_MODE=dual: both providers are configured. Every domain still has exactly one authoritative writer; the other database is a mirror reached through a durable outbox and idempotent consumer.
+- TUSAN_DATA_MODE=dual: both providers are available. Domains can be routed independently to either provider, while each individual domain still has exactly one authoritative writer. Dual mode does not automatically replicate records or perform two writes.
 
 The default remains supabase to preserve existing production behavior.
 
@@ -19,7 +19,7 @@ TUSAN_DATA_PRIMARY=supabase|mysql selects the default authority in dual mode. Do
 - TUSAN_DATA_PROVIDER_BLOG_ADMIN=supabase|mysql
 - TUSAN_DATA_PROVIDER_ANNOUNCEMENTS=supabase|mysql
 
-Each domain's mirror target is derived as the opposite provider. A domain must never perform two independent writes and assume they form one transaction.
+A domain override chooses that domain's provider. For example, blog administration can use MySQL while announcements continue using Supabase. A domain must never perform two independent writes and assume they form one transaction.
 
 ## Required environment
 
@@ -43,8 +43,7 @@ Production safety:
 Dual synchronization:
 - TUSAN_DATA_MODE=dual
 - TUSAN_DATA_PRIMARY=supabase|mysql
-- TUSAN_DATA_SYNC_TARGET is optional; if supplied it must be the opposite provider.
-- The sync target is not activated by the configuration resolver alone. A domain must have transactional outbox capture, reverse consumer, retry, replay protection, dead-letter visibility, and reconciliation before its mirror is enabled.
+- Replication is configured separately from provider routing. The existing outbox pilot currently covers only Supabase-to-MySQL for seven tables; reverse replication and full-domain coverage are not complete.
 
 ## Consistency contract
 
@@ -58,6 +57,6 @@ Dual synchronization:
 
 ## Current implementation boundary
 
-The runtime resolver and guarded server-only MySQL pool are foundational infrastructure. The existing Supabase outbox and MySQL consumer cover only a seven-table content pilot and only Supabase-to-MySQL delivery. The existing blog-admin and announcements interfaces still need complete MySQL implementations; the rest of the website domains (orders, payments, profiles, services, notifications, social orders, discounts, AI profiles, and other RPC-backed flows) remain outside the pilot.
+The runtime resolver and guarded server-only MySQL pool are foundational infrastructure. Blog administration is being moved behind a provider-selectable repository. The existing Supabase outbox and MySQL consumer cover only a seven-table content pilot and only Supabase-to-MySQL delivery. Reverse replication and the rest of the website domains (orders, payments, profiles, services, notifications, social orders, discounts, AI profiles, and other RPC-backed flows) remain outside the pilot.
 
-Consequently, do not set either domain override to MySQL, do not set dual mode for production, and do not enable reverse sync until the corresponding repository and outbox tests have passed. This document intentionally distinguishes runtime capability from completed domain coverage.
+Consequently, do not set either domain override to MySQL, do not set dual mode for production, and do not assume cross-database replication until the corresponding outbox, reverse consumer, and reconciliation tests have passed. This document intentionally distinguishes runtime capability from completed domain coverage.
