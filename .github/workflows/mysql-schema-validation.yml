@@ -36,6 +36,8 @@ jobs:
           node-version: 22
       - name: Check schema generator syntax
         run: node --check scripts/mysql-schema/generate-schema.mjs
+      - name: Check baseline seeder syntax
+        run: node --check scripts/mysql-schema/seed-mysql-from-supabase.mjs
       - name: Generate review-only schema
         run: node scripts/mysql-schema/generate-schema.mjs /tmp/tusan-schema.sql
       - name: Inspect generated custom forms DDL
