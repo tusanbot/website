@@ -37,6 +37,9 @@ function parseProvider(value: string | undefined, fallback: DataProvider): DataP
  */
 export function resolveDataRuntime(env: RuntimeEnvironment = process.env): DataRuntime {
   const mode = parseMode(env.TUSAN_DATA_MODE);
+  if (mode === "mysql") {
+    throw new Error("TUSAN_DATA_MODE=mysql is blocked until all Supabase-backed domains and authentication have MySQL adapters. Use dual mode only for domains whose MySQL repositories are complete.");
+  }
   const defaultPrimary: DataProvider = mode === "mysql" ? "mysql" : "supabase";
   const configuredPrimary = mode === "dual"
     ? parseProvider(env.TUSAN_DATA_PRIMARY, defaultPrimary)
