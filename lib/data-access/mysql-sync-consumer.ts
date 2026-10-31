@@ -15,6 +15,22 @@ const TABLE_ALLOWLIST = new Set([
 
 type PlainObject = Record<string, unknown>;
 type SqlValue = string | number | bigint | boolean | Date | Buffer | null;
+
+function executeWithValues<T extends RowDataPacket[]>(
+  connection: PoolConnection,
+  sql: string,
+  values: SqlValue[],
+) {
+  return connection.execute<T>(sql, values as never);
+}
+
+function executeMutation(
+  connection: PoolConnection,
+  sql: string,
+  values: SqlValue[],
+) {
+  return connection.execute(sql, values as never);
+}
 type SyncEvent = {
   id: number;
   event_id: string;
@@ -216,23 +232,23 @@ export async function applyMariaDbSyncEvent(event: SyncEvent): Promise<{ event_i
       const keyValues = metadata.primaryKeys.map((key) => convertValue(event.record_key[key], metadata.columns.get(key)!, event.table_name));
       const table = quoteIdentifier(event.table_name);
       if (event.operation === "delete") {
-        await connection.execute(`DELETE FROM ${table} WHERE ${where}`, keyValues);
+        await executeMutation(connection, `DELETE FROM ${table} WHERE ${where}`, keyValues);
       } else {
         const names = Object.keys(event.row_data);
         if (!names.length) throw new Error("row_data cannot be empty.");
         const values = names.map((name) => convertValue(event.row_data[name], metadata.columns.get(name)!, event.table_name));
-        const [existing] = await connection.execute<RowDataPacket[]>(`SELECT 1 FROM ${table} WHERE ${where} LIMIT 1 FOR UPDATE`, keyValues);
+        const [existing] = await executeWithValues<RowDataPacket[]>(connection, `SELECT 1 FROM ${table} WHERE ${where} LIMIT 1 FOR UPDATE`, keyValues);
         if (existing.length) {
           const updateNames = names.filter((name) => !metadata.primaryKeys.includes(name));
           if (updateNames.length) {
             const setSql = updateNames.map((name) => `${quoteIdentifier(name)} = ?`).join(", ");
             const updateValues = updateNames.map((name) => convertValue(event.row_data[name], metadata.columns.get(name)!, event.table_name));
-            await connection.execute(`UPDATE ${table} SET ${setSql} WHERE ${where}`, [...updateValues, ...keyValues]);
+            await executeMutation(connection, `UPDATE ${table} SET ${setSql} WHERE ${where}`, [...updateValues, ...keyValues]);
           }
         } else {
           const columnSql = names.map(quoteIdentifier).join(", ");
           const placeholders = names.map(() => "?").join(", ");
-          await connection.execute(`INSERT INTO ${table} (${columnSql}) VALUES (${placeholders})`, values);
+          await executeMutation(connection, `INSERT INTO ${table} (${columnSql}) VALUES (${placeholders})`, values);
         }
       }
 
