@@ -65,3 +65,8 @@ Consequently, do not set either domain override to MySQL, do not set dual mode f
 ## Test database schema gate
 
 The read-only script scripts/mysql-sync-bridge/validate-application-schema-test-only.sql checks the required columns and key relationships for the two initial MySQL repositories. It must be run only after selecting tusancni_test. It does not create or alter tables and does not prove row parity; compare counts and exercise create/update/delete separately.
+
+
+## Full schema inventory and DDL draft
+
+The checked-in metadata snapshot scripts/mysql-schema/supabase-schema-manifest-2026-10-31.json records the current 61 tables across public/private, 661 columns, 237 indexes, 94 foreign-key columns, and 69 non-generated CHECK constraints. It includes no row contents or secrets. scripts/mysql-schema/generate-schema.mjs emits a fresh-schema MariaDB DDL draft from this snapshot. The generated DDL is validated in a disposable MariaDB 11.4 CI service; it is not an ALTER migration for an existing cPanel database. PostgreSQL partial/expression indexes and CHECK constraints are reported for manual translation. Do not execute the draft on tusancni_main or tusancni_test.
