@@ -155,11 +155,6 @@ const partialUniqueMappings = {
     generated: { name: "__parent_service_unique", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN form_type = 'parent' AND parent_form_id IS NULL THEN TRIM(service_id) ELSE NULL END" },
     columns: ["__parent_service_unique"],
   },
-  idx_custom_forms_unique_child_title: {
-    table: "custom_forms",
-    generated: { name: "__child_title_lower", type: "VARCHAR(191)", expression: "IF(parent_form_id IS NOT NULL, title, NULL)" },
-    columns: ["parent_form_id", "__child_title_lower"],
-  },
   custom_forms_one_active_version: {
     table: "form_versions",
     generated: { name: "__active_form_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN is_active = 1 THEN TRIM(form_id) ELSE NULL END" },
