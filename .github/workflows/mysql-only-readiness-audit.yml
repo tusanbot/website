@@ -1,0 +1,76 @@
+name: Node and MySQL-only readiness audit
+
+on:
+  push:
+    branches:
+      - integration/node-mysql-only
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  readiness:
+    name: Audit migration blockers (no deployment)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+
+      - name: Generate Supabase and hosting dependency audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit
+          {
+            echo "# Node.js / MySQL-only readiness audit"
+            echo
+            echo "- Commit: $GITHUB_SHA"
+            echo "- Branch: $GITHUB_REF_NAME"
+            echo "- Generated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            echo
+            echo "## Supabase runtime references"
+            echo
+            if git grep -n -E '@supabase/|supabaseAdmin\(|createClient\(|NEXT_PUBLIC_SUPABASE|SUPABASE_SERVICE_ROLE|SUPABASE_URL' -- ':!archive/**' ':!*.md' > audit/supabase-references.txt; then
+              echo 'References remain; this branch is NOT MySQL-only.'
+              echo
+              echo 'See the attached supabase-references.txt artifact.'
+            else
+              echo 'No matching references found in tracked non-archive source.'
+            fi
+            echo
+            echo "## Hosting dependencies"
+            node -e "const p=require('./package.json'); for (const n of ['@opennextjs/cloudflare','wrangler','@vercel/analytics','@vercel/speed-insights']) console.log(n+': '+(p.dependencies?.[n]||p.devDependencies?.[n]||'not declared'))"
+            echo
+            echo "## Relevant environment variable names"
+            git grep -h -o -E '(NEXT_PUBLIC_SUPABASE_[A-Z_]+|SUPABASE_[A-Z_]+|MYSQL_[A-Z_]+)' -- ':!archive/**' ':!*.md' | sort -u || true
+          } > audit/readiness-report.md
+          cat audit/readiness-report.md
+          if [ -f audit/supabase-references.txt ]; then
+            cat audit/supabase-references.txt
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-only-readiness-audit
+          path: audit/
+          if-no-files-found: warn
+          retention-days: 14
