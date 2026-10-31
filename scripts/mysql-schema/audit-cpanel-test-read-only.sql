@@ -1,11 +1,22 @@
--- READ-ONLY audit of the cPanel TEST database against the Supabase schema snapshot.
+-- READ-ONLY audit of the cPanel TEST database against the checked-in Supabase schema snapshot.
 -- IMPORTANT: In phpMyAdmin, select tusancni_test before running this script.
 -- NEVER run this against tusancni_main.
 -- Persistent tables and rows are not modified. Only session-scoped TEMPORARY tables are created and dropped.
--- The result sets list missing tables, columns, primary-key columns, indexes and foreign keys.
+-- Compares base-table names/columns, ordered primary-key structure, index structure where portable,
+-- and foreign-key structure (not merely PostgreSQL-generated object names).
+-- PostgreSQL partial/expression indexes are listed separately for manual translation.
+-- The 11 extra columns in columns_detail belong to social_services_public (view metadata);
+-- the 61-table base-table snapshot contains 650 columns and is the comparison scope.
 
 SELECT DATABASE() AS selected_database, VERSION() AS mariadb_version;
-SELECT '2026-10-31' AS source_snapshot, 61 AS expected_tables, 661 AS expected_columns, 237 AS source_indexes, 94 AS source_foreign_key_columns;
+SELECT '2026-10-31' AS source_snapshot,
+       61 AS expected_base_tables,
+       650 AS expected_base_table_columns,
+       661 AS source_column_metadata_including_views,
+       237 AS source_indexes,
+       94 AS source_foreign_key_columns,
+       300 AS structurally_auditable_indexes,
+       30 AS indexes_for_manual_review;
 
 CREATE TEMPORARY TABLE tmp_tusan_expected_tables (table_name VARCHAR(128) PRIMARY KEY);
 INSERT INTO tmp_tusan_expected_tables (table_name) VALUES
@@ -1030,150 +1041,617 @@ INSERT INTO tmp_tusan_expected_indexes (table_name,index_name) VALUES
 ('traxtor_saved_projects', 'traxtor_saved_projects_pkey'),
 ('traxtor_saved_projects', 'traxtor_saved_projects_updated_at_idx');
 
-CREATE TEMPORARY TABLE tmp_tusan_expected_foreign_keys (table_name VARCHAR(128), constraint_name VARCHAR(128), column_name VARCHAR(128), referenced_table_name VARCHAR(128), referenced_column_name VARCHAR(128));
-INSERT INTO tmp_tusan_expected_foreign_keys (table_name,constraint_name,column_name,referenced_table_name,referenced_column_name) VALUES
-('blog_post_views', 'blog_post_views_post_id_fkey', 'post_id', 'blog_posts', 'id'),
-('ai_sessions', 'ai_sessions_ai_profile_id_fkey', 'ai_profile_id', 'ai_profiles', 'id'),
-('blog_comments', 'blog_comments_post_id_fkey', 'post_id', 'blog_posts', 'id'),
-('blog_post_services', 'blog_post_services_post_id_fkey', 'post_id', 'blog_posts', 'id'),
-('blog_post_services', 'blog_post_services_service_id_fkey', 'service_id', 'services', 'id'),
-('blog_posts', 'blog_posts_category_id_fkey', 'category_id', 'blog_categories', 'id'),
-('blog_ratings', 'blog_ratings_post_id_fkey', 'post_id', 'blog_posts', 'id'),
-('blog_reactions', 'blog_reactions_post_id_fkey', 'post_id', 'blog_posts', 'id'),
-('custom_forms', 'custom_forms_active_version_id_fkey', 'active_version_id', 'form_versions', 'id'),
-('custom_forms', 'custom_forms_created_by_fkey', 'created_by', 'profiles', 'id'),
-('custom_forms', 'custom_forms_parent_form_id_fkey', 'parent_form_id', 'custom_forms', 'id'),
-('custom_forms', 'custom_forms_service_id_fkey', 'service_id', 'services', 'id'),
-('discount_codes', 'discount_codes_discount_id_fkey', 'discount_id', 'discounts', 'id'),
-('discount_services', 'discount_services_discount_id_fkey', 'discount_id', 'discounts', 'id'),
-('discount_services', 'discount_services_service_id_fkey', 'service_id', 'services', 'id'),
-('discount_tag_rules', 'discount_tag_rules_discount_id_fkey', 'discount_id', 'discounts', 'id'),
-('discount_tag_rules', 'discount_tag_rules_tag_id_fkey', 'tag_id', 'member_tags', 'id'),
-('discount_usages', 'discount_usages_discount_code_id_fkey', 'discount_code_id', 'discount_codes', 'id'),
-('discount_usages', 'discount_usages_discount_id_fkey', 'discount_id', 'discounts', 'id'),
-('discount_usages', 'discount_usages_order_id_fkey', 'order_id', 'orders', 'id'),
-('discount_usages', 'discount_usages_service_id_fkey', 'service_id', 'services', 'id'),
-('discount_usages', 'discount_usages_user_id_fkey', 'user_id', 'profiles', 'id'),
-('form_versions', 'form_versions_form_id_fkey', 'form_id', 'custom_forms', 'id'),
-('member_tag_assignments', 'member_tag_assignments_referral_link_fk', 'referral_link_id', 'tag_referral_links', 'id'),
-('member_tag_assignments', 'member_tag_assignments_tag_id_fkey', 'tag_id', 'member_tags', 'id'),
-('member_tag_assignments', 'member_tag_assignments_user_id_fkey', 'user_id', 'profiles', 'id'),
-('messages', 'messages_order_id_fkey', 'order_id', 'orders', 'id'),
-('messages', 'messages_sender_id_fkey', 'sender_id', 'profiles', 'id'),
-('notifications', 'notifications_order_id_fkey', 'order_id', 'orders', 'id'),
-('notifications', 'notifications_recipient_id_fkey', 'recipient_id', 'profiles', 'id'),
-('order_cancellation_requests', 'order_cancellation_requests_order_id_fkey', 'order_id', 'orders', 'id'),
-('order_cancellation_requests', 'order_cancellation_requests_reviewed_by_fkey', 'reviewed_by', 'profiles', 'id'),
-('order_commission_ledger', 'order_commission_ledger_order_id_fkey', 'order_id', 'orders', 'id'),
-('order_commission_ledger', 'order_commission_ledger_staff_user_id_fkey', 'staff_user_id', 'profiles', 'id'),
-('order_files', 'order_files_order_id_fkey', 'order_id', 'orders', 'id'),
-('order_history', 'order_history_order_id_fkey', 'order_id', 'orders', 'id'),
-('order_refunds', 'order_refunds_order_id_fkey', 'order_id', 'orders', 'id'),
-('order_refunds', 'order_refunds_processed_by_fkey', 'processed_by', 'profiles', 'id'),
-('order_refunds', 'order_refunds_requested_by_fkey', 'requested_by', 'profiles', 'id'),
-('order_staff_requests', 'order_staff_requests_approved_by_fkey', 'approved_by', 'profiles', 'id'),
-('order_staff_requests', 'order_staff_requests_order_id_fkey', 'order_id', 'orders', 'id'),
-('order_staff_requests', 'order_staff_requests_requested_by_fkey', 'requested_by', 'profiles', 'id'),
-('order_staff_requests', 'order_staff_requests_staff_user_id_fkey', 'staff_user_id', 'profiles', 'id'),
-('orders', 'orders_assigned_staff_id_fkey', 'assigned_staff_id', 'profiles', 'id'),
-('orders', 'orders_discount_code_id_fkey', 'discount_code_id', 'discount_codes', 'id'),
-('orders', 'orders_discount_id_fkey', 'discount_id', 'discounts', 'id'),
-('orders', 'orders_form_id_fkey', 'form_id', 'custom_forms', 'id'),
-('orders', 'orders_form_version_id_fkey', 'form_version_id', 'form_versions', 'id'),
-('orders', 'orders_service_id_fkey', 'service_id', 'services', 'id'),
-('orders', 'orders_user_id_fkey', 'user_id', 'profiles', 'id'),
-('payments', 'payments_order_id_fkey', 'order_id', 'orders', 'id'),
-('payout_requests', 'payout_requests_bank_account_id_fkey', 'bank_account_id', 'staff_bank_accounts', 'id'),
-('payout_requests', 'payout_requests_processed_by_fkey', 'processed_by', 'profiles', 'id'),
-('payout_requests', 'payout_requests_staff_user_id_fkey', 'staff_user_id', 'profiles', 'id'),
-('services', 'services_parent_form_id_fkey', 'parent_form_id', 'custom_forms', 'id'),
-('services', 'services_parent_service_id_fkey', 'parent_service_id', 'services', 'id'),
-('services_announcements', 'service_announcements_service_id_fkey', 'service_id', 'services', 'id'),
-('social_categories', 'social_categories_platform_id_fkey', 'platform_id', 'social_platforms', 'id'),
-('social_orders', 'social_orders_service_id_fkey', 'service_id', 'social_services', 'id'),
-('social_services', 'social_services_category_id_fkey', 'category_id', 'social_categories', 'id'),
-('social_services', 'social_services_platform_id_fkey', 'platform_id', 'social_platforms', 'id'),
-('staff_bank_accounts', 'staff_bank_accounts_user_id_fkey', 'user_id', 'profiles', 'id'),
-('staff_bank_accounts', 'staff_bank_accounts_verified_by_fkey', 'verified_by', 'profiles', 'id'),
-('staff_category_access', 'staff_category_access_approved_by_fkey', 'approved_by', 'profiles', 'id'),
-('staff_category_access', 'staff_category_access_user_id_fkey', 'user_id', 'profiles', 'id'),
-('staff_earnings', 'staff_earnings_order_id_fkey', 'order_id', 'orders', 'id'),
-('staff_earnings', 'staff_earnings_staff_id_fkey', 'staff_id', 'profiles', 'id'),
-('staff_financial_adjustments', 'staff_financial_adjustments_created_by_fkey', 'created_by', 'profiles', 'id'),
-('staff_financial_adjustments', 'staff_financial_adjustments_order_id_fkey', 'order_id', 'orders', 'id'),
-('staff_financial_adjustments', 'staff_financial_adjustments_staff_id_fkey', 'staff_id', 'profiles', 'id'),
-('staff_reviews', 'staff_reviews_customer_id_fkey', 'customer_id', 'profiles', 'id'),
-('staff_reviews', 'staff_reviews_order_id_fkey', 'order_id', 'orders', 'id'),
-('staff_reviews', 'staff_reviews_staff_id_fkey', 'staff_id', 'profiles', 'id'),
-('staff_role_assignments', 'staff_role_assignments_approved_by_fkey', 'approved_by', 'profiles', 'id'),
-('staff_role_assignments', 'staff_role_assignments_role_id_fkey', 'role_id', 'staff_roles', 'id'),
-('staff_role_assignments', 'staff_role_assignments_user_id_fkey', 'user_id', 'profiles', 'id'),
-('staff_service_access', 'staff_service_access_approved_by_fkey', 'approved_by', 'profiles', 'id'),
-('staff_service_access', 'staff_service_access_service_id_fkey', 'service_id', 'services', 'id'),
-('staff_service_access', 'staff_service_access_user_id_fkey', 'user_id', 'profiles', 'id'),
-('staff_settlements', 'staff_settlements_bank_account_id_fkey', 'bank_account_id', 'staff_bank_accounts', 'id'),
-('staff_settlements', 'staff_settlements_processed_by_fkey', 'processed_by', 'profiles', 'id'),
-('staff_settlements', 'staff_settlements_staff_id_fkey', 'staff_id', 'profiles', 'id'),
-('sub_goals', 'sub_goals_goal_id_fkey', 'goal_id', 'goals', 'id'),
-('support_conversation_participants', 'support_conversation_participants_conversation_id_fkey', 'conversation_id', 'support_conversations', 'id'),
-('support_conversation_participants', 'support_conversation_participants_user_id_fkey', 'user_id', 'profiles', 'id'),
-('support_conversations', 'support_conversations_assigned_staff_id_fkey', 'assigned_staff_id', 'profiles', 'id'),
-('support_conversations', 'support_conversations_order_id_fkey', 'order_id', 'orders', 'id'),
-('support_conversations', 'support_conversations_user_id_fkey', 'user_id', 'profiles', 'id'),
-('support_messages', 'support_messages_conversation_id_fkey', 'conversation_id', 'support_conversations', 'id'),
-('support_messages', 'support_messages_sender_id_fkey', 'sender_id', 'profiles', 'id'),
-('support_reviews', 'support_reviews_conversation_id_fkey', 'conversation_id', 'support_conversations', 'id'),
-('support_reviews', 'support_reviews_customer_id_fkey', 'customer_id', 'profiles', 'id'),
-('support_reviews', 'support_reviews_staff_id_fkey', 'staff_id', 'profiles', 'id'),
-('tag_referral_links', 'tag_referral_links_tag_id_fkey', 'tag_id', 'member_tags', 'id');
+CREATE TEMPORARY TABLE tmp_tusan_expected_index_parts (
+  table_name VARCHAR(128), index_name VARCHAR(128), non_unique TINYINT,
+  ordinal_position INT, column_name VARCHAR(128), sort_direction VARCHAR(4),
+  PRIMARY KEY (table_name,index_name,ordinal_position)
+);
+INSERT INTO tmp_tusan_expected_index_parts
+  (table_name,index_name,non_unique,ordinal_position,column_name,sort_direction) VALUES
+('blog_post_views', 'blog_post_views_pkey', 0, 1, 'id', 'ASC'),
+('blog_post_views', 'blog_post_views_post_viewed_at_idx', 1, 1, 'post_id', 'ASC'),
+('blog_post_views', 'blog_post_views_post_viewed_at_idx', 1, 2, 'viewed_at', 'DESC'),
+('blog_post_views', 'blog_post_views_post_visitor_uidx', 0, 1, 'post_id', 'ASC'),
+('blog_post_views', 'blog_post_views_post_visitor_uidx', 0, 2, 'visitor_id', 'ASC'),
+('blog_post_views', 'blog_post_views_visitor_post_viewed_at_idx', 1, 1, 'visitor_id', 'ASC'),
+('blog_post_views', 'blog_post_views_visitor_post_viewed_at_idx', 1, 2, 'post_id', 'ASC'),
+('blog_post_views', 'blog_post_views_visitor_post_viewed_at_idx', 1, 3, 'viewed_at', 'DESC'),
+('blog_post_views', 'idx_blog_post_views_post_viewed_at', 1, 1, 'post_id', 'ASC'),
+('blog_post_views', 'idx_blog_post_views_post_viewed_at', 1, 2, 'viewed_at', 'ASC'),
+('blog_post_views', 'idx_blog_post_views_viewed_at', 1, 1, 'viewed_at', 'ASC'),
+('ai_profiles', 'ai_profiles_pkey', 0, 1, 'id', 'ASC'),
+('ai_profiles', 'ai_profiles_provider_idx', 1, 1, 'provider', 'ASC'),
+('ai_profiles', 'ai_profiles_user_id_idx', 1, 1, 'user_id', 'ASC'),
+('ai_sessions', 'ai_sessions_expires_idx', 1, 1, 'expires_at', 'ASC'),
+('ai_sessions', 'ai_sessions_pkey', 0, 1, 'id', 'ASC'),
+('ai_sessions', 'ai_sessions_profile_idx', 1, 1, 'ai_profile_id', 'ASC'),
+('ai_sessions', 'ai_sessions_token_hash_key', 0, 1, 'token_hash', 'ASC'),
+('api_rate_limits', 'api_rate_limits_pkey', 0, 1, 'key', 'ASC'),
+('api_rate_limits', 'api_rate_limits_updated_at_idx', 1, 1, 'updated_at', 'ASC'),
+('blog_categories', 'blog_categories_pkey', 0, 1, 'id', 'ASC'),
+('blog_categories', 'blog_categories_slug_key', 0, 1, 'slug', 'ASC'),
+('blog_comments', 'blog_comments_pkey', 0, 1, 'id', 'ASC'),
+('blog_comments', 'blog_comments_post_status_created_idx', 1, 1, 'post_id', 'ASC'),
+('blog_comments', 'blog_comments_post_status_created_idx', 1, 2, 'status', 'ASC'),
+('blog_comments', 'blog_comments_post_status_created_idx', 1, 3, 'created_at', 'DESC'),
+('blog_comments', 'blog_comments_post_status_idx', 1, 1, 'post_id', 'ASC'),
+('blog_comments', 'blog_comments_post_status_idx', 1, 2, 'status', 'ASC'),
+('blog_comments', 'blog_comments_post_status_idx', 1, 3, 'created_at', 'DESC'),
+('blog_comments', 'idx_blog_comments_post_status', 1, 1, 'post_id', 'ASC'),
+('blog_comments', 'idx_blog_comments_post_status', 1, 2, 'status', 'ASC'),
+('blog_post_services', 'blog_post_services_pkey', 0, 1, 'post_id', 'ASC'),
+('blog_post_services', 'blog_post_services_pkey', 0, 2, 'service_id', 'ASC'),
+('blog_post_services', 'blog_post_services_service_idx', 1, 1, 'service_id', 'ASC'),
+('blog_posts', 'blog_posts_author_id_idx', 1, 1, 'author_id', 'ASC'),
+('blog_posts', 'blog_posts_category_idx', 1, 1, 'category_id', 'ASC'),
+('blog_posts', 'blog_posts_pkey', 0, 1, 'id', 'ASC'),
+('blog_posts', 'blog_posts_slug_key', 0, 1, 'slug', 'ASC'),
+('blog_posts', 'blog_posts_status_published_idx', 1, 1, 'status', 'ASC'),
+('blog_posts', 'blog_posts_status_published_idx', 1, 2, 'published_at', 'DESC'),
+('blog_ratings', 'blog_ratings_pkey', 0, 1, 'id', 'ASC'),
+('blog_ratings', 'blog_ratings_post_id_user_id_key', 0, 1, 'post_id', 'ASC'),
+('blog_ratings', 'blog_ratings_post_id_user_id_key', 0, 2, 'user_id', 'ASC'),
+('blog_ratings', 'blog_ratings_post_idx', 1, 1, 'post_id', 'ASC'),
+('blog_ratings', 'blog_ratings_post_user_uidx', 0, 1, 'post_id', 'ASC'),
+('blog_ratings', 'blog_ratings_post_user_uidx', 0, 2, 'user_id', 'ASC'),
+('blog_ratings', 'idx_blog_ratings_post_id', 1, 1, 'post_id', 'ASC'),
+('blog_reactions', 'blog_reactions_pkey', 0, 1, 'id', 'ASC'),
+('blog_reactions', 'blog_reactions_post_id_user_id_key', 0, 1, 'post_id', 'ASC'),
+('blog_reactions', 'blog_reactions_post_id_user_id_key', 0, 2, 'user_id', 'ASC'),
+('blog_reactions', 'blog_reactions_post_idx', 1, 1, 'post_id', 'ASC'),
+('blog_reactions', 'blog_reactions_post_idx', 1, 2, 'reaction', 'ASC'),
+('blog_reactions', 'blog_reactions_post_reaction_idx', 1, 1, 'post_id', 'ASC'),
+('blog_reactions', 'blog_reactions_post_reaction_idx', 1, 2, 'reaction', 'ASC'),
+('blog_reactions', 'blog_reactions_post_user_uidx', 0, 1, 'post_id', 'ASC'),
+('blog_reactions', 'blog_reactions_post_user_uidx', 0, 2, 'user_id', 'ASC'),
+('blog_reactions', 'idx_blog_reactions_post_reaction', 1, 1, 'post_id', 'ASC'),
+('blog_reactions', 'idx_blog_reactions_post_reaction', 1, 2, 'reaction', 'ASC'),
+('custom_forms', 'custom_forms_pkey', 0, 1, 'id', 'ASC'),
+('custom_forms', 'idx_custom_forms_active_version_id', 1, 1, 'active_version_id', 'ASC'),
+('custom_forms', 'idx_custom_forms_created_by', 1, 1, 'created_by', 'ASC'),
+('custom_forms', 'idx_custom_forms_parent_form_id', 1, 1, 'parent_form_id', 'ASC'),
+('custom_forms', 'idx_custom_forms_service_id', 1, 1, 'service_id', 'ASC'),
+('custom_forms', 'idx_custom_forms_service_parent_sort', 1, 1, 'service_id', 'ASC'),
+('custom_forms', 'idx_custom_forms_service_parent_sort', 1, 2, 'parent_form_id', 'ASC'),
+('custom_forms', 'idx_custom_forms_service_parent_sort', 1, 3, 'sort_order', 'ASC'),
+('discount_codes', 'discount_codes_code_key', 0, 1, 'code', 'ASC'),
+('discount_codes', 'discount_codes_pkey', 0, 1, 'id', 'ASC'),
+('discount_codes', 'idx_discount_codes_code', 1, 1, 'code', 'ASC'),
+('discount_services', 'discount_services_pkey', 0, 1, 'discount_id', 'ASC'),
+('discount_services', 'discount_services_pkey', 0, 2, 'service_id', 'ASC'),
+('discount_tag_rules', 'discount_tag_rules_discount_id_tag_id_key', 0, 1, 'discount_id', 'ASC'),
+('discount_tag_rules', 'discount_tag_rules_discount_id_tag_id_key', 0, 2, 'tag_id', 'ASC'),
+('discount_tag_rules', 'discount_tag_rules_pkey', 0, 1, 'id', 'ASC'),
+('discount_usages', 'discount_usages_discount_id_order_id_key', 0, 1, 'discount_id', 'ASC'),
+('discount_usages', 'discount_usages_discount_id_order_id_key', 0, 2, 'order_id', 'ASC'),
+('discount_usages', 'discount_usages_pkey', 0, 1, 'id', 'ASC'),
+('discount_usages', 'idx_discount_usages_code_user', 1, 1, 'discount_code_id', 'ASC'),
+('discount_usages', 'idx_discount_usages_code_user', 1, 2, 'user_id', 'ASC'),
+('discount_usages', 'idx_discount_usages_discount_code', 1, 1, 'discount_code_id', 'ASC'),
+('discount_usages', 'idx_discount_usages_discount_user', 1, 1, 'discount_id', 'ASC'),
+('discount_usages', 'idx_discount_usages_discount_user', 1, 2, 'user_id', 'ASC'),
+('discount_usages', 'idx_discount_usages_order', 1, 1, 'order_id', 'ASC'),
+('discount_usages', 'idx_discount_usages_user', 1, 1, 'user_id', 'ASC'),
+('discounts', 'discounts_pkey', 0, 1, 'id', 'ASC'),
+('financial_transactions', 'financial_transactions_pkey', 0, 1, 'id', 'ASC'),
+('form_versions', 'form_versions_form_id_idx', 1, 1, 'form_id', 'ASC'),
+('form_versions', 'form_versions_form_id_version_number_key', 0, 1, 'form_id', 'ASC'),
+('form_versions', 'form_versions_form_id_version_number_key', 0, 2, 'version_number', 'ASC'),
+('form_versions', 'form_versions_pkey', 0, 1, 'id', 'ASC'),
+('form_versions', 'idx_form_versions_created_by', 1, 1, 'created_by', 'ASC'),
+('goals', 'goals_created_by_idx', 1, 1, 'created_by', 'ASC'),
+('goals', 'goals_pkey', 0, 1, 'id', 'ASC'),
+('goals', 'goals_status_idx', 1, 1, 'status', 'ASC'),
+('member_tag_assignments', 'idx_member_tag_assignments_tag', 1, 1, 'tag_id', 'ASC'),
+('member_tag_assignments', 'idx_member_tag_assignments_user', 1, 1, 'user_id', 'ASC'),
+('member_tag_assignments', 'member_tag_assignments_pkey', 0, 1, 'id', 'ASC'),
+('member_tag_assignments', 'member_tag_assignments_tag_id_user_id_key', 0, 1, 'tag_id', 'ASC'),
+('member_tag_assignments', 'member_tag_assignments_tag_id_user_id_key', 0, 2, 'user_id', 'ASC'),
+('member_tags', 'member_tags_pkey', 0, 1, 'id', 'ASC'),
+('member_tags', 'member_tags_slug_key', 0, 1, 'slug', 'ASC'),
+('messages', 'idx_messages_order_id', 1, 1, 'order_id', 'ASC'),
+('messages', 'idx_messages_sender_id', 1, 1, 'sender_id', 'ASC'),
+('messages', 'messages_pkey', 0, 1, 'id', 'ASC'),
+('news_announcements', 'news_announcements_pkey', 0, 1, 'id', 'ASC'),
+('news_announcements', 'news_announcements_slug_key', 0, 1, 'slug', 'ASC'),
+('news_sources', 'news_sources_pkey', 0, 1, 'id', 'ASC'),
+('news_sources', 'news_sources_url_key', 0, 1, 'url', 'ASC'),
+('notifications', 'notifications_order_idx', 1, 1, 'order_id', 'ASC'),
+('notifications', 'notifications_pkey', 0, 1, 'id', 'ASC'),
+('notifications', 'notifications_recipient_created_at_idx', 1, 1, 'recipient_id', 'ASC'),
+('notifications', 'notifications_recipient_created_at_idx', 1, 2, 'created_at', 'DESC'),
+('notifications', 'notifications_recipient_created_idx', 1, 1, 'recipient_id', 'ASC'),
+('notifications', 'notifications_recipient_created_idx', 1, 2, 'created_at', 'DESC'),
+('order_cancellation_requests', 'order_cancellation_requests_order_id_key', 0, 1, 'order_id', 'ASC'),
+('order_cancellation_requests', 'order_cancellation_requests_pkey', 0, 1, 'id', 'ASC'),
+('order_cancellation_requests', 'order_cancellation_requests_status_idx', 1, 1, 'status', 'ASC'),
+('order_cancellation_requests', 'order_cancellation_requests_status_idx', 1, 2, 'created_at', 'DESC'),
+('order_cancellation_requests', 'order_cancellation_requests_user_idx', 1, 1, 'user_id', 'ASC'),
+('order_cancellation_requests', 'order_cancellation_requests_user_idx', 1, 2, 'created_at', 'DESC'),
+('order_commission_ledger', 'order_commission_ledger_order_id_staff_user_id_key', 0, 1, 'order_id', 'ASC'),
+('order_commission_ledger', 'order_commission_ledger_order_id_staff_user_id_key', 0, 2, 'staff_user_id', 'ASC'),
+('order_commission_ledger', 'order_commission_ledger_pkey', 0, 1, 'id', 'ASC'),
+('order_files', 'idx_order_files_cleanup', 1, 1, 'order_id', 'ASC'),
+('order_files', 'idx_order_files_cleanup', 1, 2, 'deleted_at', 'ASC'),
+('order_files', 'idx_order_files_order_id', 1, 1, 'order_id', 'ASC'),
+('order_files', 'idx_order_files_uploaded_by', 1, 1, 'uploaded_by', 'ASC'),
+('order_files', 'order_files_pkey', 0, 1, 'id', 'ASC'),
+('order_history', 'idx_order_history_order_id', 1, 1, 'order_id', 'ASC'),
+('order_history', 'order_history_pkey', 0, 1, 'id', 'ASC'),
+('order_refunds', 'idx_order_refunds_status', 1, 1, 'status', 'ASC'),
+('order_refunds', 'idx_order_refunds_user', 1, 1, 'user_id', 'ASC'),
+('order_refunds', 'order_refunds_order_unique', 0, 1, 'order_id', 'ASC'),
+('order_refunds', 'order_refunds_pkey', 0, 1, 'id', 'ASC'),
+('order_staff_requests', 'idx_order_staff_requests_status_created', 1, 1, 'status', 'ASC'),
+('order_staff_requests', 'idx_order_staff_requests_status_created', 1, 2, 'created_at', 'DESC'),
+('order_staff_requests', 'order_staff_requests_order_id_staff_user_id_key', 0, 1, 'order_id', 'ASC'),
+('order_staff_requests', 'order_staff_requests_order_id_staff_user_id_key', 0, 2, 'staff_user_id', 'ASC'),
+('order_staff_requests', 'order_staff_requests_pkey', 0, 1, 'id', 'ASC'),
+('order_staff_requests', 'order_staff_requests_staff_idx', 1, 1, 'staff_user_id', 'ASC'),
+('order_staff_requests', 'order_staff_requests_staff_idx', 1, 2, 'status', 'ASC'),
+('order_staff_requests', 'order_staff_requests_staff_idx', 1, 3, 'created_at', 'DESC'),
+('order_staff_requests', 'order_staff_requests_status_idx', 1, 1, 'status', 'ASC'),
+('order_staff_requests', 'order_staff_requests_status_idx', 1, 2, 'created_at', 'DESC'),
+('orders', 'idx_orders_assigned_staff_processing', 1, 1, 'assigned_staff_id', 'ASC'),
+('orders', 'idx_orders_assigned_staff_processing', 1, 2, 'processing_status', 'ASC'),
+('orders', 'idx_orders_assigned_staff_processing', 1, 3, 'updated_at', 'DESC'),
+('orders', 'idx_orders_assignment_paid', 1, 1, 'assignment_status', 'ASC'),
+('orders', 'idx_orders_assignment_paid', 1, 2, 'service_id', 'ASC'),
+('orders', 'idx_orders_assignment_paid', 1, 3, 'created_at', 'DESC'),
+('orders', 'idx_orders_assignment_status_updated_at', 1, 1, 'assignment_status', 'ASC'),
+('orders', 'idx_orders_assignment_status_updated_at', 1, 2, 'updated_at', 'DESC'),
+('orders', 'idx_orders_form_id', 1, 1, 'form_id', 'ASC'),
+('orders', 'idx_orders_form_version_id', 1, 1, 'form_version_id', 'ASC'),
+('orders', 'idx_orders_processing_status_updated_at', 1, 1, 'processing_status', 'ASC'),
+('orders', 'idx_orders_processing_status_updated_at', 1, 2, 'updated_at', 'DESC'),
+('orders', 'idx_orders_service_id', 1, 1, 'service_id', 'ASC'),
+('orders', 'idx_orders_user_id_created_at', 1, 1, 'user_id', 'ASC'),
+('orders', 'idx_orders_user_id_created_at', 1, 2, 'created_at', 'DESC'),
+('orders', 'orders_assigned_staff_idx', 1, 1, 'assigned_staff_id', 'ASC'),
+('orders', 'orders_assigned_staff_idx', 1, 2, 'assignment_status', 'ASC'),
+('orders', 'orders_assigned_staff_idx', 1, 3, 'updated_at', 'DESC'),
+('orders', 'orders_pkey', 0, 1, 'id', 'ASC'),
+('orders', 'orders_tracking_code_key', 0, 1, 'tracking_code', 'ASC'),
+('payments', 'idx_payments_gateway', 1, 1, 'gateway', 'ASC'),
+('payments', 'idx_payments_order_id', 1, 1, 'order_id', 'ASC'),
+('payments', 'idx_payments_status', 1, 1, 'status', 'ASC'),
+('payments', 'idx_payments_user_id', 1, 1, 'user_id', 'ASC'),
+('payments', 'payments_pkey', 0, 1, 'id', 'ASC'),
+('payout_requests', 'payout_requests_pkey', 0, 1, 'id', 'ASC'),
+('profiles', 'profiles_pkey', 0, 1, 'id', 'ASC'),
+('registrations', 'registrations_pkey', 0, 1, 'id', 'ASC'),
+('services', 'idx_services_active_parent_created', 1, 1, 'is_active', 'ASC'),
+('services', 'idx_services_active_parent_created', 1, 2, 'parent_service_id', 'ASC'),
+('services', 'idx_services_active_parent_created', 1, 3, 'created_at', 'DESC'),
+('services', 'idx_services_parent_form_id', 1, 1, 'parent_form_id', 'ASC'),
+('services', 'idx_services_parent_service_id', 1, 1, 'parent_service_id', 'ASC'),
+('services', 'idx_services_service_type', 1, 1, 'service_type', 'ASC'),
+('services', 'services_pkey', 0, 1, 'id', 'ASC'),
+('services', 'services_popular_active_idx', 1, 1, 'is_popular', 'ASC'),
+('services', 'services_popular_active_idx', 1, 2, 'is_active', 'ASC'),
+('services', 'services_popular_active_idx', 1, 3, 'created_at', 'DESC'),
+('services_announcements', 'idx_service_announcements_active', 1, 1, 'is_active', 'ASC'),
+('services_announcements', 'idx_service_announcements_dates', 1, 1, 'start_at', 'ASC'),
+('services_announcements', 'idx_service_announcements_dates', 1, 2, 'end_at', 'ASC'),
+('services_announcements', 'idx_service_announcements_priority', 1, 1, 'priority', 'ASC'),
+('services_announcements', 'idx_service_announcements_service', 1, 1, 'service_id', 'ASC'),
+('services_announcements', 'service_announcements_pkey', 0, 1, 'id', 'ASC'),
+('site_settings', 'site_settings_pkey', 0, 1, 'id', 'ASC'),
+('social_categories', 'idx_social_categories_platform', 1, 1, 'platform_id', 'ASC'),
+('social_categories', 'idx_social_categories_platform', 1, 2, 'sort_order', 'ASC'),
+('social_categories', 'social_categories_pkey', 0, 1, 'id', 'ASC'),
+('social_categories', 'social_categories_platform_id_slug_key', 0, 1, 'platform_id', 'ASC'),
+('social_categories', 'social_categories_platform_id_slug_key', 0, 2, 'slug', 'ASC'),
+('social_orders', 'idx_social_orders_admin_approval', 1, 1, 'admin_approved', 'ASC'),
+('social_orders', 'idx_social_orders_admin_approval', 1, 2, 'status', 'ASC'),
+('social_orders', 'idx_social_orders_admin_approval', 1, 3, 'created_at', 'DESC'),
+('social_orders', 'idx_social_orders_provider', 1, 1, 'provider', 'ASC'),
+('social_orders', 'idx_social_orders_provider', 1, 2, 'provider_order_id', 'ASC'),
+('social_orders', 'idx_social_orders_status', 1, 1, 'status', 'ASC'),
+('social_orders', 'idx_social_orders_status', 1, 2, 'created_at', 'DESC'),
+('social_orders', 'idx_social_orders_user_created_at', 1, 1, 'user_id', 'ASC'),
+('social_orders', 'idx_social_orders_user_created_at', 1, 2, 'created_at', 'DESC'),
+('social_orders', 'social_orders_admin_approved_by_idx', 1, 1, 'admin_approved_by', 'ASC'),
+('social_orders', 'social_orders_pkey', 0, 1, 'id', 'ASC'),
+('social_orders', 'social_orders_service_id_idx', 1, 1, 'service_id', 'ASC'),
+('social_orders', 'social_orders_tracking_code_key', 0, 1, 'tracking_code', 'ASC'),
+('social_platforms', 'social_platforms_pkey', 0, 1, 'id', 'ASC'),
+('social_platforms', 'social_platforms_slug_key', 0, 1, 'slug', 'ASC'),
+('social_services', 'idx_social_services_category', 1, 1, 'category_id', 'ASC'),
+('social_services', 'idx_social_services_category', 1, 2, 'sort_order', 'ASC'),
+('social_services', 'idx_social_services_platform', 1, 1, 'platform_id', 'ASC'),
+('social_services', 'idx_social_services_platform', 1, 2, 'sort_order', 'ASC'),
+('social_services', 'social_services_pkey', 0, 1, 'id', 'ASC'),
+('social_services', 'uq_social_services_provider_service_id', 0, 1, 'provider', 'ASC'),
+('social_services', 'uq_social_services_provider_service_id', 0, 2, 'provider_service_id', 'ASC'),
+('social_sync_logs', 'social_sync_logs_created_at_idx', 1, 1, 'created_at', 'DESC'),
+('social_sync_logs', 'social_sync_logs_pkey', 0, 1, 'id', 'ASC'),
+('staff_bank_accounts', 'staff_bank_accounts_pkey', 0, 1, 'id', 'ASC'),
+('staff_bank_accounts', 'staff_bank_accounts_user_iban_uq', 0, 1, 'user_id', 'ASC'),
+('staff_bank_accounts', 'staff_bank_accounts_user_iban_uq', 0, 2, 'iban', 'ASC'),
+('staff_category_access', 'staff_category_access_pkey', 0, 1, 'id', 'ASC'),
+('staff_category_access', 'staff_category_access_user_id_category_key', 0, 1, 'user_id', 'ASC'),
+('staff_category_access', 'staff_category_access_user_id_category_key', 0, 2, 'category', 'ASC'),
+('staff_category_access', 'staff_category_access_user_status_idx', 1, 1, 'user_id', 'ASC'),
+('staff_category_access', 'staff_category_access_user_status_idx', 1, 2, 'status', 'ASC'),
+('staff_earnings', 'staff_earnings_pkey', 0, 1, 'id', 'ASC'),
+('staff_earnings', 'staff_earnings_staff_status_idx', 1, 1, 'staff_id', 'ASC'),
+('staff_earnings', 'staff_earnings_staff_status_idx', 1, 2, 'status', 'ASC'),
+('staff_financial_adjustments', 'staff_adjustments_staff_idx', 1, 1, 'staff_id', 'ASC'),
+('staff_financial_adjustments', 'staff_adjustments_staff_idx', 1, 2, 'created_at', 'DESC'),
+('staff_financial_adjustments', 'staff_financial_adjustments_pkey', 0, 1, 'id', 'ASC'),
+('staff_reviews', 'idx_staff_reviews_staff', 1, 1, 'staff_id', 'ASC'),
+('staff_reviews', 'idx_staff_reviews_staff', 1, 2, 'created_at', 'DESC'),
+('staff_reviews', 'staff_reviews_order_id_key', 0, 1, 'order_id', 'ASC'),
+('staff_reviews', 'staff_reviews_pkey', 0, 1, 'id', 'ASC'),
+('staff_reviews', 'staff_reviews_staff_idx', 1, 1, 'staff_id', 'ASC'),
+('staff_reviews', 'staff_reviews_staff_idx', 1, 2, 'created_at', 'DESC'),
+('staff_role_assignments', 'staff_role_assignments_pkey', 0, 1, 'id', 'ASC'),
+('staff_role_assignments', 'staff_role_assignments_user_id_role_id_key', 0, 1, 'user_id', 'ASC'),
+('staff_role_assignments', 'staff_role_assignments_user_id_role_id_key', 0, 2, 'role_id', 'ASC'),
+('staff_role_assignments', 'staff_role_assignments_user_status_idx', 1, 1, 'user_id', 'ASC'),
+('staff_role_assignments', 'staff_role_assignments_user_status_idx', 1, 2, 'status', 'ASC'),
+('staff_roles', 'staff_roles_code_key', 0, 1, 'code', 'ASC'),
+('staff_roles', 'staff_roles_pkey', 0, 1, 'id', 'ASC'),
+('staff_service_access', 'staff_service_access_pkey', 0, 1, 'id', 'ASC'),
+('staff_service_access', 'staff_service_access_user_id_service_id_key', 0, 1, 'user_id', 'ASC'),
+('staff_service_access', 'staff_service_access_user_id_service_id_key', 0, 2, 'service_id', 'ASC'),
+('staff_service_access', 'staff_service_access_user_status_idx', 1, 1, 'user_id', 'ASC'),
+('staff_service_access', 'staff_service_access_user_status_idx', 1, 2, 'status', 'ASC'),
+('staff_settlements', 'idx_staff_settlements_status', 1, 1, 'status', 'ASC'),
+('staff_settlements', 'idx_staff_settlements_status', 1, 2, 'requested_at', 'ASC'),
+('staff_settlements', 'staff_settlements_pkey', 0, 1, 'id', 'ASC'),
+('staff_settlements', 'staff_settlements_staff_status_idx', 1, 1, 'staff_id', 'ASC'),
+('staff_settlements', 'staff_settlements_staff_status_idx', 1, 2, 'status', 'ASC'),
+('sub_goals', 'sub_goals_goal_id_idx', 1, 1, 'goal_id', 'ASC'),
+('sub_goals', 'sub_goals_pkey', 0, 1, 'id', 'ASC'),
+('support_conversation_participants', 'support_conversation_participants_conversation_id_user_id_key', 0, 1, 'conversation_id', 'ASC'),
+('support_conversation_participants', 'support_conversation_participants_conversation_id_user_id_key', 0, 2, 'user_id', 'ASC'),
+('support_conversation_participants', 'support_conversation_participants_pkey', 0, 1, 'id', 'ASC'),
+('support_conversation_participants', 'support_participants_conversation_idx', 1, 1, 'conversation_id', 'ASC'),
+('support_conversation_participants', 'support_participants_conversation_idx', 1, 2, 'left_at', 'ASC'),
+('support_conversations', 'idx_support_conversations_assigned_status', 1, 1, 'assigned_staff_id', 'ASC'),
+('support_conversations', 'idx_support_conversations_assigned_status', 1, 2, 'status', 'ASC'),
+('support_conversations', 'idx_support_conversations_assigned_status', 1, 3, 'updated_at', 'DESC'),
+('support_conversations', 'idx_support_conversations_status_updated', 1, 1, 'status', 'ASC'),
+('support_conversations', 'idx_support_conversations_status_updated', 1, 2, 'updated_at', 'DESC'),
+('support_conversations', 'support_conversations_assigned_staff_idx', 1, 1, 'assigned_staff_id', 'ASC'),
+('support_conversations', 'support_conversations_assigned_staff_idx', 1, 2, 'status', 'ASC'),
+('support_conversations', 'support_conversations_assigned_staff_idx', 1, 3, 'updated_at', 'DESC'),
+('support_conversations', 'support_conversations_order_idx', 1, 1, 'order_id', 'ASC'),
+('support_conversations', 'support_conversations_order_idx', 1, 2, 'updated_at', 'DESC'),
+('support_conversations', 'support_conversations_pkey', 0, 1, 'id', 'ASC'),
+('support_conversations', 'support_conversations_status_idx', 1, 1, 'status', 'ASC'),
+('support_conversations', 'support_conversations_status_idx', 1, 2, 'updated_at', 'DESC'),
+('support_conversations', 'support_conversations_user_idx', 1, 1, 'user_id', 'ASC'),
+('support_conversations', 'support_conversations_user_idx', 1, 2, 'updated_at', 'DESC'),
+('support_faqs', 'support_faqs_active_category_idx', 1, 1, 'is_active', 'ASC'),
+('support_faqs', 'support_faqs_active_category_idx', 1, 2, 'category', 'ASC'),
+('support_faqs', 'support_faqs_active_category_idx', 1, 3, 'sort_order', 'ASC'),
+('support_faqs', 'support_faqs_pkey', 0, 1, 'id', 'ASC'),
+('support_messages', 'idx_support_messages_conversation_created', 1, 1, 'conversation_id', 'ASC'),
+('support_messages', 'idx_support_messages_conversation_created', 1, 2, 'created_at', 'ASC'),
+('support_messages', 'support_messages_conversation_idx', 1, 1, 'conversation_id', 'ASC'),
+('support_messages', 'support_messages_conversation_idx', 1, 2, 'created_at', 'ASC'),
+('support_messages', 'support_messages_pkey', 0, 1, 'id', 'ASC'),
+('support_messages', 'support_messages_sender_idx', 1, 1, 'sender_id', 'ASC'),
+('support_messages', 'support_messages_unread_idx', 1, 1, 'is_read', 'ASC'),
+('support_messages', 'support_messages_unread_idx', 1, 2, 'created_at', 'ASC'),
+('support_reviews', 'support_reviews_conversation_id_key', 0, 1, 'conversation_id', 'ASC'),
+('support_reviews', 'support_reviews_customer_idx', 1, 1, 'customer_id', 'ASC'),
+('support_reviews', 'support_reviews_customer_idx', 1, 2, 'created_at', 'DESC'),
+('support_reviews', 'support_reviews_pkey', 0, 1, 'id', 'ASC'),
+('support_reviews', 'support_reviews_staff_idx', 1, 1, 'staff_id', 'ASC'),
+('support_reviews', 'support_reviews_staff_idx', 1, 2, 'created_at', 'DESC'),
+('tag_referral_links', 'idx_referral_links_code', 1, 1, 'code', 'ASC'),
+('tag_referral_links', 'tag_referral_links_code_key', 0, 1, 'code', 'ASC'),
+('tag_referral_links', 'tag_referral_links_pkey', 0, 1, 'id', 'ASC'),
+('traxtor_saved_projects', 'traxtor_saved_projects_pkey', 0, 1, 'id', 'ASC'),
+('traxtor_saved_projects', 'traxtor_saved_projects_updated_at_idx', 1, 1, 'updated_at', 'DESC');
+
+CREATE TEMPORARY TABLE tmp_tusan_manual_review_indexes (
+  table_name VARCHAR(128), index_name VARCHAR(128),
+  index_definition VARCHAR(1000), review_reason VARCHAR(255),
+  PRIMARY KEY (table_name,index_name)
+);
+INSERT INTO tmp_tusan_manual_review_indexes
+  (table_name,index_name,index_definition,review_reason) VALUES
+('ai_profiles', 'ai_profiles_anonymous_key_hash_unique_idx', 'CREATE UNIQUE INDEX ai_profiles_anonymous_key_hash_unique_idx ON public.ai_profiles USING btree (key_hash) WHERE (user_id IS NULL)', 'Partial index predicate requires manual semantic review'),
+('ai_profiles', 'ai_profiles_user_id_unique_idx', 'CREATE UNIQUE INDEX ai_profiles_user_id_unique_idx ON public.ai_profiles USING btree (user_id) WHERE (user_id IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('custom_forms', 'idx_custom_forms_one_parent_per_service', 'CREATE UNIQUE INDEX idx_custom_forms_one_parent_per_service ON public.custom_forms USING btree (service_id) WHERE ((form_type = ''parent''::text) AND (parent_form_id IS NULL))', 'Partial index predicate requires manual semantic review'),
+('custom_forms', 'idx_custom_forms_unique_child_title', 'CREATE UNIQUE INDEX idx_custom_forms_unique_child_title ON public.custom_forms USING btree (parent_form_id, lower((title)::text)) WHERE (parent_form_id IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('form_versions', 'custom_forms_one_active_version', 'CREATE UNIQUE INDEX custom_forms_one_active_version ON public.form_versions USING btree (form_id) WHERE (is_active = true)', 'Partial index predicate requires manual semantic review'),
+('messages', 'idx_messages_unread_admin_by_order', 'CREATE INDEX idx_messages_unread_admin_by_order ON public.messages USING btree (order_id) WHERE ((sender_role = ''user''::text) AND (read_by_admin = false))', 'Partial index predicate requires manual semantic review'),
+('messages', 'idx_messages_unread_user_by_order', 'CREATE INDEX idx_messages_unread_user_by_order ON public.messages USING btree (order_id) WHERE ((sender_role = ''admin''::text) AND (read_by_user = false))', 'Partial index predicate requires manual semantic review'),
+('news_announcements', 'news_announcements_public_listing', 'CREATE INDEX news_announcements_public_listing ON public.news_announcements USING btree (published_at DESC) WHERE (status = ''published''::text)', 'Partial index predicate requires manual semantic review'),
+('news_announcements', 'news_announcements_review_queue', 'CREATE INDEX news_announcements_review_queue ON public.news_announcements USING btree (created_at DESC) WHERE (status = ANY (ARRAY[''draft''::text, ''review''::text]))', 'Partial index predicate requires manual semantic review'),
+('news_announcements', 'news_announcements_source_guid_unique', 'CREATE UNIQUE INDEX news_announcements_source_guid_unique ON public.news_announcements USING btree (source_guid) WHERE (source_guid IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('news_announcements', 'news_announcements_source_url_unique', 'CREATE UNIQUE INDEX news_announcements_source_url_unique ON public.news_announcements USING btree (source_url) WHERE (source_url IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('notifications', 'notifications_recipient_unread_created_idx', 'CREATE INDEX notifications_recipient_unread_created_idx ON public.notifications USING btree (recipient_id, created_at DESC) WHERE (read_at IS NULL)', 'Partial index predicate requires manual semantic review'),
+('notifications', 'notifications_recipient_unread_idx', 'CREATE INDEX notifications_recipient_unread_idx ON public.notifications USING btree (recipient_id, created_at DESC) WHERE (read_at IS NULL)', 'Partial index predicate requires manual semantic review'),
+('notifications', 'notifications_unread_idx', 'CREATE INDEX notifications_unread_idx ON public.notifications USING btree (recipient_id, created_at DESC) WHERE (read_at IS NULL)', 'Partial index predicate requires manual semantic review'),
+('orders', 'orders_user_id_idempotency_key_uq', 'CREATE UNIQUE INDEX orders_user_id_idempotency_key_uq ON public.orders USING btree (user_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('payments', 'idx_payments_authority', 'CREATE INDEX idx_payments_authority ON public.payments USING btree (authority) WHERE (authority IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('payments', 'idx_payments_transaction_id', 'CREATE INDEX idx_payments_transaction_id ON public.payments USING btree (transaction_id) WHERE (transaction_id IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('payments', 'idx_payments_unique_authority', 'CREATE UNIQUE INDEX idx_payments_unique_authority ON public.payments USING btree (gateway, authority) WHERE (authority IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('payments', 'idx_payments_unique_transaction', 'CREATE UNIQUE INDEX idx_payments_unique_transaction ON public.payments USING btree (gateway, transaction_id) WHERE (transaction_id IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('payments', 'payments_one_active_per_order_uq', 'CREATE UNIQUE INDEX payments_one_active_per_order_uq ON public.payments USING btree (order_id) WHERE (status = ANY (ARRAY[''pending''::text, ''redirected''::text]))', 'Partial index predicate requires manual semantic review'),
+('services', 'services_local_only_idx', 'CREATE INDEX services_local_only_idx ON public.services USING btree (local_only) WHERE (local_only = true)', 'Partial index predicate requires manual semantic review'),
+('services', 'services_slug_unique', 'CREATE UNIQUE INDEX services_slug_unique ON public.services USING btree (slug) WHERE ((slug IS NOT NULL) AND (slug <> ''''::text))', 'Partial index predicate requires manual semantic review'),
+('social_orders', 'idx_social_orders_payment_reference', 'CREATE INDEX idx_social_orders_payment_reference ON public.social_orders USING btree (payment_reference) WHERE (payment_reference IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('social_orders', 'social_orders_user_id_idempotency_key_uq', 'CREATE UNIQUE INDEX social_orders_user_id_idempotency_key_uq ON public.social_orders USING btree (user_id, idempotency_key) WHERE (idempotency_key IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('social_orders', 'uq_social_orders_payment_track_id', 'CREATE UNIQUE INDEX uq_social_orders_payment_track_id ON public.social_orders USING btree (payment_track_id) WHERE (payment_track_id IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('staff_financial_adjustments', 'staff_financial_adjustments_reference_uq', 'CREATE UNIQUE INDEX staff_financial_adjustments_reference_uq ON public.staff_financial_adjustments USING btree (reference_key) WHERE (reference_key IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('staff_role_assignments', 'staff_role_assignments_staff_code_uq', 'CREATE UNIQUE INDEX staff_role_assignments_staff_code_uq ON public.staff_role_assignments USING btree (staff_code) WHERE (staff_code IS NOT NULL)', 'Partial index predicate requires manual semantic review'),
+('staff_settlements', 'staff_settlements_one_open_per_staff', 'CREATE UNIQUE INDEX staff_settlements_one_open_per_staff ON public.staff_settlements USING btree (staff_id) WHERE (status = ANY (ARRAY[''requested''::text, ''approved''::text, ''processing''::text]))', 'Partial index predicate requires manual semantic review'),
+('support_conversations', 'support_conversations_one_open_general_per_user', 'CREATE UNIQUE INDEX support_conversations_one_open_general_per_user ON public.support_conversations USING btree (user_id) WHERE ((status = ''open''::text) AND (order_id IS NULL))', 'Partial index predicate requires manual semantic review'),
+('support_conversations', 'support_conversations_one_open_per_user_idx', 'CREATE UNIQUE INDEX support_conversations_one_open_per_user_idx ON public.support_conversations USING btree (user_id) WHERE (status = ''open''::text)', 'Partial index predicate requires manual semantic review');
+
+CREATE TEMPORARY TABLE tmp_tusan_expected_foreign_keys (
+  table_name VARCHAR(128), constraint_name VARCHAR(128), column_name VARCHAR(128),
+  ordinal_position INT, referenced_table_name VARCHAR(128), referenced_column_name VARCHAR(128),
+  update_rule VARCHAR(16), delete_rule VARCHAR(16)
+);
+INSERT INTO tmp_tusan_expected_foreign_keys
+  (table_name,constraint_name,column_name,ordinal_position,referenced_table_name,referenced_column_name,update_rule,delete_rule) VALUES
+('blog_post_views', 'blog_post_views_post_id_fkey', 'post_id', 1, 'blog_posts', 'id', 'NO ACTION', 'CASCADE'),
+('ai_sessions', 'ai_sessions_ai_profile_id_fkey', 'ai_profile_id', 1, 'ai_profiles', 'id', 'NO ACTION', 'CASCADE'),
+('blog_comments', 'blog_comments_post_id_fkey', 'post_id', 1, 'blog_posts', 'id', 'NO ACTION', 'CASCADE'),
+('blog_post_services', 'blog_post_services_post_id_fkey', 'post_id', 1, 'blog_posts', 'id', 'NO ACTION', 'CASCADE'),
+('blog_post_services', 'blog_post_services_service_id_fkey', 'service_id', 1, 'services', 'id', 'NO ACTION', 'CASCADE'),
+('blog_posts', 'blog_posts_category_id_fkey', 'category_id', 1, 'blog_categories', 'id', 'NO ACTION', 'SET NULL'),
+('blog_ratings', 'blog_ratings_post_id_fkey', 'post_id', 1, 'blog_posts', 'id', 'NO ACTION', 'CASCADE'),
+('blog_reactions', 'blog_reactions_post_id_fkey', 'post_id', 1, 'blog_posts', 'id', 'NO ACTION', 'CASCADE'),
+('custom_forms', 'custom_forms_active_version_id_fkey', 'active_version_id', 1, 'form_versions', 'id', 'NO ACTION', 'NO ACTION'),
+('custom_forms', 'custom_forms_created_by_fkey', 'created_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('custom_forms', 'custom_forms_parent_form_id_fkey', 'parent_form_id', 1, 'custom_forms', 'id', 'NO ACTION', 'CASCADE'),
+('custom_forms', 'custom_forms_service_id_fkey', 'service_id', 1, 'services', 'id', 'NO ACTION', 'CASCADE'),
+('discount_codes', 'discount_codes_discount_id_fkey', 'discount_id', 1, 'discounts', 'id', 'NO ACTION', 'CASCADE'),
+('discount_services', 'discount_services_discount_id_fkey', 'discount_id', 1, 'discounts', 'id', 'NO ACTION', 'CASCADE'),
+('discount_services', 'discount_services_service_id_fkey', 'service_id', 1, 'services', 'id', 'NO ACTION', 'CASCADE'),
+('discount_tag_rules', 'discount_tag_rules_discount_id_fkey', 'discount_id', 1, 'discounts', 'id', 'NO ACTION', 'CASCADE'),
+('discount_tag_rules', 'discount_tag_rules_tag_id_fkey', 'tag_id', 1, 'member_tags', 'id', 'NO ACTION', 'CASCADE'),
+('discount_usages', 'discount_usages_discount_code_id_fkey', 'discount_code_id', 1, 'discount_codes', 'id', 'NO ACTION', 'NO ACTION'),
+('discount_usages', 'discount_usages_discount_id_fkey', 'discount_id', 1, 'discounts', 'id', 'NO ACTION', 'NO ACTION'),
+('discount_usages', 'discount_usages_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'NO ACTION'),
+('discount_usages', 'discount_usages_service_id_fkey', 'service_id', 1, 'services', 'id', 'NO ACTION', 'NO ACTION'),
+('discount_usages', 'discount_usages_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('form_versions', 'form_versions_form_id_fkey', 'form_id', 1, 'custom_forms', 'id', 'NO ACTION', 'CASCADE'),
+('member_tag_assignments', 'member_tag_assignments_referral_link_fk', 'referral_link_id', 1, 'tag_referral_links', 'id', 'NO ACTION', 'SET NULL'),
+('member_tag_assignments', 'member_tag_assignments_tag_id_fkey', 'tag_id', 1, 'member_tags', 'id', 'NO ACTION', 'CASCADE'),
+('member_tag_assignments', 'member_tag_assignments_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('messages', 'messages_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('messages', 'messages_sender_id_fkey', 'sender_id', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('notifications', 'notifications_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('notifications', 'notifications_recipient_id_fkey', 'recipient_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('order_cancellation_requests', 'order_cancellation_requests_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('order_cancellation_requests', 'order_cancellation_requests_reviewed_by_fkey', 'reviewed_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('order_commission_ledger', 'order_commission_ledger_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('order_commission_ledger', 'order_commission_ledger_staff_user_id_fkey', 'staff_user_id', 1, 'profiles', 'id', 'NO ACTION', 'RESTRICT'),
+('order_files', 'order_files_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('order_history', 'order_history_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('order_refunds', 'order_refunds_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('order_refunds', 'order_refunds_processed_by_fkey', 'processed_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('order_refunds', 'order_refunds_requested_by_fkey', 'requested_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('order_staff_requests', 'order_staff_requests_approved_by_fkey', 'approved_by', 1, 'profiles', 'id', 'NO ACTION', 'SET NULL'),
+('order_staff_requests', 'order_staff_requests_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('order_staff_requests', 'order_staff_requests_requested_by_fkey', 'requested_by', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('order_staff_requests', 'order_staff_requests_staff_user_id_fkey', 'staff_user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('orders', 'orders_assigned_staff_id_fkey', 'assigned_staff_id', 1, 'profiles', 'id', 'NO ACTION', 'SET NULL'),
+('orders', 'orders_discount_code_id_fkey', 'discount_code_id', 1, 'discount_codes', 'id', 'NO ACTION', 'NO ACTION'),
+('orders', 'orders_discount_id_fkey', 'discount_id', 1, 'discounts', 'id', 'NO ACTION', 'NO ACTION'),
+('orders', 'orders_form_id_fkey', 'form_id', 1, 'custom_forms', 'id', 'NO ACTION', 'SET NULL'),
+('orders', 'orders_form_version_id_fkey', 'form_version_id', 1, 'form_versions', 'id', 'NO ACTION', 'NO ACTION'),
+('orders', 'orders_service_id_fkey', 'service_id', 1, 'services', 'id', 'NO ACTION', 'NO ACTION'),
+('orders', 'orders_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('payments', 'payments_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('payout_requests', 'payout_requests_bank_account_id_fkey', 'bank_account_id', 1, 'staff_bank_accounts', 'id', 'NO ACTION', 'NO ACTION'),
+('payout_requests', 'payout_requests_processed_by_fkey', 'processed_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('payout_requests', 'payout_requests_staff_user_id_fkey', 'staff_user_id', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('services', 'services_parent_form_id_fkey', 'parent_form_id', 1, 'custom_forms', 'id', 'NO ACTION', 'SET NULL'),
+('services', 'services_parent_service_id_fkey', 'parent_service_id', 1, 'services', 'id', 'NO ACTION', 'SET NULL'),
+('services_announcements', 'service_announcements_service_id_fkey', 'service_id', 1, 'services', 'id', 'NO ACTION', 'SET NULL'),
+('social_categories', 'social_categories_platform_id_fkey', 'platform_id', 1, 'social_platforms', 'id', 'NO ACTION', 'CASCADE'),
+('social_orders', 'social_orders_service_id_fkey', 'service_id', 1, 'social_services', 'id', 'NO ACTION', 'NO ACTION'),
+('social_services', 'social_services_category_id_fkey', 'category_id', 1, 'social_categories', 'id', 'NO ACTION', 'CASCADE'),
+('social_services', 'social_services_platform_id_fkey', 'platform_id', 1, 'social_platforms', 'id', 'NO ACTION', 'CASCADE'),
+('staff_bank_accounts', 'staff_bank_accounts_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('staff_bank_accounts', 'staff_bank_accounts_verified_by_fkey', 'verified_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('staff_category_access', 'staff_category_access_approved_by_fkey', 'approved_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('staff_category_access', 'staff_category_access_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('staff_earnings', 'staff_earnings_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'SET NULL'),
+('staff_earnings', 'staff_earnings_staff_id_fkey', 'staff_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('staff_financial_adjustments', 'staff_financial_adjustments_created_by_fkey', 'created_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('staff_financial_adjustments', 'staff_financial_adjustments_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'SET NULL'),
+('staff_financial_adjustments', 'staff_financial_adjustments_staff_id_fkey', 'staff_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('staff_reviews', 'staff_reviews_customer_id_fkey', 'customer_id', 1, 'profiles', 'id', 'NO ACTION', 'RESTRICT'),
+('staff_reviews', 'staff_reviews_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'CASCADE'),
+('staff_reviews', 'staff_reviews_staff_id_fkey', 'staff_id', 1, 'profiles', 'id', 'NO ACTION', 'RESTRICT'),
+('staff_role_assignments', 'staff_role_assignments_approved_by_fkey', 'approved_by', 1, 'profiles', 'id', 'NO ACTION', 'SET NULL'),
+('staff_role_assignments', 'staff_role_assignments_role_id_fkey', 'role_id', 1, 'staff_roles', 'id', 'NO ACTION', 'CASCADE'),
+('staff_role_assignments', 'staff_role_assignments_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('staff_service_access', 'staff_service_access_approved_by_fkey', 'approved_by', 1, 'profiles', 'id', 'NO ACTION', 'SET NULL'),
+('staff_service_access', 'staff_service_access_service_id_fkey', 'service_id', 1, 'services', 'id', 'NO ACTION', 'CASCADE'),
+('staff_service_access', 'staff_service_access_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('staff_settlements', 'staff_settlements_bank_account_id_fkey', 'bank_account_id', 1, 'staff_bank_accounts', 'id', 'NO ACTION', 'NO ACTION'),
+('staff_settlements', 'staff_settlements_processed_by_fkey', 'processed_by', 1, 'profiles', 'id', 'NO ACTION', 'NO ACTION'),
+('staff_settlements', 'staff_settlements_staff_id_fkey', 'staff_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('sub_goals', 'sub_goals_goal_id_fkey', 'goal_id', 1, 'goals', 'id', 'NO ACTION', 'CASCADE'),
+('support_conversation_participants', 'support_conversation_participants_conversation_id_fkey', 'conversation_id', 1, 'support_conversations', 'id', 'NO ACTION', 'CASCADE'),
+('support_conversation_participants', 'support_conversation_participants_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('support_conversations', 'support_conversations_assigned_staff_id_fkey', 'assigned_staff_id', 1, 'profiles', 'id', 'NO ACTION', 'SET NULL'),
+('support_conversations', 'support_conversations_order_id_fkey', 'order_id', 1, 'orders', 'id', 'NO ACTION', 'SET NULL'),
+('support_conversations', 'support_conversations_user_id_fkey', 'user_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('support_messages', 'support_messages_conversation_id_fkey', 'conversation_id', 1, 'support_conversations', 'id', 'NO ACTION', 'CASCADE'),
+('support_messages', 'support_messages_sender_id_fkey', 'sender_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('support_reviews', 'support_reviews_conversation_id_fkey', 'conversation_id', 1, 'support_conversations', 'id', 'NO ACTION', 'CASCADE'),
+('support_reviews', 'support_reviews_customer_id_fkey', 'customer_id', 1, 'profiles', 'id', 'NO ACTION', 'CASCADE'),
+('support_reviews', 'support_reviews_staff_id_fkey', 'staff_id', 1, 'profiles', 'id', 'NO ACTION', 'SET NULL'),
+('tag_referral_links', 'tag_referral_links_tag_id_fkey', 'tag_id', 1, 'member_tags', 'id', 'NO ACTION', 'CASCADE');
 
 -- Result 1: missing base tables.
 SELECT 'MISSING_TABLE' AS issue, e.table_name
 FROM tmp_tusan_expected_tables e
-LEFT JOIN information_schema.TABLES a ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.TABLE_TYPE='BASE TABLE'
+LEFT JOIN information_schema.TABLES a
+  ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.TABLE_TYPE='BASE TABLE'
 WHERE a.TABLE_NAME IS NULL
 ORDER BY e.table_name;
 
--- Result 2: missing columns in tables that already exist.
+-- Result 2: missing columns in base tables that already exist.
 SELECT 'MISSING_COLUMN' AS issue, e.table_name, e.column_name
 FROM tmp_tusan_expected_columns e
-JOIN information_schema.TABLES t ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-LEFT JOIN information_schema.COLUMNS a ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.COLUMN_NAME=e.column_name
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+LEFT JOIN information_schema.COLUMNS a
+  ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.COLUMN_NAME=e.column_name
 WHERE a.COLUMN_NAME IS NULL
 ORDER BY e.table_name,e.column_name;
 
--- Result 3: missing primary-key columns.
-SELECT 'MISSING_PRIMARY_KEY_COLUMN' AS issue, e.table_name, e.column_name, e.ordinal_position
-FROM tmp_tusan_expected_primary_keys e
-JOIN information_schema.TABLES t ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-LEFT JOIN information_schema.KEY_COLUMN_USAGE a ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.CONSTRAINT_NAME='PRIMARY' AND a.COLUMN_NAME=e.column_name
-WHERE a.COLUMN_NAME IS NULL
-ORDER BY e.table_name,e.ordinal_position;
+-- Result 3: exact primary-key structure mismatches (column sequence matters).
+SELECT 'PRIMARY_KEY_STRUCTURE_MISMATCH' AS issue,
+       e.table_name, e.expected_columns,
+       COALESCE(a.actual_columns,'<missing primary key>') AS actual_columns
+FROM (
+  SELECT table_name,
+         GROUP_CONCAT(column_name ORDER BY ordinal_position SEPARATOR ',') AS expected_columns
+  FROM tmp_tusan_expected_primary_keys
+  GROUP BY table_name
+) e
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+LEFT JOIN (
+  SELECT TABLE_NAME,
+         GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ',') AS actual_columns
+  FROM information_schema.KEY_COLUMN_USAGE
+  WHERE TABLE_SCHEMA=DATABASE() AND CONSTRAINT_NAME='PRIMARY'
+  GROUP BY TABLE_NAME
+) a ON a.TABLE_NAME=e.table_name
+WHERE a.TABLE_NAME IS NULL OR a.actual_columns<>e.expected_columns
+ORDER BY e.table_name;
 
--- Result 4: source index names absent in the destination. Review definitions before adding.
-SELECT 'MISSING_INDEX_NAME' AS issue, e.table_name, e.index_name
-FROM tmp_tusan_expected_indexes e
-JOIN information_schema.TABLES t ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-LEFT JOIN information_schema.STATISTICS a ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.INDEX_NAME=e.index_name
+-- Result 4: genuinely missing portable index structures, independent of index names.
+-- Structural signature = uniqueness + ordered column list + ASC/DESC direction.
+SELECT 'MISSING_INDEX_STRUCTURE' AS issue, e.table_name, e.index_name,
+       e.expected_columns, IF(e.non_unique=0,'UNIQUE','NON_UNIQUE') AS expected_uniqueness
+FROM (
+  SELECT table_name,index_name,MAX(non_unique) AS non_unique,
+         GROUP_CONCAT(CONCAT(column_name,':',sort_direction) ORDER BY ordinal_position SEPARATOR ',') AS expected_columns
+  FROM tmp_tusan_expected_index_parts
+  GROUP BY table_name,index_name
+) e
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+LEFT JOIN (
+  SELECT TABLE_NAME,INDEX_NAME,MAX(NON_UNIQUE) AS non_unique,
+         GROUP_CONCAT(CONCAT(COLUMN_NAME,':',IF(COLLATION='D','DESC','ASC')) ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS actual_columns
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IS NOT NULL
+  GROUP BY TABLE_NAME,INDEX_NAME
+) a ON a.TABLE_NAME=e.table_name
+   AND a.non_unique=e.non_unique
+   AND a.actual_columns=e.expected_columns
 WHERE a.INDEX_NAME IS NULL
 ORDER BY e.table_name,e.index_name;
 
--- Result 5: source foreign-key constraint names absent in the destination.
-SELECT 'MISSING_FOREIGN_KEY_NAME' AS issue, e.table_name, e.constraint_name, e.column_name, e.referenced_table_name, e.referenced_column_name
+-- Result 4b: source index names differ, but an equivalent portable structure exists in MariaDB.
+SELECT 'INDEX_NAME_DIFFERS_BUT_STRUCTURE_MATCHES' AS issue,
+       e.table_name,e.index_name AS source_index_name,a.index_name AS destination_index_name,
+       e.expected_columns
+FROM (
+  SELECT table_name,index_name,MAX(non_unique) AS non_unique,
+         GROUP_CONCAT(CONCAT(column_name,':',sort_direction) ORDER BY ordinal_position SEPARATOR ',') AS expected_columns
+  FROM tmp_tusan_expected_index_parts
+  GROUP BY table_name,index_name
+) e
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+JOIN (
+  SELECT TABLE_NAME,INDEX_NAME,MAX(NON_UNIQUE) AS non_unique,
+         GROUP_CONCAT(CONCAT(COLUMN_NAME,':',IF(COLLATION='D','DESC','ASC')) ORDER BY SEQ_IN_INDEX SEPARATOR ',') AS actual_columns
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IS NOT NULL
+  GROUP BY TABLE_NAME,INDEX_NAME
+) a ON a.TABLE_NAME=e.table_name
+   AND a.non_unique=e.non_unique
+   AND a.actual_columns=e.expected_columns
+LEFT JOIN information_schema.STATISTICS same_name
+  ON same_name.TABLE_SCHEMA=DATABASE() AND same_name.TABLE_NAME=e.table_name
+ AND same_name.INDEX_NAME=e.index_name
+WHERE same_name.INDEX_NAME IS NULL
+ORDER BY e.table_name,e.index_name,a.index_name;
+
+-- Result 4c: PostgreSQL partial/expression indexes are not auto-classified as missing.
+-- Review these definitions manually before deciding how to translate them to MariaDB.
+SELECT 'INDEX_REQUIRES_MANUAL_TRANSLATION' AS issue,
+       e.table_name,e.index_name,e.review_reason,e.index_definition
+FROM tmp_tusan_manual_review_indexes e
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+ORDER BY e.table_name,e.index_name;
+
+-- Result 5: genuinely missing foreign-key relationships, ignoring constraint names.
+-- The current snapshot contains only single-column foreign keys; rules are compared too.
+SELECT 'MISSING_FOREIGN_KEY_STRUCTURE' AS issue,
+       e.table_name,e.column_name,e.referenced_table_name,e.referenced_column_name,
+       e.update_rule,e.delete_rule
 FROM tmp_tusan_expected_foreign_keys e
-JOIN information_schema.TABLES t ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
-LEFT JOIN information_schema.KEY_COLUMN_USAGE a ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name AND a.CONSTRAINT_NAME=e.constraint_name AND a.COLUMN_NAME=e.column_name AND a.REFERENCED_TABLE_NAME=e.referenced_table_name AND a.REFERENCED_COLUMN_NAME=e.referenced_column_name
-WHERE a.CONSTRAINT_NAME IS NULL
-ORDER BY e.table_name,e.constraint_name,e.column_name;
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM information_schema.KEY_COLUMN_USAGE a
+  JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+    ON rc.CONSTRAINT_SCHEMA=a.CONSTRAINT_SCHEMA
+   AND rc.CONSTRAINT_NAME=a.CONSTRAINT_NAME
+   AND rc.TABLE_NAME=a.TABLE_NAME
+  WHERE a.TABLE_SCHEMA=DATABASE()
+    AND a.TABLE_NAME=e.table_name
+    AND a.COLUMN_NAME=e.column_name
+    AND a.REFERENCED_TABLE_SCHEMA=DATABASE()
+    AND a.REFERENCED_TABLE_NAME=e.referenced_table_name
+    AND a.REFERENCED_COLUMN_NAME=e.referenced_column_name
+    AND (CASE WHEN UPPER(rc.UPDATE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.UPDATE_RULE) END)
+        = (CASE WHEN UPPER(e.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.update_rule) END)
+    AND (CASE WHEN UPPER(rc.DELETE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.DELETE_RULE) END)
+        = (CASE WHEN UPPER(e.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.delete_rule) END)
+)
+ORDER BY e.table_name,e.column_name;
+
+-- Result 5b: same foreign-key relationship and actions exist, but the constraint name differs.
+SELECT 'FOREIGN_KEY_NAME_DIFFERS_BUT_STRUCTURE_MATCHES' AS issue,
+       e.table_name,e.constraint_name AS source_constraint_name,
+       a.CONSTRAINT_NAME AS destination_constraint_name,
+       e.column_name,e.referenced_table_name,e.referenced_column_name
+FROM tmp_tusan_expected_foreign_keys e
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
+JOIN information_schema.KEY_COLUMN_USAGE a
+  ON a.TABLE_SCHEMA=DATABASE() AND a.TABLE_NAME=e.table_name
+ AND a.COLUMN_NAME=e.column_name
+ AND a.REFERENCED_TABLE_SCHEMA=DATABASE()
+ AND a.REFERENCED_TABLE_NAME=e.referenced_table_name
+ AND a.REFERENCED_COLUMN_NAME=e.referenced_column_name
+JOIN information_schema.REFERENTIAL_CONSTRAINTS rc
+  ON rc.CONSTRAINT_SCHEMA=a.CONSTRAINT_SCHEMA
+ AND rc.CONSTRAINT_NAME=a.CONSTRAINT_NAME
+ AND rc.TABLE_NAME=a.TABLE_NAME
+WHERE a.CONSTRAINT_NAME<>e.constraint_name
+  AND (CASE WHEN UPPER(rc.UPDATE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.UPDATE_RULE) END)
+      = (CASE WHEN UPPER(e.update_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.update_rule) END)
+  AND (CASE WHEN UPPER(rc.DELETE_RULE) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(rc.DELETE_RULE) END)
+      = (CASE WHEN UPPER(e.delete_rule) IN ('RESTRICT','NO ACTION') THEN 'NO ACTION' ELSE UPPER(e.delete_rule) END)
+ORDER BY e.table_name,e.constraint_name;
 
 -- Result 6: current destination table row estimates, for later migration planning only.
 SELECT t.TABLE_NAME, t.TABLE_ROWS
 FROM tmp_tusan_expected_tables e
-JOIN information_schema.TABLES t ON t.TABLE_NAME=e.table_name
-WHERE t.TABLE_SCHEMA=DATABASE() AND t.TABLE_TYPE='BASE TABLE'
+JOIN information_schema.TABLES t
+  ON t.TABLE_SCHEMA=DATABASE() AND t.TABLE_NAME=e.table_name AND t.TABLE_TYPE='BASE TABLE'
 ORDER BY t.TABLE_NAME;
 
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_foreign_keys;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_manual_review_indexes;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_index_parts;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_indexes;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_primary_keys;
 DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_columns;
