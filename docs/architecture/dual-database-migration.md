@@ -102,7 +102,7 @@ The direct Node.js consumer must satisfy the following contract before the dispa
 - For delete events, use `record_key` to delete the matching row. For insert/update, map only reviewed PostgreSQL values to the MariaDB schema; do not guess conversions.
 - Ensure event replay cannot revert a newer change. Idempotent receipts are required because the destination transaction can commit before the source queue acknowledgement.
 
-**Important:** the dispatcher is not a complete sync system by itself. The external MariaDB bridge, schema mapping, secrets, scheduled invocation, and test-database validation are still required. Until these exist, leave the dispatcher disabled and do not apply the migration.
+**Important:** the dispatcher is not a complete sync system by itself. The direct cPanel MariaDB consumer, schema mapping, secrets, controlled event tests, and scheduled invocation still require target-host validation. Until those steps are complete, leave the dispatcher unscheduled and do not apply the Supabase outbox migration.
 
 ## Required verification before expanding the pilot
 
