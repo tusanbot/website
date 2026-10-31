@@ -22,7 +22,7 @@ import { convertValue } from "../mysql-sync-bridge/value-mapping.mjs";
 
 const args = new Set(process.argv.slice(2));
 const getArg = (prefix, fallback) => process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length) ?? fallback;
-const batchSize = Math.max(50, Math.min(Number(getArg("--batch-size=", "250")) || 250, 500));
+const batchSize = Math.max(25, Math.min(Number(getArg("--batch-size=", "50")) || 50, 100));
 const apply = args.has("--apply");
 const showHelp = args.has("--help");
 
@@ -103,6 +103,10 @@ async function getDestinationMetadata(connection, tableName, sourceTable) {
 }
 
 async function validateAllTables(connection) {
+  const [syncTables] = await connection.query("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('data_sync_event_receipts', 'data_sync_record_versions')");
+  if (syncTables.length !== 2) throw new Error("MySQL sync metadata tables are missing; apply schema-test-only.sql first.");
+  const { error: outboxError } = await supabase.from("data_sync_outbox").select("id", { count: "exact", head: true });
+  if (outboxError) throw new Error("Supabase outbox migration is not active or service-role access is unavailable: " + outboxError.message);
   const metadata = new Map();
   for (const sourceTable of selectedTables) {
     const tableName = sourceTable.name.slice(7);
