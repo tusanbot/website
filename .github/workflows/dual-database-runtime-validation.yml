@@ -28,6 +28,13 @@ jobs:
       - name: TypeScript validation
         run: npx tsc --noEmit
       - name: Audit direct Supabase writes
-        run: npm run audit:supabase-writes
+        run: node scripts/mysql-sync-bridge/audit-supabase-writes.mjs /tmp/supabase-write-inventory.json
       - name: Validate sync bridge syntax and mapping tests
         run: node --check scripts/mysql-sync-bridge/server.mjs && node --check scripts/mysql-sync-bridge/value-mapping.mjs && node --test scripts/mysql-sync-bridge/value-mapping.test.mjs
+      - name: Upload Supabase write inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-write-inventory
+          path: /tmp/supabase-write-inventory.json
+          if-no-files-found: error
+          retention-days: 14
