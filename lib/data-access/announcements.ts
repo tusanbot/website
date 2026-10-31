@@ -20,6 +20,7 @@ export type AnnouncementPayload = {
 
 export interface AnnouncementRepository {
   listAdmin(): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+  listServices(): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
   findById(id: string): Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>;
   create(payload: AnnouncementPayload): Promise<{ data: Record<string, unknown> | null; error: { message: string; code?: string } | null }>;
   update(id: string, payload: Partial<AnnouncementPayload> & { updated_at?: string }): Promise<{ data: Record<string, unknown> | null; error: { message: string; code?: string } | null }>;
@@ -38,6 +39,10 @@ export function createAnnouncementRepository(): AnnouncementRepository {
         .select("id,title,type,summary,start_at,end_at,extended_end_at,is_active,is_extendable,button_label,priority,created_at,service_id")
         .order("priority", { ascending: false })
         .order("start_at", { ascending: false });
+    },
+
+    async listServices() {
+      return await db.from("services").select("id,title,icon").eq("is_active", true).order("title");
     },
 
     async findById(id) {
@@ -65,7 +70,7 @@ export function createAnnouncementRepository(): AnnouncementRepository {
     async listPublic() {
       const now = Date.now();
       const { data, error } = await db.from("services_announcements")
-        .select("id,title,summary,content,type,start_at,end_at,extended_end_at,button_label,service_id,priority,created_at,documents,services(title,slug,category,description,icon,price,form_schema)")
+        .select("id,title,summary,content,type,start_at,end_at,extended_end_at,button_label,service_id,priority,created_at,documents,is_extendable,is_active,services(title,slug,category,description,icon,price,form_schema)")
         .eq("is_active", true)
         .order("priority", { ascending: false })
         .order("created_at", { ascending: false })
