@@ -35,9 +35,11 @@ function parsePayload(body: Record<string, unknown>): AnnouncementPayload | null
 
 export async function GET() {
   if (!await requireAdmin()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { data, error } = await createAnnouncementRepository().listAdmin();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ announcements: data || [] }, { headers: { "Cache-Control": "no-store" } });
+  const repository = createAnnouncementRepository();
+  const [announcementsResult, servicesResult] = await Promise.all([repository.listAdmin(), repository.listServices()]);
+  if (announcementsResult.error) return NextResponse.json({ error: announcementsResult.error.message }, { status: 500 });
+  if (servicesResult.error) return NextResponse.json({ error: servicesResult.error.message }, { status: 500 });
+  return NextResponse.json({ announcements: announcementsResult.data || [], services: servicesResult.data || [] }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function POST(request: Request) {
