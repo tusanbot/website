@@ -26,6 +26,7 @@ for (const col of manifest.columns_detail || []) {
   if (!detailByTable.has(key)) detailByTable.set(key, new Map());
   detailByTable.get(key).set(col.column_name, col);
 }
+const identityColumns = new Set((manifest.identity_columns || []).map((column) => `${column.table_name}.${column.column_name}`));
 const indexedTextColumns = new Map();
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
@@ -155,7 +156,7 @@ for (const table of manifest.tables) {
     const type = mysqlType(tableName, col);
     const nullable = (col.options || []).includes("nullable");
     const defaultValue = normalizeDefault(col.default_value, col.format);
-    let line = `  ${quote(col.name)} ${type}${nullable ? "" : " NOT NULL"}`;
+    let line = `  ${quote(col.name)} ${type}${identityColumns.has(`${tableName}.${col.name}`) ? " AUTO_INCREMENT" : ""}${nullable ? "" : " NOT NULL"}`;
     if (defaultValue !== null) line += ` DEFAULT ${defaultValue}`;
     return line;
   });
