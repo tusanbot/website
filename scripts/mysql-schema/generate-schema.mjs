@@ -70,7 +70,7 @@ function translateCheck(expression) {
   value = value.replace(/\bchar_length\b/gi, "CHAR_LENGTH");
   value = value.replace(/([a-z_][a-z0-9_]*)\s*=\s*ANY\s*\(\s*\(*\s*ARRAY\[([^\]]*)\]\s*\)*\s*\)/gi, (_all, column, rawValues) => {
     const values = rawValues.split(",").map((item) => item.trim().replace(/::(?:text|character varying|varchar)\b/gi, ""));
-    return \`\${column} IN (\${values.join(", ")})\`;
+    return `${column} IN (${values.join(", ")})`;
   });
   if (/::|\bANY\b|\bARRAY\b|TRIM\(BOTH FROM/i.test(value)) return null;
   return value;
