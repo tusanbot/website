@@ -17,6 +17,23 @@ SELECT '2026-10-31' AS source_snapshot,
        300 AS structurally_auditable_index_columns,
        30 AS indexes_for_manual_review;
 
+-- Safe re-run cleanup in this session (temporary objects only).
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_pk_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_pk_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_index_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_index_signatures;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_foreign_keys;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_index_parts;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_primary_keys;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_columns;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_actual_tables;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_foreign_keys;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_manual_review_indexes;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_index_parts;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_primary_keys;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_columns;
+DROP TEMPORARY TABLE IF EXISTS tmp_tusan_expected_tables;
+
 -- Expected schema snapshot.
 CREATE TEMPORARY TABLE tmp_tusan_expected_tables (
   table_name VARCHAR(128) PRIMARY KEY
