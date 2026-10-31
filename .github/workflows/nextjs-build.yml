@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - cloudflare-migration
+      - feat/dual-database-foundation
     paths-ignore:
       - '**.md'
       - 'docs/**'

@@ -1,0 +1,37 @@
+name: Dual database runtime validation
+
+on:
+  pull_request:
+    branches:
+      - feat/dual-database-foundation
+      - cloudflare-migration
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund --legacy-peer-deps
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+      - name: Audit direct Supabase writes
+        run: node scripts/mysql-sync-bridge/audit-supabase-writes.mjs /tmp/supabase-write-inventory.json
+      - name: Validate sync bridge syntax and mapping tests
+        run: node --check scripts/mysql-sync-bridge/server.mjs && node --check scripts/mysql-sync-bridge/value-mapping.mjs && node --test scripts/mysql-sync-bridge/value-mapping.test.mjs
+      - name: Upload Supabase write inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-write-inventory
+          path: /tmp/supabase-write-inventory.json
+          if-no-files-found: error
+          retention-days: 14

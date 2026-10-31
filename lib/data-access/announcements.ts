@@ -1,6 +1,8 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { assertProviderConfigured, getDomainDataRuntime } from "@/lib/data-access/database-runtime";
+import { createMySqlAnnouncementRepository } from "@/lib/data-access/announcements-mysql";
 
 export type AnnouncementPayload = {
   title: string;
@@ -29,8 +31,12 @@ export interface AnnouncementRepository {
   listPublic(mode?: "window" | "all-active" | "started"): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
 }
 
-/** Supabase remains the sole implementation until the MariaDB read/write adapter is proven. */
+/** Provider-selected repository for announcement administration and public reads. */
 export function createAnnouncementRepository(): AnnouncementRepository {
+  const runtime = getDomainDataRuntime("announcements");
+  assertProviderConfigured(runtime.primary);
+  if (runtime.primary === "mysql") return createMySqlAnnouncementRepository();
+
   const db = supabaseAdmin();
 
   return {

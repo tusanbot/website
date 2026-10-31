@@ -1,0 +1,86 @@
+name: Supabase outbox migration validation
+
+on:
+  push:
+    branches:
+      - integration/dual-database-runtime
+    paths:
+      - supabase/migrations/20261029160000_dual_database_outbox.sql
+      - .github/workflows/supabase-outbox-validation.yml
+  pull_request:
+    branches:
+      - feat/dual-database-foundation
+    paths:
+      - supabase/migrations/20261029160000_dual_database_outbox.sql
+      - .github/workflows/supabase-outbox-validation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-migration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: tusan_outbox_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d tusan_outbox_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Prepare Supabase-like roles and representative source tables
+        env:
+          PGPASSWORD: test_password
+        run: |
+          psql -h 127.0.0.1 -U postgres -d tusan_outbox_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon;
+          CREATE ROLE authenticated;
+          CREATE ROLE service_role;
+          CREATE TABLE public.profiles (id uuid PRIMARY KEY, display_name text);
+          CREATE SCHEMA private;
+          CREATE TABLE private.blog_post_views (
+            id uuid PRIMARY KEY,
+            post_id uuid NOT NULL,
+            visitor_id text NOT NULL,
+            viewed_at timestamptz NOT NULL DEFAULT now()
+          );
+          SQL
+      - name: Apply outbox migration
+        env:
+          PGPASSWORD: test_password
+        run: psql -h 127.0.0.1 -U postgres -d tusan_outbox_test -v ON_ERROR_STOP=1 -f supabase/migrations/20261029160000_dual_database_outbox.sql
+      - name: Verify public and private change capture and serialized claim
+        env:
+          PGPASSWORD: test_password
+        run: |
+          psql -h 127.0.0.1 -U postgres -d tusan_outbox_test -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO public.profiles (id, display_name) VALUES ('00000000-0000-4000-8000-000000000001', 'CI');
+          INSERT INTO private.blog_post_views (id, post_id, visitor_id) VALUES ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000003', 'ci-visitor');
+          DO $$
+          BEGIN
+            IF (SELECT COUNT(*) FROM public.data_sync_outbox) <> 2 THEN
+              RAISE EXCEPTION 'Expected two captured outbox events.';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM public.data_sync_outbox WHERE schema_name='public' AND table_name='profiles') THEN
+              RAISE EXCEPTION 'Public table event was not captured.';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM public.data_sync_outbox WHERE schema_name='private' AND table_name='blog_post_views') THEN
+              RAISE EXCEPTION 'Private blog view event was not captured.';
+            END IF;
+          END;
+          $$;
+          SELECT COUNT(*) AS exported_private_views FROM public.export_private_blog_post_views(NULL, 10);
+          SELECT COUNT(*) AS claimed_events FROM public.claim_data_sync_outbox('ci-worker', 10);
+          SELECT public.release_data_sync_dispatch('ci-worker');
+          SQL

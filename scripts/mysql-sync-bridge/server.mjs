@@ -7,13 +7,69 @@ const PORT = Number(process.env.PORT || 8788);
 const TOKEN = process.env.MYSQL_SYNC_BRIDGE_TOKEN || "";
 const MAX_BODY_BYTES = 1_000_000;
 const TABLE_ALLOWLIST = new Set([
-  "blog_posts",
-  "blog_categories",
-  "blog_post_services",
-  "blog_comments",
-  "blog_reactions",
-  "blog_ratings",
+  "profiles",
+  "services",
+  "registrations",
+  "orders",
+  "order_files",
+  "order_history",
+  "messages",
+  "custom_forms",
   "services_announcements",
+  "site_settings",
+  "goals",
+  "sub_goals",
+  "financial_transactions",
+  "payments",
+  "social_platforms",
+  "social_categories",
+  "social_services",
+  "social_orders",
+  "social_sync_logs",
+  "api_rate_limits",
+  "blog_categories",
+  "blog_posts",
+  "blog_post_services",
+  "ai_profiles",
+  "ai_sessions",
+  "form_versions",
+  "traxtor_saved_projects",
+  "notifications",
+  "support_conversations",
+  "support_messages",
+  "blog_comments",
+  "blog_ratings",
+  "blog_reactions",
+  "staff_roles",
+  "staff_role_assignments",
+  "staff_service_access",
+  "support_conversation_participants",
+  "order_staff_requests",
+  "order_commission_ledger",
+  "staff_category_access",
+  "staff_reviews",
+  "support_reviews",
+  "staff_bank_accounts",
+  "staff_earnings",
+  "staff_settlements",
+  "staff_financial_adjustments",
+  "payout_requests",
+  "support_faqs",
+  "order_refunds",
+  "order_cancellation_requests",
+  "member_tags",
+  "member_tag_assignments",
+  "tag_referral_links",
+  "discounts",
+  "discount_codes",
+  "discount_tag_rules",
+  "discount_services",
+  "discount_usages",
+  "news_announcements",
+  "news_sources",
+]);
+const PRIVATE_TABLE_ALLOWLIST = new Set([
+  "blog_post_views",
 ]);
 
 const requiredEnv = [
@@ -131,7 +187,7 @@ function validateEvent(event) {
   if (typeof event.event_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(event.event_id)) {
     throw Object.assign(new Error("Invalid event_id."), { statusCode: 400 });
   }
-  if (event.schema_name !== "public" || typeof event.table_name !== "string" || !TABLE_ALLOWLIST.has(event.table_name)) {
+  if (typeof event.table_name !== "string" || !((event.schema_name === "public" && TABLE_ALLOWLIST.has(event.table_name)) || (event.schema_name === "private" && PRIVATE_TABLE_ALLOWLIST.has(event.table_name)))) {
     throw Object.assign(new Error("Schema/table is not allowlisted."), { statusCode: 403 });
   }
   if (!["insert", "update", "delete"].includes(event.operation)) {
@@ -187,7 +243,7 @@ async function applyEvent(event) {
       }
     }
 
-    const recordKeyHash = keyHash({ schema_name: "public", table_name: tableName, record_key: event.record_key });
+    const recordKeyHash = keyHash({ schema_name: event.schema_name, table_name: tableName, record_key: event.record_key });
     const [versions] = await conn.execute(
       "SELECT source_outbox_id FROM data_sync_record_versions WHERE record_key_hash = ? FOR UPDATE",
       [recordKeyHash],
@@ -222,14 +278,14 @@ async function applyEvent(event) {
       }
 
       await conn.execute(
-        "INSERT INTO data_sync_record_versions (record_key_hash, schema_name, table_name, record_key_json, source_outbox_id, updated_at) VALUES (?, 'public', ?, ?, ?, CURRENT_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE record_key_json = VALUES(record_key_json), source_outbox_id = VALUES(source_outbox_id), updated_at = VALUES(updated_at)",
-        [recordKeyHash, tableName, JSON.stringify(event.record_key), String(incomingVersion)],
+        "INSERT INTO data_sync_record_versions (record_key_hash, schema_name, table_name, record_key_json, source_outbox_id, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE record_key_json = VALUES(record_key_json), source_outbox_id = VALUES(source_outbox_id), updated_at = VALUES(updated_at)",
+        [recordKeyHash, event.schema_name, tableName, JSON.stringify(event.record_key), String(incomingVersion)],
       );
     }
 
     await conn.execute(
-      "INSERT INTO data_sync_event_receipts (event_id, source_outbox_id, schema_name, table_name, record_key_hash, operation, applied_at) VALUES (?, ?, 'public', ?, ?, ?, CURRENT_TIMESTAMP(3))",
-      [event.event_id, String(event.source_outbox_id), tableName, recordKeyHash, event.operation],
+      "INSERT INTO data_sync_event_receipts (event_id, source_outbox_id, schema_name, table_name, record_key_hash, operation, applied_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3))",
+      [event.event_id, String(event.source_outbox_id), event.schema_name, tableName, recordKeyHash, event.operation],
     );
     await conn.commit();
     return { event_id: event.event_id, duplicate: false, stale: incomingVersion <= lastVersion };

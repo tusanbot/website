@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const ROOTS = ["app", "components", "lib", "admin", "hooks", "contexts", "pages"];
@@ -83,4 +83,20 @@ console.log("Scanned " + files.length + " source files; found " + tableMutations
 for (const item of findings) {
   console.log(item.file + ":" + item.line + "\t" + item.kind + "\t" + item.operation + "\t" + item.target);
 }
-console.log("Limitations: this regex audit may miss aliased query builders, dynamic table names, indirect helper calls, SQL strings, and external writers. It is not proof of complete coverage.");
+const limitations = [
+  "Regex-based inventory may miss aliased query builders, dynamic table names, indirect helper calls, SQL strings, and external writers.",
+  "Findings are candidates for manual classification, not proof of complete coverage.",
+];
+for (const limitation of limitations) console.log("Limitations: " + limitation);
+const outputPath = process.argv[2];
+if (outputPath) {
+  await writeFile(outputPath, JSON.stringify({
+    generatedAt: new Date().toISOString(),
+    scannedFiles: files.length,
+    tableMutationCandidates: tableMutations,
+    rpcCandidates,
+    findings,
+    limitations,
+  }, null, 2) + "\n", "utf8");
+  console.log("Wrote machine-readable inventory: " + outputPath);
+}

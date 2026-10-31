@@ -1,4 +1,4 @@
--- Dual-database phase 1: durable change capture for the initial content pilot.
+-- Dual-database phase 1: durable change capture for every public application table and private.blog_post_views.
 -- This migration is intentionally not applied automatically. Review and apply only
 -- after the MySQL bridge and destination schema are ready.
 begin;
@@ -84,19 +84,72 @@ $$;
 
 revoke all on function public.capture_data_sync_outbox() from public, anon, authenticated;
 
--- Attach capture only to tables in the first content pilot. Missing tables are
--- skipped so the migration can be reviewed against the deployed schema first.
+-- Attach capture to the complete schema snapshot. Missing tables are skipped
+-- so this migration remains safe to review against the deployed schema first.
 do $$
 declare
   v_table text;
   v_tables text[] := array[
-    'blog_posts',
+    'profiles',
+    'services',
+    'registrations',
+    'orders',
+    'order_files',
+    'order_history',
+    'messages',
+    'custom_forms',
+    'services_announcements',
+    'site_settings',
+    'goals',
+    'sub_goals',
+    'financial_transactions',
+    'payments',
+    'social_platforms',
+    'social_categories',
+    'social_services',
+    'social_orders',
+    'social_sync_logs',
+    'api_rate_limits',
     'blog_categories',
+    'blog_posts',
     'blog_post_services',
+    'ai_profiles',
+    'ai_sessions',
+    'form_versions',
+    'traxtor_saved_projects',
+    'notifications',
+    'support_conversations',
+    'support_messages',
     'blog_comments',
-    'blog_reactions',
     'blog_ratings',
-    'services_announcements'
+    'blog_reactions',
+    'staff_roles',
+    'staff_role_assignments',
+    'staff_service_access',
+    'support_conversation_participants',
+    'order_staff_requests',
+    'order_commission_ledger',
+    'staff_category_access',
+    'staff_reviews',
+    'support_reviews',
+    'staff_bank_accounts',
+    'staff_earnings',
+    'staff_settlements',
+    'staff_financial_adjustments',
+    'payout_requests',
+    'support_faqs',
+    'order_refunds',
+    'order_cancellation_requests',
+    'member_tags',
+    'member_tag_assignments',
+    'tag_referral_links',
+    'discounts',
+    'discount_codes',
+    'discount_tag_rules',
+    'discount_services',
+    'discount_usages',
+    'news_announcements',
+    'news_sources'
   ];
 begin
   foreach v_table in array v_tables loop
@@ -108,8 +161,40 @@ begin
       );
     end if;
   end loop;
+
+  if to_regclass('private.blog_post_views') is not null then
+    execute 'drop trigger if exists data_sync_outbox_capture on private.blog_post_views';
+    execute 'create trigger data_sync_outbox_capture after insert or update or delete on private.blog_post_views for each row execute function public.capture_data_sync_outbox()';
+  end if;
 end;
 $$;
+
+-- Service-role-only keyset export for the private blog view table. PostgREST does not
+-- expose the private schema directly, but the initial MySQL baseline must include
+-- existing view rows before outbox events are replayed.
+create or replace function public.export_private_blog_post_views(
+  p_after_id uuid default null,
+  p_limit integer default 500
+)
+returns table (
+  id uuid,
+  post_id uuid,
+  visitor_id text,
+  viewed_at timestamptz
+)
+language sql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+  select v.id, v.post_id, v.visitor_id, v.viewed_at
+  from private.blog_post_views v
+  where p_after_id is null or v.id > p_after_id
+  order by v.id
+  limit greatest(1, least(coalesce(p_limit, 500), 1000));
+$$;
+
+revoke all on function public.export_private_blog_post_views(uuid, integer) from public, anon, authenticated;
+grant execute on function public.export_private_blog_post_views(uuid, integer) to service_role;
 
 -- A single serialized dispatcher claim prevents concurrent route invocations from
 -- skipping a locked earliest event and delivering later events first.
