@@ -123,7 +123,10 @@ for (const index of manifest.indexes || []) {
   }
   const unique = /CREATE\s+UNIQUE\s+INDEX/i.test(def);
   const name = index.indexname.slice(0, 64);
-  indexStatements.push({ table, name, sql: `  ${unique ? "UNIQUE " : ""}KEY ${quote(name)} (${cols.join(", ")})` });
+  const primary = (manifest.tables.find((t) => t.name.split(".").at(-1) === table)?.primary_keys || []).join(",");
+  const indexed = match[1].split(",").map((part) => part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "")).join(",");
+  if (unique && indexed === primary) continue;
+  indexStatements.push({ table, name, sql: \`  \${unique ? "UNIQUE " : ""}KEY \${quote(name)} (\${cols.join(", ")})\` });
 }
 const statements = [
   "-- REVIEW-ONLY generated schema draft. Do not execute against production.",
