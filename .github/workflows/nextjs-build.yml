@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - cloudflare-migration
+      - integration/dual-database-runtime
     paths-ignore:
       - '**.md'
       - 'docs/**'
   pull_request:
     branches:
       - cloudflare-migration
+      - feat/dual-database-foundation
     paths-ignore:
       - '**.md'
       - 'docs/**'
