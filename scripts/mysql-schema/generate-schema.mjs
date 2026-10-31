@@ -206,9 +206,15 @@ for (const index of manifest.indexes || []) {
   const whereMatch = def.match(/\s+WHERE\s+(.+)$/i);
   const predicate = whereMatch ? whereMatch[1] : "";
   const rawColumns = match[1].split(",");
+  if (rawColumns.some((part) => /\s+NULLS\s+(FIRST|LAST)$/i.test(part.trim()))) {
+    warnings.push("Skipped index with explicit NULLS ordering; MariaDB requires a manual semantic review " + index.indexname + ": " + def);
+    continue;
+  }
   let columns = rawColumns.map((part) => {
-    const name = part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
-    return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name) ? name : null;
+    const trimmed = part.trim();
+    const direction = trimmed.match(/\s+(ASC|DESC)$/i)?.[1]?.toUpperCase() || "ASC";
+    const name = trimmed.replace(/\s+(ASC|DESC)$/i, "").replace(/^"|"$/g, "");
+    return { name: /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name) ? name : null, direction };
   });
 
   if (whereMatch && unique) {
@@ -216,23 +222,23 @@ for (const index of manifest.indexes || []) {
     if (mapping) {
       if (!helperColumnsByTable.has(table)) helperColumnsByTable.set(table, []);
       helperColumnsByTable.get(table).push(mapping.generated);
-      columns = mapping.columns;
+      columns = mapping.columns.map((name) => ({ name, direction: "ASC" }));
     } else {
       const nonNullPredicate = predicate.match(/^\(?\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+IS\s+NOT\s+NULL\s*\)?$/i);
-      if (!nonNullPredicate || !columns.includes(nonNullPredicate[1])) {
+      if (!nonNullPredicate || !columns.some((column) => column.name === nonNullPredicate[1])) {
         warnings.push("Skipped partial unique index requiring manual translation " + index.indexname + ": " + def);
         continue;
       }
     }
   }
-  if (columns.some((name) => !name)) {
+  if (columns.some((column) => !column.name)) {
     warnings.push("Skipped expression index " + index.indexname + ": " + def);
     continue;
   }
   const primary = (manifest.tables.find((item) => item.name.split(".").at(-1) === table)?.primary_keys || []).join(",");
-  if (unique && columns.join(",") === primary) continue;
+  if (unique && columns.map((column) => column.name).join(",") === primary) continue;
   const name = index.indexname.slice(0, 64);
-  const sql = "  " + (unique ? "UNIQUE " : "") + "KEY " + quote(name) + " (" + columns.map(quote).join(", ") + ")";
+  const sql = "  " + (unique ? "UNIQUE " : "") + "KEY " + quote(name) + " (" + columns.map((column) => quote(column.name) + (column.direction === "DESC" ? " DESC" : "")).join(", ") + ")";
   indexStatements.push({ table, name, sql });
 }
 const statements = [
