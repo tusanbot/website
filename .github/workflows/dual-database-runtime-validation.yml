@@ -1,9 +1,6 @@
 name: Dual database runtime validation
 
 on:
-  push:
-    branches:
-      - integration/dual-database-runtime
   pull_request:
     branches:
       - feat/dual-database-foundation
