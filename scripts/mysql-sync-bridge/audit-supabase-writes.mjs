@@ -97,6 +97,6 @@ if (outputPath) {
     rpcCandidates,
     findings,
     limitations,
-  }, null, 2) + "\\n", "utf8");
+  }, null, 2) + "\n", "utf8");
   console.log("Wrote machine-readable inventory: " + outputPath);
 }
