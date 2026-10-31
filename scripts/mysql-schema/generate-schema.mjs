@@ -169,12 +169,12 @@ for (const index of manifest.indexes || []) {
   const schema = schemaMatch?.[1];
   if (!tableNames.has(table) || !["public", "private"].includes(schema)) continue;
   if (!/USING\s+btree/i.test(def)) {
-    warnings.push(\`Skipped non-btree index \${index.indexname}: \${def}\`);
+    warnings.push(`Skipped non-btree index ${index.indexname}: ${def}`);
     continue;
   }
   const match = def.match(/USING\s+btree\s*\((.*)\)(?:\s+WHERE\s+.*)?$/i);
   if (!match) {
-    warnings.push(\`Could not parse index \${index.indexname}: \${def}\`);
+    warnings.push(`Could not parse index ${index.indexname}: ${def}`);
     continue;
   }
   const unique = /CREATE\s+UNIQUE\s+INDEX/i.test(def);
@@ -193,18 +193,18 @@ for (const index of manifest.indexes || []) {
       generatedColumnsByTable.get(table).push(mapping.generated);
       columns = mapping.columns;
     } else if (!/^\(?\s*[a-zA-Z_][a-zA-Z0-9_]*\s+IS\s+NOT\s+NULL\s*\)?$/i.test(predicate)) {
-      warnings.push(\`Skipped partial unique index requiring manual translation \${index.indexname}: \${def}\`);
+      warnings.push(`Skipped partial unique index requiring manual translation ${index.indexname}: ${def}`);
       continue;
     }
   }
   if (columns.some((x) => !x)) {
-    warnings.push(\`Skipped expression index \${index.indexname}: \${def}\`);
+    warnings.push(`Skipped expression index ${index.indexname}: ${def}`);
     continue;
   }
   const primary = (manifest.tables.find((t) => t.name.split(".").at(-1) === table)?.primary_keys || []).join(",");
   if (unique && columns.join(",") === primary) continue;
   const name = index.indexname.slice(0, 64);
-  indexStatements.push({ table, name, sql: \`  \${unique ? "UNIQUE " : ""}KEY \${quote(name)} (\${columns.map(quote).join(", ")})\` });
+  indexStatements.push({ table, name, sql: `  ${unique ? "UNIQUE " : ""}KEY ${quote(name)} (${columns.map(quote).join(", ")})` });
 }
 const statements = [
   "-- REVIEW-ONLY generated schema draft. Do not execute against production.",
