@@ -228,9 +228,7 @@ for (const table of manifest.tables) {
   }
   for (const index of indexStatements.filter(x=>x.table===tableName)) columns.push(index.sql);
   for (const check of (manifest.check_constraints || []).filter((item) => item.table_name === tableName)) {
-    const translated = translateCheck(check.check_clause);
-    if (translated) columns.push(`  CONSTRAINT ${quote(check.constraint_name.slice(0,64))} CHECK (${translated})`);
-    else warnings.push(`Untranslated CHECK ${tableName}.${check.constraint_name}: ${check.check_clause}`);
+    warnings.push(`CHECK requires manual MariaDB translation ${tableName}.${check.constraint_name}: ${check.check_clause}`);
   }
   statements.push(`CREATE TABLE IF NOT EXISTS ${quote(tableName)} (\n${columns.join(",\n")}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
 }
