@@ -1168,8 +1168,8 @@ ORDER BY e.table_name,e.constraint_name,e.column_name;
 
 -- Result 6: current destination table row estimates, for later migration planning only.
 SELECT t.TABLE_NAME, t.TABLE_ROWS
-FROM information_schema.TABLES t
-JOIN tmp_tusan_expected_tables e ON e.table_name=t.TABLE_NAME
+FROM tmp_tusan_expected_tables e
+JOIN information_schema.TABLES t ON t.TABLE_NAME=e.table_name
 WHERE t.TABLE_SCHEMA=DATABASE() AND t.TABLE_TYPE='BASE TABLE'
 ORDER BY t.TABLE_NAME;
 
