@@ -190,24 +190,24 @@ const helperColumnsByTable = new Map();
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
   const table = index.tablename;
-  const schemaMatch = def.match(/ON\\s+([a-zA-Z0-9_]+)\\.([a-zA-Z0-9_]+)\\s+USING/i);
+  const schemaMatch = def.match(/ON\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\s+USING/i);
   const schema = schemaMatch && schemaMatch[1];
   if (!tableNames.has(table) || (schema !== "public" && schema !== "private")) continue;
-  if (!/USING\\s+btree/i.test(def)) {
+  if (!/USING\s+btree/i.test(def)) {
     warnings.push("Skipped non-btree index " + index.indexname + ": " + def);
     continue;
   }
-  const match = def.match(/USING\\s+btree\\s*\\((.*?)\\)(?:\\s+WHERE\\s+.*)?$/i);
+  const match = def.match(/USING\s+btree\s*\((.*?)\)(?:\s+WHERE\s+.*)?$/i);
   if (!match) {
     warnings.push("Could not parse index " + index.indexname + ": " + def);
     continue;
   }
-  const unique = /CREATE\\s+UNIQUE\\s+INDEX/i.test(def);
-  const whereMatch = def.match(/\\s+WHERE\\s+(.+)$/i);
+  const unique = /CREATE\s+UNIQUE\s+INDEX/i.test(def);
+  const whereMatch = def.match(/\s+WHERE\s+(.+)$/i);
   const predicate = whereMatch ? whereMatch[1] : "";
   const rawColumns = match[1].split(",");
   let columns = rawColumns.map((part) => {
-    const name = part.trim().replace(/\\s+(ASC|DESC)(\\s+NULLS\\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
+    const name = part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
     return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name) ? name : null;
   });
 
@@ -218,7 +218,7 @@ for (const index of manifest.indexes || []) {
       helperColumnsByTable.get(table).push(mapping.generated);
       columns = mapping.columns;
     } else {
-      const nonNullPredicate = predicate.match(/^\\(?\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+IS\\s+NOT\\s+NULL\\s*\\)?$/i);
+      const nonNullPredicate = predicate.match(/^\(?\s*([a-zA-Z_][a-zA-Z0-9_]*)\s+IS\s+NOT\s+NULL\s*\)?$/i);
       if (!nonNullPredicate || !columns.includes(nonNullPredicate[1])) {
         warnings.push("Skipped partial unique index requiring manual translation " + index.indexname + ": " + def);
         continue;
