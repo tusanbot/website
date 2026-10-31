@@ -8,7 +8,7 @@ This document describes the target contract; it does not mean dual-write or sync
 
 ## Runtime constraint
 
-The repository uses Next.js 16 and `@opennextjs/cloudflare` and includes a Cloudflare build/deploy script. Cloudflare Workers do not provide a general raw TCP connection to a cPanel MySQL server. Do not add a browser-side MySQL connection or expose database credentials. Before enabling MariaDB access, determine the deployed runtime for each route. If a route executes on Cloudflare, access MariaDB through a narrowly scoped, authenticated HTTPS bridge hosted in a suitable Node.js environment; if it executes on cPanel Node.js, use a server-only MariaDB adapter. Keep these implementations behind one server-side interface.
+The active website deployment target for this migration is the Next.js/React application running as a Node.js application on cPanel. The pilot dispatcher therefore uses Next.js `runtime = "nodejs"` and a server-only `mysql2` pool to connect directly to MariaDB. It does not use a Cloudflare Worker or a separately hosted HTTPS bridge. Never add a browser-side MySQL connection or expose database credentials. Cloudflare build scripts may remain in the repository for other workflows, but they are not part of this cPanel database path.
 
 ## Non-negotiable safety rules
 
@@ -85,27 +85,22 @@ This is an initial confirmed inventory, not a claim that every table writer in t
 The pilot implementation now includes:
 
 - `supabase/migrations/20261029160000_dual_database_outbox.sql`: creates a private outbox, captures insert/update/delete events for the initial blog/announcement content tables, and provides a serialized claim/release RPC. It is a repository migration only; it has not been applied to Supabase.
-- `app/api/internal/data-sync/dispatch/route.ts`: an authenticated dispatcher that claims queued events and forwards them to a separately hosted HTTPS bridge. It marks events delivered only after the bridge returns HTTP success and echoes the exact `event_id`; failures are recorded with bounded exponential retry delays.
-- `MYSQL_SYNC_BRIDGE_URL`, `MYSQL_SYNC_BRIDGE_TOKEN`, and `DATA_SYNC_DISPATCH_SECRET` are server-only configuration variables. Do not add a `NEXT_PUBLIC_` prefix.
+- `lib/data-access/mysql-sync-consumer.ts`: a server-only MariaDB consumer using a pooled `mysql2` connection, a static seven-table allowlist, explicit value conversions, transactional apply, replay receipts, and per-record source-outbox ordering. During validation it hard-rejects any database other than `tusancni_test`.
+- `app/api/internal/data-sync/dispatch/route.ts`: an authenticated Next.js Node.js route that claims queued events, applies them directly through the consumer, and acknowledges each event only after the MariaDB transaction commits. Failures are recorded with bounded exponential retry delays.
+- `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE=tusancni_test`, optional `MYSQL_PORT`/`MYSQL_SSL`, and `DATA_SYNC_DISPATCH_SECRET` are server-only configuration variables. Do not add a `NEXT_PUBLIC_` prefix.
 
-The initial bridge draft is now present under `scripts/mysql-sync-bridge/`:
+The former standalone HTTP bridge draft remains under `scripts/mysql-sync-bridge/` for historical reference and mapping tests; it is not used by the active website dispatcher. The two metadata tables described by `schema-test-only.sql` have been created manually in `tusancni_test`.
 
-- `server.mjs`: a separate Node.js HTTP service with bearer authentication, HTTPS-proxy deployment assumptions, request-size limits, a static table allowlist, destination-column/primary-key validation, transactional apply, replay receipts, and per-record source-outbox ordering.
-- `schema-test-only.sql`: metadata tables for idempotency/version tracking. It is explicitly marked for manual execution in `tusancni_test` only; it must not be run against `tusancni_main`.
-- `README.md`: setup and safety notes.
+The direct cPanel consumer is implementation code only: it has not yet been built on the target cPanel server or tested against a live MariaDB connection. The Supabase outbox migration has not been applied, no cron invocation is configured, and the dispatcher remains inactive until schema constraints and controlled event tests are completed.
 
-The dispatcher now forwards `source_outbox_id`, applies a bridge request timeout, and acknowledges/requeues only while it still owns the outbox event lease.
+The direct Node.js consumer must satisfy the following contract before the dispatcher can be enabled:
 
-This is implementation code only: it has not been syntax-checked or run against the actual MariaDB schema in this environment, the test-only SQL has not been executed, and no bridge has been deployed or configured.
-
-The bridge must implement the following contract before the dispatcher can be enabled:
-
-- Accept only HTTPS POSTs authenticated with the configured bearer token.
-- Accept one event per request with `event_id`, `schema_name`, `table_name`, `record_key`, `operation`, and `row_data`.
-- Enforce a strict table and column allowlist; reject unknown table names/columns and never accept arbitrary SQL or identifiers from the request.
-- Apply each event transactionally and idempotently by `event_id`. Return JSON `{ "event_id": "<same id>" }` only after the destination transaction commits.
-- For delete events, use `record_key` to delete the matching row. For insert/update, map known PostgreSQL values to the reviewed MariaDB schema; do not guess conversions.
-- Verify an event replay cannot revert a newer change. The dispatcher preserves per-record event order, but the bridge must still be idempotent because a network failure can occur after a destination commit and before the source queue is acknowledged.
+- Run only in Next.js Node.js runtime and require the route bearer secret.
+- Connect only to `tusancni_test` during validation; reject any other configured database name.
+- Enforce a strict table/column allowlist and never accept arbitrary SQL or identifiers from event payloads.
+- Apply each event and its receipt/version metadata in one InnoDB transaction.
+- For delete events, use `record_key` to delete the matching row. For insert/update, map only reviewed PostgreSQL values to the MariaDB schema; do not guess conversions.
+- Ensure event replay cannot revert a newer change. Idempotent receipts are required because the destination transaction can commit before the source queue acknowledgement.
 
 **Important:** the dispatcher is not a complete sync system by itself. The external MariaDB bridge, schema mapping, secrets, scheduled invocation, and test-database validation are still required. Until these exist, leave the dispatcher disabled and do not apply the migration.
 
@@ -126,7 +121,7 @@ The repository now includes `scripts/mysql-sync-bridge/audit-supabase-writes.mjs
 
 Treat this as a review aid, not a complete static analysis: it can miss aliased query builders, dynamic table names, indirect helper calls, SQL strings, and writes performed by external services or scheduled jobs. Every reported RPC must be classified as read-only or mutating. The audit does not rewrite existing clients and does not change runtime database behavior.
 
-A shared adapter should be introduced domain-by-domain only after the relevant read/write contract is documented. In particular, Supabase Auth must remain separate, browser components must not receive MySQL credentials, and Cloudflare routes must not import a raw MySQL driver. The current MariaDB bridge is a write-only event consumer; it is not yet a read API or a complete MySQL repository. Therefore `DATA_PRIMARY=mysql` must remain unsupported until a server-side read adapter and route-runtime strategy are implemented and tested.
+A shared adapter should be introduced domain-by-domain only after the relevant read/write contract is documented. In particular, Supabase Auth must remain separate, browser components must not receive MySQL credentials, and Cloudflare routes must not import a raw MySQL driver. The current MariaDB consumer is a write-only event consumer; it is not yet a read API or a complete MySQL repository. Therefore `DATA_PRIMARY=mysql` must remain unsupported until a server-side read adapter and route-runtime strategy are implemented and tested.
 
 ### Audit result on 2026-10-30
 
