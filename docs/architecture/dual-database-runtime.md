@@ -43,7 +43,7 @@ Production safety:
 Dual synchronization:
 - TUSAN_DATA_MODE=dual
 - TUSAN_DATA_PRIMARY=supabase|mysql
-- Replication is configured separately from provider routing. The existing outbox pilot currently covers only Supabase-to-MySQL for seven tables; reverse replication and full-domain coverage are not complete.
+- Replication is configured separately from provider routing. The outbox migration and consumer allowlists now cover all 60 public tables plus private.blog_post_views for Supabase-to-MySQL delivery. This is a one-way mirror; reverse MySQL-to-Supabase replication and cutover reconciliation are not implemented.
 
 ## Consistency contract
 
@@ -57,7 +57,7 @@ Dual synchronization:
 
 ## Current implementation boundary
 
-The runtime resolver and guarded server-only MySQL pool are foundational infrastructure. Blog administration is being moved behind a provider-selectable repository. The existing Supabase outbox and MySQL consumer cover only a seven-table content pilot and only Supabase-to-MySQL delivery. Reverse replication and the rest of the website domains (orders, payments, profiles, services, notifications, social orders, discounts, AI profiles, and other RPC-backed flows) remain outside the pilot.
+The runtime resolver and guarded server-only MySQL pool are foundational infrastructure. Blog administration is being moved behind a provider-selectable repository. The outbox capture migration and MySQL consumer allowlists cover all 60 public tables plus private.blog_post_views for one-way Supabase-to-MySQL delivery. The baseline seeder scripts/mysql-schema/seed-mysql-from-supabase.mjs is dry-run by default, hard-locked to tusancni_test, validates every source column and primary key before writing, and imports the private blog view baseline through a service-role-only RPC. MySQL-to-Supabase reverse replication remains unimplemented; the other website domains still need provider-selectable application repositories.
 
 Consequently, do not set either domain override to MySQL until the real cPanel test schema audit and CRUD tests pass; do not set dual mode for production; and do not assume cross-database replication until the corresponding outbox, reverse consumer, and reconciliation tests have passed. This document intentionally distinguishes runtime capability from completed domain coverage.
 
@@ -70,3 +70,8 @@ The read-only script scripts/mysql-sync-bridge/validate-application-schema-test-
 ## Full schema inventory and DDL draft
 
 The checked-in metadata snapshot scripts/mysql-schema/supabase-schema-manifest-2026-10-31.json records the current 61 tables across public/private, 661 columns, 237 indexes, 94 foreign-key columns, and 69 non-generated CHECK constraints. It includes no row contents or secrets, and explicitly records the PostgreSQL identity column used by private.blog_post_views so MariaDB emits AUTO_INCREMENT for it. scripts/mysql-schema/generate-schema.mjs emits a fresh-schema MariaDB DDL draft from this snapshot. The generated DDL passed a disposable MariaDB 11.4 CI test: 61 tables and 94 foreign keys were created; the private.blog_post_views identity column is also asserted as AUTO_INCREMENT. The first run reported 31 portability warnings and 69 CHECK constraints requiring manual translation. The workflow publishes the generated draft as a short-lived artifact for review. scripts/mysql-schema/audit-cpanel-test-read-only.sql compares all 61 expected tables and 650 columns, plus primary keys, index names, foreign keys and row estimates, against the selected cPanel database using only session-scoped temporary tables and SELECT queries. It is not an ALTER migration for an existing cPanel database. The generator includes explicit VARCHAR overrides for text fields used in MariaDB generated unique-key expressions. It maps only partial unique indexes with a verified MariaDB expression; the partial unique child-form-title index is deliberately deferred for manual translation after MariaDB 11.4 rejected its generated-column expression. PostgreSQL CHECK constraints are also reported for manual translation; unsupported partial/expression indexes are reported rather than silently copied. Do not execute the draft on tusancni_main or tusancni_test.
+
+
+## Baseline data transfer
+
+After the reviewed schema has been applied to an isolated test database, the MySQL sync metadata tables exist, and the Supabase outbox migration is active, run scripts/mysql-schema/seed-mysql-from-supabase.mjs without arguments first. It validates schema compatibility and reports source row counts without writing. Only after reviewing the results should the operator pass --apply. The script is locked to tusancni_test, uses idempotent upserts in batches, does not delete destination-only rows, and imports private.blog_post_views through the restricted export RPC. Keep the outbox dispatcher paused during the baseline; after it completes, replay the captured outbox backlog and reconcile counts. This process has not been run against the user's cPanel database.
