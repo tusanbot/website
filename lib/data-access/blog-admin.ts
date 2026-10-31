@@ -1,6 +1,8 @@
 import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { assertProviderConfigured, getDomainDataRuntime } from "@/lib/data-access/database-runtime";
+import { createMySqlBlogAdminRepository } from "@/lib/data-access/blog-admin-mysql";
 
 type RepositoryError = {
   code?: string;
@@ -39,6 +41,10 @@ export interface BlogAdminRepository {
  * API, transaction semantics, and schema mapping are proven.
  */
 export function createBlogAdminRepository(): BlogAdminRepository {
+  const runtime = getDomainDataRuntime("blogAdmin");
+  assertProviderConfigured(runtime.primary);
+  if (runtime.primary === "mysql") return createMySqlBlogAdminRepository();
+
   const db = supabaseAdmin();
 
   return {
