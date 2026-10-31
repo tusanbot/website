@@ -14,6 +14,7 @@ const TABLE_ALLOWLIST = new Set([
 ]);
 
 type PlainObject = Record<string, unknown>;
+type SqlValue = string | number | bigint | boolean | Date | Buffer | null;
 type SyncEvent = {
   id: number;
   event_id: string;
@@ -93,7 +94,7 @@ function quoteIdentifier(value: string): string {
   return `\x60${value}\x60`;
 }
 
-function convertValue(value: unknown, column: ColumnMetadata, tableName: string): unknown {
+function convertValue(value: unknown, column: ColumnMetadata, tableName: string): SqlValue {
   if (value === null || value === undefined) return null;
   const type = column.DATA_TYPE.toLowerCase();
   const name = column.COLUMN_NAME;
@@ -133,7 +134,9 @@ function convertValue(value: unknown, column: ColumnMetadata, tableName: string)
     throw new Error(`Boolean value requires an explicit mapping for ${name} (${type}).`);
   }
   if (typeof value === "number" && !Number.isFinite(value)) throw new Error(`Non-finite numeric value for ${name}.`);
-  return value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "bigint") return value;
+  if (value instanceof Date || Buffer.isBuffer(value)) return value;
+  throw new Error(`Unsupported SQL value for ${name}.`);
 }
 
 async function getTableMetadata(connection: PoolConnection, tableName: string): Promise<TableMetadata> {
