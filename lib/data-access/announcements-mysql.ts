@@ -53,7 +53,7 @@ async function insertAnnouncement(payload: AnnouncementPayload): Promise<Record<
   if (row.id) {
     const [saved] = await pool.execute<DbRow[]>(
       "SELECT * FROM services_announcements WHERE id = ? LIMIT 1",
-      [row.id],
+      [row.id as SqlValue],
     );
     if (saved[0]) return saved[0];
   }
