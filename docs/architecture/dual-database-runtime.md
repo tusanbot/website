@@ -7,10 +7,10 @@ The application data layer can run with Supabase only, MySQL only, or both provi
 ## Modes
 
 - TUSAN_DATA_MODE=supabase: Supabase is the only active application provider.
-- TUSAN_DATA_MODE=mysql: MySQL is the only active application provider.
+- TUSAN_DATA_MODE=mysql: reserved for the future full migration; currently rejected at runtime because several domains and authentication still depend on Supabase.
 - TUSAN_DATA_MODE=dual: both providers are available. Domains can be routed independently to either provider, while each individual domain still has exactly one authoritative writer. Dual mode does not automatically replicate records or perform two writes.
 
-The default remains supabase to preserve existing production behavior.
+The default remains supabase to preserve existing production behavior. Do not set mysql mode yet. In dual mode, only the two completed provider-selectable pilots can be routed; uncovered domains continue using their existing Supabase paths.
 
 ## Routing
 
@@ -59,7 +59,7 @@ Dual synchronization:
 
 The runtime resolver and guarded server-only MySQL pool are foundational infrastructure. Blog administration is being moved behind a provider-selectable repository. The existing Supabase outbox and MySQL consumer cover only a seven-table content pilot and only Supabase-to-MySQL delivery. Reverse replication and the rest of the website domains (orders, payments, profiles, services, notifications, social orders, discounts, AI profiles, and other RPC-backed flows) remain outside the pilot.
 
-Consequently, do not set either domain override to MySQL, do not set dual mode for production, and do not assume cross-database replication until the corresponding outbox, reverse consumer, and reconciliation tests have passed. This document intentionally distinguishes runtime capability from completed domain coverage.
+Consequently, do not set either domain override to MySQL until the real cPanel test schema audit and CRUD tests pass; do not set dual mode for production; and do not assume cross-database replication until the corresponding outbox, reverse consumer, and reconciliation tests have passed. This document intentionally distinguishes runtime capability from completed domain coverage.
 
 
 ## Test database schema gate
