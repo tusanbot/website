@@ -6,6 +6,7 @@ on:
       - integration/dual-database-runtime
   pull_request:
     branches:
+      - feat/dual-database-foundation
       - cloudflare-migration
       - main
   workflow_dispatch:
