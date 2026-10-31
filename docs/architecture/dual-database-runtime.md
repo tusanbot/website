@@ -2,7 +2,7 @@
 
 ## Objective
 
-The application can run with Supabase only, MySQL only, or both providers available at the same time. This is an application-level capability, not merely two connection strings.
+The application data layer can run with Supabase only, MySQL only, or both providers available at the same time. This is an application-level capability, not merely two connection strings. Authentication is currently a separate concern and still uses Supabase Auth, including profile/role checks; selecting MySQL for application data does not remove that identity dependency.
 
 ## Modes
 
@@ -60,3 +60,8 @@ Dual synchronization:
 The runtime resolver and guarded server-only MySQL pool are foundational infrastructure. Blog administration is being moved behind a provider-selectable repository. The existing Supabase outbox and MySQL consumer cover only a seven-table content pilot and only Supabase-to-MySQL delivery. Reverse replication and the rest of the website domains (orders, payments, profiles, services, notifications, social orders, discounts, AI profiles, and other RPC-backed flows) remain outside the pilot.
 
 Consequently, do not set either domain override to MySQL, do not set dual mode for production, and do not assume cross-database replication until the corresponding outbox, reverse consumer, and reconciliation tests have passed. This document intentionally distinguishes runtime capability from completed domain coverage.
+
+
+## Test database schema gate
+
+The read-only script scripts/mysql-sync-bridge/validate-application-schema-test-only.sql checks the required columns and key relationships for the two initial MySQL repositories. It must be run only after selecting tusancni_test. It does not create or alter tables and does not prove row parity; compare counts and exercise create/update/delete separately.
