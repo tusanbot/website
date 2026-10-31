@@ -41,13 +41,12 @@ for (const check of manifest.check_constraints || []) {
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
   const table = index.tablename;
-  const match = def.match(/USING\s+btree\s*\((.*)\)(?:\s+WHERE\s+.*)?$/i);
-  if (!match || /\bWHERE\b/i.test(def) || /\b(lower|upper|coalesce|jsonb_path_ops)\s*\(/i.test(match?.[1] || "")) continue;
+  const match = def.match(/USING\\s+btree\\s*\\((.*?)\\)(?:\\s+WHERE\\s+.*)?$/i);
+  if (!match || /\\b(lower|upper|coalesce|jsonb_path_ops)\\s*\\(/i.test(match[1])) continue;
   for (const raw of match[1].split(",")) {
-    const column = raw.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
+    const column = raw.trim().replace(/\\s+(ASC|DESC)(\\s+NULLS\\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(column)) continue;
-    const key = `${table}.${column}`;
-    indexedTextColumns.set(key, true);
+    indexedTextColumns.set(table + "." + column, true);
   }
 }
 const quote = (value) => "`" + String(value).replace(/\`/g, "``") + "`";
@@ -191,24 +190,24 @@ const helperColumnsByTable = new Map();
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
   const table = index.tablename;
-  const schemaMatch = def.match(/ON\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\s+USING/i);
-  const schema = schemaMatch?.[1];
-  if (!tableNames.has(table) || !["public", "private"].includes(schema)) continue;
-  if (!/USING\s+btree/i.test(def)) {
-    warnings.push(`Skipped non-btree index ${index.indexname}: ${def}`);
+  const schemaMatch = def.match(/ON\\s+([a-zA-Z0-9_]+)\\.([a-zA-Z0-9_]+)\\s+USING/i);
+  const schema = schemaMatch && schemaMatch[1];
+  if (!tableNames.has(table) || (schema !== "public" && schema !== "private")) continue;
+  if (!/USING\\s+btree/i.test(def)) {
+    warnings.push("Skipped non-btree index " + index.indexname + ": " + def);
     continue;
   }
-  const match = def.match(/USING\s+btree\s*\((.*)\)(?:\s+WHERE\s+.*)?$/i);
+  const match = def.match(/USING\\s+btree\\s*\\((.*?)\\)(?:\\s+WHERE\\s+.*)?$/i);
   if (!match) {
-    warnings.push(`Could not parse index ${index.indexname}: ${def}`);
+    warnings.push("Could not parse index " + index.indexname + ": " + def);
     continue;
   }
-  const unique = /CREATE\s+UNIQUE\s+INDEX/i.test(def);
-  const whereMatch = def.match(/\s+WHERE\s+(.+)$/i);
-  const predicate = whereMatch?.[1] || "";
-  let rawColumns = match[1].split(",");
+  const unique = /CREATE\\s+UNIQUE\\s+INDEX/i.test(def);
+  const whereMatch = def.match(/\\s+WHERE\\s+(.+)$/i);
+  const predicate = whereMatch ? whereMatch[1] : "";
+  const rawColumns = match[1].split(",");
   let columns = rawColumns.map((part) => {
-    const name = part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
+    const name = part.trim().replace(/\\s+(ASC|DESC)(\\s+NULLS\\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
     return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name) ? name : null;
   });
 
@@ -218,20 +217,23 @@ for (const index of manifest.indexes || []) {
       if (!helperColumnsByTable.has(table)) helperColumnsByTable.set(table, []);
       helperColumnsByTable.get(table).push(mapping.generated);
       columns = mapping.columns;
-    } else if (!/^\(?\s*[a-zA-Z_][a-zA-Z0-9_]*\s+IS\s+NOT\s+NULL\s*\)?$/i.test(predicate)) {
-      warnings.push(`Skipped partial unique index requiring manual translation ${index.indexname}: ${def}`);
-      continue;
+    } else {
+      const nonNullPredicate = predicate.match(/^\\(?\\s*([a-zA-Z_][a-zA-Z0-9_]*)\\s+IS\\s+NOT\\s+NULL\\s*\\)?$/i);
+      if (!nonNullPredicate || !columns.includes(nonNullPredicate[1])) {
+        warnings.push("Skipped partial unique index requiring manual translation " + index.indexname + ": " + def);
+        continue;
       }
     }
   }
-  if (columns.some((x) => !x)) {
-    warnings.push(`Skipped expression index ${index.indexname}: ${def}`);
+  if (columns.some((name) => !name)) {
+    warnings.push("Skipped expression index " + index.indexname + ": " + def);
     continue;
   }
-  const primary = (manifest.tables.find((t) => t.name.split(".").at(-1) === table)?.primary_keys || []).join(",");
+  const primary = (manifest.tables.find((item) => item.name.split(".").at(-1) === table)?.primary_keys || []).join(",");
   if (unique && columns.join(",") === primary) continue;
   const name = index.indexname.slice(0, 64);
-  indexStatements.push({ table, name, sql: `  ${unique ? "UNIQUE " : ""}KEY ${quote(name)} (${columns.map(quote).join(", ")})` });
+  const sql = "  " + (unique ? "UNIQUE " : "") + "KEY " + quote(name) + " (" + columns.map(quote).join(", ") + ")";
+  indexStatements.push({ table, name, sql });
 }
 const statements = [
   "-- REVIEW-ONLY generated schema draft. Do not execute against production.",
