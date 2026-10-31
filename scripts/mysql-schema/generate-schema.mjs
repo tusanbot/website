@@ -221,6 +221,7 @@ for (const index of manifest.indexes || []) {
     } else if (!/^\(?\s*[a-zA-Z_][a-zA-Z0-9_]*\s+IS\s+NOT\s+NULL\s*\)?$/i.test(predicate)) {
       warnings.push(`Skipped partial unique index requiring manual translation ${index.indexname}: ${def}`);
       continue;
+      }
     }
   }
   if (columns.some((x) => !x)) {
