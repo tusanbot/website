@@ -147,7 +147,7 @@ const indexStatements = [];
 const partialUniqueMappings = {
   ai_profiles_anonymous_key_hash_unique_idx: {
     table: "ai_profiles",
-    generated: { name: "__anonymous_key_hash", type: "VARCHAR(191)", expression: "CASE WHEN user_id IS NULL THEN key_hash ELSE NULL END" },
+    generated: { name: "__anonymous_key_hash", type: "VARCHAR(191)", expression: "IF(user_id IS NULL, key_hash, NULL)" },
     columns: ["__anonymous_key_hash"],
   },
   idx_custom_forms_one_parent_per_service: {
@@ -157,7 +157,7 @@ const partialUniqueMappings = {
   },
   idx_custom_forms_unique_child_title: {
     table: "custom_forms",
-    generated: { name: "__child_title_lower", type: "VARCHAR(191)", expression: "CASE WHEN parent_form_id IS NOT NULL THEN LOWER(title) ELSE NULL END" },
+    generated: { name: "__child_title_lower", type: "VARCHAR(191)", expression: "IF(parent_form_id IS NOT NULL, LOWER(title), NULL)" },
     columns: ["parent_form_id", "__child_title_lower"],
   },
   custom_forms_one_active_version: {
@@ -172,7 +172,7 @@ const partialUniqueMappings = {
   },
   services_slug_unique: {
     table: "services",
-    generated: { name: "__nonempty_slug", type: "VARCHAR(191)", expression: "CASE WHEN slug IS NOT NULL AND slug <> '' THEN slug ELSE NULL END" },
+    generated: { name: "__nonempty_slug", type: "VARCHAR(191)", expression: "IF(slug IS NOT NULL AND slug <> '', slug, NULL)" },
     columns: ["__nonempty_slug"],
   },
   staff_settlements_one_open_per_staff: {
