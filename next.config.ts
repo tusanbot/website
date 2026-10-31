@@ -45,7 +45,7 @@ const contentSecurityPolicy = [
 
 const nextConfig: NextConfig = {
     // Generate a self-contained Node.js release only for the cPanel packaging workflow.
-    // Keep the default output mode for the existing Cloudflare migration workflow.
+    // Leave the standard Next.js output unchanged outside cPanel packaging.
     output: process.env.CPANEL_BUILD === "1" ? "standalone" : undefined,
     webpack(config) {
         // Explicit root alias for webpack builds; keeps @/ imports rooted at the repository.
