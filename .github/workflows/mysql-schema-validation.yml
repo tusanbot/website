@@ -45,7 +45,8 @@ jobs:
         run: node --check scripts/mysql-schema/generate-schema.mjs
       - name: Generate review-only schema
         run: node scripts/mysql-schema/generate-schema.mjs /tmp/tusan-schema.sql
-      - name: Inspect generated custom forms DDL\n        run: sed -n '/CREATE TABLE IF NOT EXISTS `custom_forms`/,/ENGINE=InnoDB/p' /tmp/tusan-schema.sql\n      - name: Install MariaDB client
+      - name: Inspect generated custom forms DDL
+        run: sed -n '/CREATE TABLE IF NOT EXISTS `custom_forms`/,/ENGINE=InnoDB/p' /tmp/tusan-schema.sql
         run: sudo apt-get update && sudo apt-get install -y mariadb-client
       - name: Apply generated schema to disposable MariaDB
         env:
