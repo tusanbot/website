@@ -34,8 +34,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     return NextResponse.json({ ok: true });
   }
 
+  const announcementType = values.type;
   if (typeof values.title !== "string" || !values.title.trim() ||
-      (values.type !== "registration" && values.type !== "announcement")) {
+      (announcementType !== "registration" && announcementType !== "announcement")) {
     return NextResponse.json({ error: "عنوان یا نوع اطلاعیه معتبر نیست." }, { status: 400 });
   }
 
@@ -44,7 +45,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const payload = {
     title: values.title.trim(),
-    type: values.type,
+    type: announcementType,
     summary: typeof values.summary === "string" ? values.summary : null,
     content: typeof values.content === "string" ? values.content : null,
     start_at: typeof values.start_at === "string" && values.start_at ? values.start_at : null,
