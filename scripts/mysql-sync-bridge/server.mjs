@@ -187,7 +187,7 @@ function validateEvent(event) {
   if (typeof event.event_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(event.event_id)) {
     throw Object.assign(new Error("Invalid event_id."), { statusCode: 400 });
   }
-  if (event.schema_name !== "public" || typeof event.table_name !== "string" || !TABLE_ALLOWLIST.has(event.table_name)) {
+  if (typeof event.table_name !== "string" || !((event.schema_name === "public" && TABLE_ALLOWLIST.has(event.table_name)) || (event.schema_name === "private" && PRIVATE_TABLE_ALLOWLIST.has(event.table_name)))) {
     throw Object.assign(new Error("Schema/table is not allowlisted."), { statusCode: 403 });
   }
   if (!["insert", "update", "delete"].includes(event.operation)) {
@@ -243,7 +243,7 @@ async function applyEvent(event) {
       }
     }
 
-    const recordKeyHash = keyHash({ schema_name: "public", table_name: tableName, record_key: event.record_key });
+    const recordKeyHash = keyHash({ schema_name: event.schema_name, table_name: tableName, record_key: event.record_key });
     const [versions] = await conn.execute(
       "SELECT source_outbox_id FROM data_sync_record_versions WHERE record_key_hash = ? FOR UPDATE",
       [recordKeyHash],
@@ -284,8 +284,8 @@ async function applyEvent(event) {
     }
 
     await conn.execute(
-      "INSERT INTO data_sync_event_receipts (event_id, source_outbox_id, schema_name, table_name, record_key_hash, operation, applied_at) VALUES (?, ?, 'public', ?, ?, ?, CURRENT_TIMESTAMP(3))",
-      [event.event_id, String(event.source_outbox_id), tableName, recordKeyHash, event.operation],
+      "INSERT INTO data_sync_event_receipts (event_id, source_outbox_id, schema_name, table_name, record_key_hash, operation, applied_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3))",
+      [event.event_id, String(event.source_outbox_id), event.schema_name, tableName, recordKeyHash, event.operation],
     );
     await conn.commit();
     return { event_id: event.event_id, duplicate: false, stale: incomingVersion <= lastVersion };
