@@ -114,35 +114,97 @@ for (const fk of manifest.foreign_keys || []) {
   fkGroups.get(key).push(fk);
 }
 const indexStatements = [];
+const partialUniqueMappings = {
+  ai_profiles_anonymous_key_hash_unique_idx: {
+    table: "ai_profiles",
+    generated: { name: "__anonymous_key_hash", type: "VARCHAR(191)", expression: "CASE WHEN user_id IS NULL THEN key_hash ELSE NULL END" },
+    columns: ["__anonymous_key_hash"],
+  },
+  idx_custom_forms_one_parent_per_service: {
+    table: "custom_forms",
+    generated: { name: "__parent_service_unique", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN form_type = 'parent' AND parent_form_id IS NULL THEN service_id ELSE NULL END" },
+    columns: ["__parent_service_unique"],
+  },
+  idx_custom_forms_unique_child_title: {
+    table: "custom_forms",
+    generated: { name: "__child_title_lower", type: "VARCHAR(191)", expression: "CASE WHEN parent_form_id IS NOT NULL THEN LOWER(title) ELSE NULL END" },
+    columns: ["parent_form_id", "__child_title_lower"],
+  },
+  custom_forms_one_active_version: {
+    table: "form_versions",
+    generated: { name: "__active_form_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN is_active = 1 THEN form_id ELSE NULL END" },
+    columns: ["__active_form_id"],
+  },
+  payments_one_active_per_order_uq: {
+    table: "payments",
+    generated: { name: "__active_order_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('pending', 'redirected') THEN order_id ELSE NULL END" },
+    columns: ["__active_order_id"],
+  },
+  services_slug_unique: {
+    table: "services",
+    generated: { name: "__nonempty_slug", type: "VARCHAR(191)", expression: "CASE WHEN slug IS NOT NULL AND slug <> '' THEN slug ELSE NULL END" },
+    columns: ["__nonempty_slug"],
+  },
+  staff_settlements_one_open_per_staff: {
+    table: "staff_settlements",
+    generated: { name: "__open_staff_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('requested', 'approved', 'processing') THEN staff_id ELSE NULL END" },
+    columns: ["__open_staff_id"],
+  },
+  support_conversations_one_open_general_per_user: {
+    table: "support_conversations",
+    generated: { name: "__open_general_user_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' AND order_id IS NULL THEN user_id ELSE NULL END" },
+    columns: ["__open_general_user_id"],
+  },
+  support_conversations_one_open_per_user_idx: {
+    table: "support_conversations",
+    generated: { name: "__open_user_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' THEN user_id ELSE NULL END" },
+    columns: ["__open_user_id"],
+  },
+};
+const generatedColumnsByTable = new Map();
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
   const table = index.tablename;
   const schemaMatch = def.match(/ON\s+([a-zA-Z0-9_]+)\.([a-zA-Z0-9_]+)\s+USING/i);
   const schema = schemaMatch?.[1];
   if (!tableNames.has(table) || !["public", "private"].includes(schema)) continue;
-  if (/\bWHERE\b/i.test(def) || !/USING\s+btree/i.test(def) || /\b(lower|upper|coalesce)\s*\(/i.test(def)) {
-    warnings.push(`Skipped non-portable index ${index.indexname}: ${def}`);
+  if (!/USING\s+btree/i.test(def)) {
+    warnings.push(\`Skipped non-btree index \${index.indexname}: \${def}\`);
     continue;
   }
-  const match = def.match(/USING\s+btree\s*\((.*)\)$/i);
+  const match = def.match(/USING\s+btree\s*\((.*)\)(?:\s+WHERE\s+.*)?$/i);
   if (!match) {
-    warnings.push(`Could not parse index ${index.indexname}: ${def}`);
-    continue;
-  }
-  const cols = match[1].split(",").map((part) => {
-    const name = part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
-    return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name) ? quote(name) : null;
-  });
-  if (cols.some((x) => !x)) {
-    warnings.push(`Skipped expression index ${index.indexname}: ${def}`);
+    warnings.push(\`Could not parse index \${index.indexname}: \${def}\`);
     continue;
   }
   const unique = /CREATE\s+UNIQUE\s+INDEX/i.test(def);
-  const name = index.indexname.slice(0, 64);
+  const whereMatch = def.match(/\s+WHERE\s+(.+)$/i);
+  const predicate = whereMatch?.[1] || "";
+  let rawColumns = match[1].split(",");
+  let columns = rawColumns.map((part) => {
+    const name = part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
+    return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name) ? name : null;
+  });
+
+  if (whereMatch && unique) {
+    const mapping = partialUniqueMappings[index.indexname];
+    if (mapping) {
+      if (!generatedColumnsByTable.has(table)) generatedColumnsByTable.set(table, []);
+      generatedColumnsByTable.get(table).push(mapping.generated);
+      columns = mapping.columns;
+    } else if (!/^\(?\s*[a-zA-Z_][a-zA-Z0-9_]*\s+IS\s+NOT\s+NULL\s*\)?$/i.test(predicate)) {
+      warnings.push(\`Skipped partial unique index requiring manual translation \${index.indexname}: \${def}\`);
+      continue;
+    }
+  }
+  if (columns.some((x) => !x)) {
+    warnings.push(\`Skipped expression index \${index.indexname}: \${def}\`);
+    continue;
+  }
   const primary = (manifest.tables.find((t) => t.name.split(".").at(-1) === table)?.primary_keys || []).join(",");
-  const indexed = match[1].split(",").map((part) => part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "")).join(",");
-  if (unique && indexed === primary) continue;
-  indexStatements.push({ table, name, sql: `  ${unique ? "UNIQUE " : ""}KEY ${quote(name)} (${cols.join(", ")})` });
+  if (unique && columns.join(",") === primary) continue;
+  const name = index.indexname.slice(0, 64);
+  indexStatements.push({ table, name, sql: \`  \${unique ? "UNIQUE " : ""}KEY \${quote(name)} (\${columns.map(quote).join(", ")})\` });
 }
 const statements = [
   "-- REVIEW-ONLY generated schema draft. Do not execute against production.",
@@ -161,6 +223,9 @@ for (const table of manifest.tables) {
     return line;
   });
   if (table.primary_keys?.length) columns.push(`  PRIMARY KEY (${table.primary_keys.map(quote).join(", ")})`);
+  for (const generated of generatedColumnsByTable.get(tableName) || []) {
+    columns.push(`  ${quote(generated.name)} ${generated.type} GENERATED ALWAYS AS (${generated.expression}) STORED`);
+  }
   for (const index of indexStatements.filter(x=>x.table===tableName)) columns.push(index.sql);
   for (const check of (manifest.check_constraints || []).filter((item) => item.table_name === tableName)) {
     const translated = translateCheck(check.check_clause);
