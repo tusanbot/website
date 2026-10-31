@@ -6,6 +6,7 @@ on:
       - integration/dual-database-runtime
     paths:
       - scripts/mysql-schema/**
+      - scripts/mysql-sync-bridge/schema-test-only.sql
       - .github/workflows/mysql-schema-validation.yml
   pull_request:
     branches:
@@ -50,6 +51,10 @@ jobs:
         env:
           MYSQL_PWD: test_root_password
         run: mysql --host=127.0.0.1 --port=3306 --user=root tusan_schema_test < /tmp/tusan-schema.sql
+      - name: Create MySQL sync metadata tables
+        env:
+          MYSQL_PWD: test_root_password
+        run: mysql --host=127.0.0.1 --port=3306 --user=root tusan_schema_test < scripts/mysql-sync-bridge/schema-test-only.sql
       - name: Verify table and foreign-key counts
         env:
           MYSQL_PWD: test_root_password
@@ -58,7 +63,7 @@ jobs:
           FKS=$(mysql --batch --skip-column-names --host=127.0.0.1 --port=3306 --user=root -e "SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema='tusan_schema_test' AND constraint_type='FOREIGN KEY'")
           echo "Created tables: $TABLES"
           echo "Created foreign keys: $FKS"
-          test "$TABLES" -eq 61
+          test "$TABLES" -eq 63
           test "$FKS" -gt 40
           IDENTITY=$(mysql --batch --skip-column-names --host=127.0.0.1 --port=3306 --user=root -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='tusan_schema_test' AND TABLE_NAME='blog_post_views' AND COLUMN_NAME='id' AND EXTRA LIKE '%auto_increment%'")
           echo "Identity columns preserved: $IDENTITY"
