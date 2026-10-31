@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import type { RowDataPacket } from "mysql2/promise";
+import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 import { getApplicationMySqlPool } from "@/lib/data-access/mysql-pool";
 import type { BlogAdminRepository, RepositoryResult } from "@/lib/data-access/blog-admin";
 
@@ -233,7 +233,7 @@ export function createMySqlBlogAdminRepository(): BlogAdminRepository {
 
     async updateComment(id, status, updatedAt) {
       try {
-        const [result] = await pool.execute<mysql.ResultSetHeader>(
+        const [result] = await pool.execute<ResultSetHeader>(
           "UPDATE blog_comments SET status = ?, updated_at = ? WHERE id = ?",
           [status, updatedAt, id],
         );
