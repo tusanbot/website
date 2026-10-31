@@ -169,6 +169,33 @@ begin
 end;
 $$;
 
+-- Service-role-only keyset export for the private blog view table. PostgREST does not
+-- expose the private schema directly, but the initial MySQL baseline must include
+-- existing view rows before outbox events are replayed.
+create or replace function public.export_private_blog_post_views(
+  p_after_id uuid default null,
+  p_limit integer default 500
+)
+returns table (
+  id uuid,
+  post_id uuid,
+  visitor_id text,
+  viewed_at timestamptz
+)
+language sql
+security definer
+set search_path = pg_catalog, public, private
+as $$
+  select v.id, v.post_id, v.visitor_id, v.viewed_at
+  from private.blog_post_views v
+  where p_after_id is null or v.id > p_after_id
+  order by v.id
+  limit greatest(1, least(coalesce(p_limit, 500), 1000));
+$$;
+
+revoke all on function public.export_private_blog_post_views(uuid, integer) from public, anon, authenticated;
+grant execute on function public.export_private_blog_post_views(uuid, integer) to service_role;
+
 -- A single serialized dispatcher claim prevents concurrent route invocations from
 -- skipping a locked earliest event and delivering later events first.
 create table if not exists public.data_sync_dispatch_state (
