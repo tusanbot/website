@@ -17,6 +17,7 @@ type PlainObject = Record<string, unknown>;
 type SyncEvent = {
   id: number;
   event_id: string;
+  source_database: string;
   schema_name: string;
   table_name: string;
   record_key: PlainObject;
@@ -155,6 +156,7 @@ function validateEvent(event: SyncEvent): void {
   if (!event || typeof event.event_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(event.event_id)) {
     throw new Error("Invalid sync event ID.");
   }
+  if (event.source_database !== "supabase") throw new Error("Unexpected source database.");
   if (event.schema_name !== "public" || !TABLE_ALLOWLIST.has(event.table_name)) throw new Error("Schema/table is not allowlisted.");
   if (!["insert", "update", "delete"].includes(event.operation)) throw new Error("Invalid operation.");
   if (!isPlainObject(event.record_key) || !Object.keys(event.record_key).length) throw new Error("Invalid record key.");
