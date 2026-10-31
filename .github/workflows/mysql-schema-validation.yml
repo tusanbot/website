@@ -60,6 +60,9 @@ jobs:
           echo "Created foreign keys: $FKS"
           test "$TABLES" -eq 61
           test "$FKS" -gt 40
+          IDENTITY=$(mysql --batch --skip-column-names --host=127.0.0.1 --port=3306 --user=root -e "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA='tusan_schema_test' AND TABLE_NAME='blog_post_views' AND COLUMN_NAME='id' AND EXTRA LIKE '%auto_increment%'")
+          echo "Identity columns preserved: $IDENTITY"
+          test "$IDENTITY" -eq 1
       - name: Upload review-only schema draft
         uses: actions/upload-artifact@v4
         with:
