@@ -50,6 +50,10 @@ jobs:
         env:
           MYSQL_PWD: test_root_password
         run: mysql --host=127.0.0.1 --port=3306 --user=root tusan_schema_test < /tmp/tusan-schema.sql
+      - name: Execute read-only cPanel audit against disposable MariaDB
+        env:
+          MYSQL_PWD: test_root_password
+        run: mysql --host=127.0.0.1 --port=3306 --user=root tusan_schema_test < scripts/mysql-schema/audit-cpanel-test-read-only.sql
       - name: Create MySQL sync metadata tables
         env:
           MYSQL_PWD: test_root_password
