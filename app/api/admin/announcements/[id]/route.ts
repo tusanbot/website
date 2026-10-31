@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { createAnnouncementRepository } from "@/lib/data-access/announcements";
+import { createAnnouncementRepository, type AnnouncementPayload } from "@/lib/data-access/announcements";
 
 async function requireAdmin() {
   const supabase = await createSupabaseServerClient();
@@ -43,9 +43,9 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const priority = Number(values.priority ?? 0);
   if (!Number.isFinite(priority)) return NextResponse.json({ error: "اولویت معتبر نیست." }, { status: 400 });
 
-  const payload = {
+  const payload: Partial<AnnouncementPayload> & { updated_at: string } = {
     title: values.title.trim(),
-    type: announcementType,
+    type: announcementType as AnnouncementPayload["type"],
     summary: typeof values.summary === "string" ? values.summary : null,
     content: typeof values.content === "string" ? values.content : null,
     start_at: typeof values.start_at === "string" && values.start_at ? values.start_at : null,
