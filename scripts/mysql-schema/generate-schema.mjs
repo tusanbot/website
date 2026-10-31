@@ -157,7 +157,7 @@ const partialUniqueMappings = {
   },
   idx_custom_forms_unique_child_title: {
     table: "custom_forms",
-    generated: { name: "__child_title_lower", type: "VARCHAR(191)", expression: "IF(parent_form_id IS NOT NULL, LOWER(title), NULL)" },
+    generated: { name: "__child_title_lower", type: "VARCHAR(191)", expression: "IF(parent_form_id IS NOT NULL, title, NULL)" },
     columns: ["parent_form_id", "__child_title_lower"],
   },
   custom_forms_one_active_version: {
