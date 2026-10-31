@@ -36,7 +36,8 @@
     "react-dom": "19.2.4",
     "react-multi-date-picker": "^4.5.2",
     "recharts": "^3.10.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "mysql2": "^3.15.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
