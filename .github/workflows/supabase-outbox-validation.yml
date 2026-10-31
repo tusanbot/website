@@ -80,6 +80,7 @@ jobs:
             END IF;
           END;
           $$;
+          SELECT COUNT(*) AS exported_private_views FROM public.export_private_blog_post_views(NULL, 10);
           SELECT COUNT(*) AS claimed_events FROM public.claim_data_sync_outbox('ci-worker', 10);
           SELECT public.release_data_sync_dispatch('ci-worker');
           SQL
