@@ -80,7 +80,7 @@ function stableJson(value: unknown): string {
   if (isPlainObject(value)) {
     return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
   }
-  return JSON.stringify(value);
+  return JSON.stringify(value) ?? "null";
 }
 
 function hashKey(value: unknown): string {
