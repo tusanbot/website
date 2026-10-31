@@ -95,7 +95,17 @@ function translateCheck(expression) {
   if (depth > 0) value += ")".repeat(depth);
   return value;
 }
+const typeOverrides = new Map([
+  ["custom_forms.form_type", "VARCHAR(32)"],
+  ["custom_forms.title", "VARCHAR(191)"],
+  ["payments.status", "VARCHAR(32)"],
+  ["services.slug", "VARCHAR(191)"],
+  ["staff_settlements.status", "VARCHAR(32)"],
+  ["support_conversations.status", "VARCHAR(32)"],
+]);
 function mysqlType(table, col) {
+  const override = typeOverrides.get(`${table}.${col.name}`);
+  if (override) return override;
   const detail = detailByTable.get(table)?.get(col.name);
   const format = col.format || detail?.udt_name || col.data_type;
   if (format === "uuid") return "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin";
