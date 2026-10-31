@@ -278,8 +278,8 @@ async function applyEvent(event) {
       }
 
       await conn.execute(
-        "INSERT INTO data_sync_record_versions (record_key_hash, schema_name, table_name, record_key_json, source_outbox_id, updated_at) VALUES (?, 'public', ?, ?, ?, CURRENT_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE record_key_json = VALUES(record_key_json), source_outbox_id = VALUES(source_outbox_id), updated_at = VALUES(updated_at)",
-        [recordKeyHash, tableName, JSON.stringify(event.record_key), String(incomingVersion)],
+        "INSERT INTO data_sync_record_versions (record_key_hash, schema_name, table_name, record_key_json, source_outbox_id, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE record_key_json = VALUES(record_key_json), source_outbox_id = VALUES(source_outbox_id), updated_at = VALUES(updated_at)",
+        [recordKeyHash, event.schema_name, tableName, JSON.stringify(event.record_key), String(incomingVersion)],
       );
     }
 
