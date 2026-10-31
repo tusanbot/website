@@ -41,10 +41,10 @@ for (const check of manifest.check_constraints || []) {
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
   const table = index.tablename;
-  const match = def.match(/USING\\s+btree\\s*\\((.*?)\\)(?:\\s+WHERE\\s+.*)?$/i);
-  if (!match || /\\b(lower|upper|coalesce|jsonb_path_ops)\\s*\\(/i.test(match[1])) continue;
+  const match = def.match(/USING\s+btree\s*\((.*?)\)(?:\s+WHERE\s+.*)?$/i);
+  if (!match || /\b(lower|upper|coalesce|jsonb_path_ops)\s*\(/i.test(match[1])) continue;
   for (const raw of match[1].split(",")) {
-    const column = raw.trim().replace(/\\s+(ASC|DESC)(\\s+NULLS\\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
+    const column = raw.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "");
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(column)) continue;
     indexedTextColumns.set(table + "." + column, true);
   }
