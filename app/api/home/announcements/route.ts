@@ -3,8 +3,10 @@ import { createAnnouncementRepository } from "@/lib/data-access/announcements";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const { data, error } = await createAnnouncementRepository().listPublic();
+export async function GET(request: Request) {
+  const requestedMode = new URL(request.url).searchParams.get("mode");
+  const mode = requestedMode === "all-active" || requestedMode === "started" ? requestedMode : "window";
+  const { data, error } = await createAnnouncementRepository().listPublic(mode);
   if (error) {
     console.error("[home/announcements]", error);
     return NextResponse.json({ ok: false, error: "دریافت اطلاعیه‌ها انجام نشد." }, {
