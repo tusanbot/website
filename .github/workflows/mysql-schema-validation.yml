@@ -1,0 +1,62 @@
+name: MariaDB schema draft validation
+
+on:
+  push:
+    branches:
+      - integration/dual-database-runtime
+    paths:
+      - scripts/mysql-schema/**
+      - .github/workflows/mysql-schema-validation.yml
+  pull_request:
+    branches:
+      - feat/dual-database-foundation
+    paths:
+      - scripts/mysql-schema/**
+      - .github/workflows/mysql-schema-validation.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-and-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mariadb:
+        image: mariadb:11.4
+        env:
+          MARIADB_ROOT_PASSWORD: test_root_password
+          MARIADB_DATABASE: tusan_schema_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check schema generator syntax
+        run: node --check scripts/mysql-schema/generate-schema.mjs
+      - name: Generate review-only schema
+        run: node scripts/mysql-schema/generate-schema.mjs /tmp/tusan-schema.sql
+      - name: Install MariaDB client
+        run: sudo apt-get update && sudo apt-get install -y mariadb-client
+      - name: Apply generated schema to disposable MariaDB
+        env:
+          MYSQL_PWD: test_root_password
+        run: mysql --host=127.0.0.1 --port=3306 --user=root tusan_schema_test < /tmp/tusan-schema.sql
+      - name: Verify table and foreign-key counts
+        env:
+          MYSQL_PWD: test_root_password
+        run: |
+          TABLES=$(mysql --batch --skip-column-names --host=127.0.0.1 --port=3306 --user=root -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='tusan_schema_test' AND table_type='BASE TABLE'")
+          FKS=$(mysql --batch --skip-column-names --host=127.0.0.1 --port=3306 --user=root -e "SELECT COUNT(*) FROM information_schema.table_constraints WHERE table_schema='tusan_schema_test' AND constraint_type='FOREIGN KEY'")
+          echo "Created tables: $TABLES"
+          echo "Created foreign keys: $FKS"
+          test "$TABLES" -eq 61
+          test "$FKS" -gt 40
