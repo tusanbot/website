@@ -39,7 +39,7 @@ for (const index of manifest.indexes || []) {
     indexedTextColumns.set(key, true);
   }
 }
-const quote = (value) => "`" + String(value).replace(/\\`/g, "``") + "`";
+const quote = (value) => "`" + String(value).replace(/\`/g, "``") + "`";
 const normalizeDefault = (value, type) => {
   if (!value) return null;
   const v = value.trim();
@@ -126,7 +126,7 @@ for (const index of manifest.indexes || []) {
   const primary = (manifest.tables.find((t) => t.name.split(".").at(-1) === table)?.primary_keys || []).join(",");
   const indexed = match[1].split(",").map((part) => part.trim().replace(/\s+(ASC|DESC)(\s+NULLS\s+(FIRST|LAST))?$/i, "").replace(/^"|"$/g, "")).join(",");
   if (unique && indexed === primary) continue;
-  indexStatements.push({ table, name, sql: \`  \${unique ? "UNIQUE " : ""}KEY \${quote(name)} (\${cols.join(", ")})\` });
+  indexStatements.push({ table, name, sql: `  ${unique ? "UNIQUE " : ""}KEY ${quote(name)} (${cols.join(", ")})` });
 }
 const statements = [
   "-- REVIEW-ONLY generated schema draft. Do not execute against production.",
