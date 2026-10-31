@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 
 type Announcement = {
     id: string;
@@ -52,21 +51,14 @@ export default function AnnouncementSlider() {
     async function loadAnnouncements() {
         setLoading(true);
 
-        const { data, error } = await supabase
-            .from("services_announcements")
-            .select(`
-  *,
-  services(
-    title,
-    icon
-  )
-`)
-            .eq("is_active", true)
-            .order("priority", { ascending: false })
-            .order("start_at", { ascending: false });
-
-        if (!error) {
-            setItems((data || []) as Announcement[]);
+        try {
+            const response = await fetch("/api/home/announcements", { cache: "no-store" });
+            const result = await response.json();
+            if (!response.ok || !result.ok) throw new Error(result.error || "دریافت اطلاعیه‌ها انجام نشد.");
+            setItems((result.items || []) as Announcement[]);
+        } catch (error) {
+            console.error("[AnnouncementSlider]", error);
+            setItems([]);
         }
 
         setLoading(false);
