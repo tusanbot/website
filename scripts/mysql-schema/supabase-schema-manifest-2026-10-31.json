@@ -21929,5 +21929,14 @@
     "indexes": 237,
     "foreign_key_columns": 94,
     "check_constraints": 69
-  }
+  },
+  "identity_columns": [
+    {
+      "table_schema": "private",
+      "table_name": "blog_post_views",
+      "column_name": "id",
+      "data_type": "bigint",
+      "identity_generation": "BY DEFAULT"
+    }
+  ]
 }
