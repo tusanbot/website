@@ -266,7 +266,7 @@ export default function ServiceAnnouncementsSlider({
         setLoading(true);
 
         try {
-            const response = await fetch("/api/home/announcements", { cache: "no-store" });
+            const response = await fetch("/api/home/announcements?mode=started", { cache: "no-store" });
             const result = await response.json();
             if (!response.ok || !result.ok) throw new Error(result.error || "دریافت اطلاعیه‌ها انجام نشد.");
             const validAnnouncements = (result.items || []).map((item: Announcement) => ({
