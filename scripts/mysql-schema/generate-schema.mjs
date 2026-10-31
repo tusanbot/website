@@ -55,10 +55,25 @@ const normalizeDefault = (value, type) => {
   if (quoted) return "'" + quoted[1].replace(/''/g, "''") + "'";
   const numeric = v.match(/^-?\d+(?:\.\d+)?$/);
   if (numeric) return v;
+  const castNumeric = v.match(/^(-?\\d+(?:\\.\\d+)?)::(?:integer|int4|int8|smallint|numeric)$/i);
+  if (castNumeric) return castNumeric[1];
   if (/^NULL$/i.test(v)) return "NULL";
   warnings.push(`Untranslated default: ${v}`);
   return null;
 };
+function translateCheck(expression) {
+  let value = expression.trim();
+  value = value.replace(/::(?:text|character varying|varchar|numeric|integer|int4|int8|smallint|boolean|bool)\b/gi, "");
+  value = value.replace(/TRIM\\(BOTH FROM ([^)]+)\\)/gi, "TRIM($1)");
+  value = value.replace(/\\bbtrim\\(/gi, "TRIM(");
+  value = value.replace(/\\bchar_length\\b/gi, "CHAR_LENGTH");
+  value = value.replace(/([a-z_][a-z0-9_]*)\\s*=\\s*ANY\\s*\\(\\s*\\(*\\s*ARRAY\\[([^\\]]*)\\]\\s*\\)*\\s*\\)/gi, (_all, column, rawValues) => {
+    const values = rawValues.split(",").map((item) => item.trim().replace(/::(?:text|character varying|varchar)\\b/gi, ""));
+    return \`\${column} IN (\${values.join(", ")})\`;
+  });
+  if (/::|\\bANY\\b|\\bARRAY\\b|TRIM\\(BOTH FROM/i.test(value)) return null;
+  return value;
+}
 function mysqlType(table, col) {
   const detail = detailByTable.get(table)?.get(col.name);
   const format = col.format || detail?.udt_name || col.data_type;
@@ -146,6 +161,11 @@ for (const table of manifest.tables) {
   });
   if (table.primary_keys?.length) columns.push(`  PRIMARY KEY (${table.primary_keys.map(quote).join(", ")})`);
   for (const index of indexStatements.filter(x=>x.table===tableName)) columns.push(index.sql);
+  for (const check of (manifest.check_constraints || []).filter((item) => item.table_name === tableName)) {
+    const translated = translateCheck(check.check_clause);
+    if (translated) columns.push(`  CONSTRAINT ${quote(check.constraint_name.slice(0,64))} CHECK (${translated})`);
+    else warnings.push(`Untranslated CHECK ${tableName}.${check.constraint_name}: ${check.check_clause}`);
+  }
   statements.push(`CREATE TABLE IF NOT EXISTS ${quote(tableName)} (\n${columns.join(",\n")}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
 }
 
@@ -160,8 +180,7 @@ for (const fk of fkGroups.values()) {
   statements.push(`ALTER TABLE ${quote(source)} ADD CONSTRAINT ${quote(first.constraint_name.slice(0,64))} FOREIGN KEY (${localCols.join(", ")}) REFERENCES ${quote(target)} (${foreignCols.join(", ")}) ON DELETE ${deleteRule} ON UPDATE ${updateRule};`);
 }
 statements.push("SET FOREIGN_KEY_CHECKS = 1;");
-statements.push("", "-- CHECK constraints and skipped PostgreSQL indexes are listed below for manual translation.");
-for (const check of manifest.check_constraints || []) statements.push(`-- CHECK ${check.table_schema}.${check.table_name}.${check.constraint_name}: ${check.check_clause}`);
+statements.push("", "-- Portability warnings requiring manual translation/review.");
 for (const warning of warnings) statements.push(`-- WARNING: ${warning.replace(/\n/g, " ")}`);
 const output = statements.join("\n\n") + "\n";
 if (outputPath) fs.writeFileSync(outputPath, output, "utf8");
