@@ -152,7 +152,7 @@ const partialUniqueMappings = {
   },
   idx_custom_forms_one_parent_per_service: {
     table: "custom_forms",
-    generated: { name: "__parent_service_unique", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN form_type = 'parent' AND parent_form_id IS NULL THEN service_id ELSE NULL END" },
+    generated: { name: "__parent_service_unique", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN form_type = 'parent' AND parent_form_id IS NULL THEN TRIM(service_id) ELSE NULL END" },
     columns: ["__parent_service_unique"],
   },
   idx_custom_forms_unique_child_title: {
@@ -162,12 +162,12 @@ const partialUniqueMappings = {
   },
   custom_forms_one_active_version: {
     table: "form_versions",
-    generated: { name: "__active_form_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN is_active = 1 THEN form_id ELSE NULL END" },
+    generated: { name: "__active_form_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN is_active = 1 THEN TRIM(form_id) ELSE NULL END" },
     columns: ["__active_form_id"],
   },
   payments_one_active_per_order_uq: {
     table: "payments",
-    generated: { name: "__active_order_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('pending', 'redirected') THEN order_id ELSE NULL END" },
+    generated: { name: "__active_order_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('pending', 'redirected') THEN TRIM(order_id) ELSE NULL END" },
     columns: ["__active_order_id"],
   },
   services_slug_unique: {
@@ -177,17 +177,17 @@ const partialUniqueMappings = {
   },
   staff_settlements_one_open_per_staff: {
     table: "staff_settlements",
-    generated: { name: "__open_staff_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('requested', 'approved', 'processing') THEN staff_id ELSE NULL END" },
+    generated: { name: "__open_staff_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('requested', 'approved', 'processing') THEN TRIM(staff_id) ELSE NULL END" },
     columns: ["__open_staff_id"],
   },
   support_conversations_one_open_general_per_user: {
     table: "support_conversations",
-    generated: { name: "__open_general_user_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' AND order_id IS NULL THEN user_id ELSE NULL END" },
+    generated: { name: "__open_general_user_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' AND order_id IS NULL THEN TRIM(user_id) ELSE NULL END" },
     columns: ["__open_general_user_id"],
   },
   support_conversations_one_open_per_user_idx: {
     table: "support_conversations",
-    generated: { name: "__open_user_id", type: "CHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' THEN user_id ELSE NULL END" },
+    generated: { name: "__open_user_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' THEN TRIM(user_id) ELSE NULL END" },
     columns: ["__open_user_id"],
   },
 };
