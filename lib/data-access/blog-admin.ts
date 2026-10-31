@@ -36,9 +36,8 @@ export interface BlogAdminRepository {
 
 /**
  * Domain-level data access boundary for the first blog pilot.
- * Supabase is deliberately the only implementation/authority at this stage.
- * A MariaDB implementation can be added behind this contract after its read
- * API, transaction semantics, and schema mapping are proven.
+ * The selected provider is resolved server-side. Supabase remains the default;
+ * MySQL is available for the blog-admin domain when explicitly configured.
  */
 export function createBlogAdminRepository(): BlogAdminRepository {
   const runtime = getDomainDataRuntime("blogAdmin");
