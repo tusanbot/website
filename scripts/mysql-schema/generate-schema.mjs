@@ -64,7 +64,7 @@ const normalizeDefault = (value, type) => {
 };
 function translateCheck(expression) {
   let value = expression.trim();
-  value = value.replace(/::(?:text|character varying|varchar|numeric|integer|int4|int8|smallint|boolean|bool)\b/gi, "");
+  value = value.replace(/::(?:text|character varying|varchar|numeric|integer|int4|int8|smallint|boolean|bool)(?:\[\])?/gi, "");
   value = value.replace(/TRIM\(BOTH FROM ([^)]+)\)/gi, "TRIM($1)");
   value = value.replace(/\bbtrim\(/gi, "TRIM(");
   value = value.replace(/\bchar_length\b/gi, "CHAR_LENGTH");
