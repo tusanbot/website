@@ -7,7 +7,7 @@ export type DataDomain = "blogAdmin" | "announcements";
 export type DomainDataRuntime = {
   mode: DataMode;
   primary: DataProvider;
-  syncTarget: DataProvider | null;
+  availableProviders: DataProvider[];
 };
 
 export type DataRuntime = {
@@ -30,10 +30,6 @@ function parseProvider(value: string | undefined, fallback: DataProvider): DataP
   throw new Error("Database provider must be either supabase or mysql.");
 }
 
-function opposite(provider: DataProvider): DataProvider {
-  return provider === "supabase" ? "mysql" : "supabase";
-}
-
 /**
  * Resolves server-side data routing without opening either database connection.
  * In dual mode each domain has one authoritative provider and a mirror target.
@@ -49,20 +45,8 @@ export function resolveDataRuntime(env: RuntimeEnvironment = process.env): DataR
     throw new Error("TUSAN_DATA_PRIMARY conflicts with TUSAN_DATA_MODE.");
   }
 
-  const configuredTarget = env.TUSAN_DATA_SYNC_TARGET?.trim().toLowerCase();
-  let syncTarget: DataProvider | null = null;
-
-  if (mode === "dual") {
-    syncTarget = configuredTarget
-      ? parseProvider(configuredTarget, opposite(configuredPrimary))
-      : opposite(configuredPrimary);
-    if (syncTarget === configuredPrimary) {
-      throw new Error("TUSAN_DATA_SYNC_TARGET must be different from TUSAN_DATA_PRIMARY.");
-    }
-  } else if (configuredTarget && configuredTarget !== "none") {
-    throw new Error("TUSAN_DATA_SYNC_TARGET is available only when TUSAN_DATA_MODE=dual.");
-  }
-
+  // Dual mode makes both providers available for independent domain routing.
+  // It does not turn on replication or unsafe dual writes.
   const makeDomain = (domain: DataDomain): DomainDataRuntime => {
     const key = domain === "blogAdmin"
       ? "TUSAN_DATA_PROVIDER_BLOG_ADMIN"
@@ -74,7 +58,7 @@ export function resolveDataRuntime(env: RuntimeEnvironment = process.env): DataR
     return {
       mode,
       primary,
-      syncTarget: mode === "dual" ? opposite(primary) : null,
+      availableProviders: mode === "dual" ? ["supabase", "mysql"] : [primary],
     };
   };
 
