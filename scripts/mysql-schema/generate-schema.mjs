@@ -260,13 +260,13 @@ for (const table of manifest.tables) {
 }
 
 for (const [tableName, helpers] of helperColumnsByTable.entries()) {
-  const assignments = helpers.map((helper) => \`SET NEW.\${quote(helper.name)} = \${helper.expression};\`);
+  const assignments = helpers.map((helper) => "SET NEW." + quote(helper.name) + " = " + helper.expression + ";");
   for (const action of ["INSERT", "UPDATE"]) {
     const suffix = action === "INSERT" ? "bi" : "bu";
-    const triggerName = \`trg_\${tableName}_sync_unique_\${suffix}\`.slice(0, 64);
-    statements.push("DELIMITER $");
-    statements.push(\`DROP TRIGGER IF EXISTS \${quote(triggerName)}$\`);
-    statements.push(\`CREATE TRIGGER \${quote(triggerName)} BEFORE \${action} ON \${quote(tableName)} FOR EACH ROW BEGIN \${assignments.join(" ")} END$\`);
+    const triggerName = ("trg_" + tableName + "_sync_unique_" + suffix).slice(0, 64);
+    statements.push("DELIMITER //");
+    statements.push("DROP TRIGGER IF EXISTS " + quote(triggerName) + "//");
+    statements.push("CREATE TRIGGER " + quote(triggerName) + " BEFORE " + action + " ON " + quote(tableName) + " FOR EACH ROW BEGIN " + assignments.join(" ") + " END//");
     statements.push("DELIMITER ;");
   }
 }
