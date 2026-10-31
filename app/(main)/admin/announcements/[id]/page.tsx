@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "../../../../../lib/supabase";
 import AnnouncementForm from "../../../../../components/admin/AnnouncementForm";
 
 import {
@@ -30,30 +29,12 @@ export default function EditAnnouncementPage() {
         setLoading(true);
         setError("");
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("role")
-                .eq("id", user.id)
-                .single();
-
-            if (profile?.role !== "admin") {
-                router.push("/dashboard");
-                return;
-            }
-
-            const { data, error } = await supabase
-                .from("services_announcements")
-                .select("*")
-                .eq("id", id)
-                .single();
-
-            if (error || !data) throw new Error("اطلاعیه موردنظر پیدا نشد.");
+            const response = await fetch("/api/admin/announcements/" + id, { cache: "no-store" });
+            if (response.status === 401) { router.push("/login"); return; }
+            if (response.status === 404) throw new Error("اطلاعیه موردنظر پیدا نشد.");
+            const result = await response.json();
+            if (!response.ok || !result.announcement) throw new Error(result.error || "دریافت اطلاعیه انجام نشد.");
+            const data = result.announcement;
 
             setAnnouncement({
                 ...data,
@@ -98,12 +79,14 @@ export default function EditAnnouncementPage() {
                 updated_at: new Date().toISOString(),
             };
 
-            const { error } = await supabase
-                .from("services_announcements")
-                .update(payload)
-                .eq("id", id);
-
-            if (error) throw new Error(error.message);
+            const response = await fetch("/api/admin/announcements/" + id, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.status === 401) { router.push("/login"); return; }
+            if (!response.ok) throw new Error(result.error || "ذخیره تغییرات انجام نشد.");
             router.push("/admin/announcements");
         } catch (err: any) {
             console.error(err);
