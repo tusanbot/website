@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import { applyMariaDbSyncEvent, checkMariaDbSyncConnection } from "@/lib/data-access/mysql-sync-consumer";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 type OutboxEvent = {
   id: number;
@@ -18,28 +20,22 @@ type OutboxEvent = {
   attempts: number;
 };
 
-function isHttpsUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password;
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(request: Request) {
   const dispatchSecret = process.env.DATA_SYNC_DISPATCH_SECRET;
-  const bridgeUrl = process.env.MYSQL_SYNC_BRIDGE_URL;
-  const bridgeToken = process.env.MYSQL_SYNC_BRIDGE_TOKEN;
-  if (!dispatchSecret || !bridgeUrl || !bridgeToken) {
-    return NextResponse.json({ error: "Data sync dispatcher is not configured." }, { status: 503 });
+  if (!dispatchSecret || dispatchSecret.length < 32 ||
+      !process.env.MYSQL_HOST || !process.env.MYSQL_USER ||
+      !process.env.MYSQL_PASSWORD || process.env.MYSQL_DATABASE !== "tusancni_test") {
+    return NextResponse.json({ error: "Test database dispatcher is not configured safely." }, { status: 503 });
   }
 
   if (request.headers.get("authorization") !== `Bearer ${dispatchSecret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isHttpsUrl(bridgeUrl)) {
-    return NextResponse.json({ error: "MYSQL_SYNC_BRIDGE_URL must be an HTTPS URL." }, { status: 503 });
+
+  try {
+    await checkMariaDbSyncConnection();
+  } catch {
+    return NextResponse.json({ error: "Could not connect to the configured test database." }, { status: 503 });
   }
 
   const workerId = crypto.randomUUID();
@@ -62,51 +58,16 @@ export async function POST(request: Request) {
   try {
     for (const event of events) {
       try {
-        const response = await fetch(bridgeUrl, {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${bridgeToken}`,
-            "content-type": "application/json",
-            "idempotency-key": event.event_id,
-          },
-          signal: AbortSignal.timeout(12_000),
-          body: JSON.stringify({
-            event_id: event.event_id,
-            source_outbox_id: event.id,
-            source_database: event.source_database,
-            schema_name: event.schema_name,
-            table_name: event.table_name,
-            record_key: event.record_key,
-            operation: event.operation,
-            row_data: event.row_data,
-            source_txid: event.source_txid,
-            created_at: event.created_at,
-          }),
-        });
-
-        if (!response.ok) {
-          const body = (await response.text()).slice(0, 1500);
-          throw new Error(`Bridge returned HTTP ${response.status}: ${body || "no response body"}`);
-        }
-
-        let acknowledgement: { event_id?: string } = {};
-        try {
-          acknowledgement = await response.json() as { event_id?: string };
-        } catch {
-          throw new Error("Bridge response was not valid JSON.");
-        }
-        if (acknowledgement.event_id !== event.event_id) {
-          throw new Error("Bridge acknowledgement event_id did not match.");
-        }
-
+        await applyMariaDbSyncEvent(event);
         const marked = await db.from("data_sync_outbox")
           .update({ processed_at: new Date().toISOString(), locked_at: null, locked_by: null, last_error: null })
           .eq("id", event.id)
           .eq("locked_by", workerId)
           .select("id")
           .maybeSingle();
-        if (marked.error || !marked.data) throw new Error("Bridge accepted event, but queue acknowledgement failed or the lease was lost; retry will rely on bridge idempotency.");
-
+        if (marked.error || !marked.data) {
+          throw new Error("MariaDB committed the event, but queue acknowledgement failed or the lease was lost; retry is safe because event receipts are idempotent.");
+        }
         delivered++;
       } catch (error) {
         failed++;
@@ -129,6 +90,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: failed === 0,
+    destination: "tusancni_test",
     claimed: events.length,
     delivered,
     failed,
