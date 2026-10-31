@@ -38,6 +38,8 @@ jobs:
         run: node --check scripts/mysql-schema/generate-schema.mjs
       - name: Check baseline seeder syntax
         run: node --check scripts/mysql-schema/seed-mysql-from-supabase.mjs
+      - name: Verify baseline seeder dependencies
+        run: node scripts/mysql-schema/seed-mysql-from-supabase.mjs --help
       - name: Generate review-only schema
         run: node scripts/mysql-schema/generate-schema.mjs /tmp/tusan-schema.sql
       - name: Inspect generated custom forms DDL
