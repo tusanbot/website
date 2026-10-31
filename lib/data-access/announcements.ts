@@ -26,7 +26,7 @@ export interface AnnouncementRepository {
   update(id: string, payload: Partial<AnnouncementPayload> & { updated_at?: string }): Promise<{ data: Record<string, unknown> | null; error: { message: string; code?: string } | null }>;
   setActive(id: string, isActive: boolean): Promise<{ error: { message: string } | null }>;
   remove(id: string): Promise<{ error: { message: string } | null }>;
-  listPublic(): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+  listPublic(mode?: "window" | "all-active" | "started"): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
 }
 
 /** Supabase remains the sole implementation until the MariaDB read/write adapter is proven. */
@@ -67,7 +67,7 @@ export function createAnnouncementRepository(): AnnouncementRepository {
       return { error };
     },
 
-    async listPublic() {
+    async listPublic(mode = "window") {
       const now = Date.now();
       const { data, error } = await db.from("services_announcements")
         .select("id,title,summary,content,type,start_at,end_at,extended_end_at,button_label,service_id,priority,created_at,documents,is_extendable,is_active,services(title,slug,category,description,icon,price,form_schema)")
@@ -79,9 +79,14 @@ export function createAnnouncementRepository(): AnnouncementRepository {
       if (error) return { data: null, error };
 
       const visible = (data || []).filter((item) => {
+        if (mode === "all-active") return true;
         const start = item.start_at ? Date.parse(item.start_at) : null;
         const endValue = item.extended_end_at || item.end_at;
         const end = endValue ? Date.parse(endValue) : null;
+        if (mode === "started") {
+          return start !== null && !Number.isNaN(start) && start <= now &&
+            end !== null && !Number.isNaN(end) && end > now;
+        }
         return (start === null || (!Number.isNaN(start) && start <= now)) &&
           end !== null && !Number.isNaN(end) && end > now;
       });
