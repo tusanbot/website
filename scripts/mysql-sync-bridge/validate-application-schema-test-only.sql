@@ -11,9 +11,22 @@ FROM (
   SELECT 'blog_posts','slug' UNION ALL
   SELECT 'blog_posts','category_id' UNION ALL
   SELECT 'blog_posts','created_at' UNION ALL
+  SELECT 'blog_posts','updated_at' UNION ALL
+  SELECT 'blog_posts','primary_keyword' UNION ALL
+  SELECT 'blog_posts','seo_keywords' UNION ALL
+  SELECT 'blog_posts','author_id' UNION ALL
+  SELECT 'blog_posts','meta_title' UNION ALL
+  SELECT 'blog_posts','meta_description' UNION ALL
+  SELECT 'blog_posts','excerpt' UNION ALL
+  SELECT 'blog_posts','content' UNION ALL
+  SELECT 'blog_posts','featured_image' UNION ALL
+  SELECT 'blog_posts','status' UNION ALL
+  SELECT 'blog_posts','published_at' UNION ALL
   SELECT 'blog_categories','id' UNION ALL
   SELECT 'blog_categories','name' UNION ALL
   SELECT 'blog_categories','slug' UNION ALL
+  SELECT 'blog_categories','description' UNION ALL
+  SELECT 'blog_categories','created_at' UNION ALL
   SELECT 'blog_post_services','post_id' UNION ALL
   SELECT 'blog_post_services','service_id' UNION ALL
   SELECT 'blog_comments','id' UNION ALL
@@ -24,10 +37,39 @@ FROM (
   SELECT 'blog_comments','created_at' UNION ALL
   SELECT 'blog_comments','updated_at' UNION ALL
   SELECT 'blog_comments','author_name' UNION ALL
+  SELECT 'blog_ratings','id' UNION ALL
+  SELECT 'blog_ratings','post_id' UNION ALL
+  SELECT 'blog_ratings','user_id' UNION ALL
+  SELECT 'blog_ratings','rating' UNION ALL
+  SELECT 'blog_ratings','created_at' UNION ALL
+  SELECT 'blog_ratings','updated_at' UNION ALL
+  SELECT 'blog_reactions','id' UNION ALL
+  SELECT 'blog_reactions','post_id' UNION ALL
+  SELECT 'blog_reactions','user_id' UNION ALL
+  SELECT 'blog_reactions','reaction' UNION ALL
+  SELECT 'blog_reactions','created_at' UNION ALL
+  SELECT 'blog_reactions','updated_at' UNION ALL
   SELECT 'services','id' UNION ALL
   SELECT 'services','title' UNION ALL
   SELECT 'services','slug' UNION ALL
   SELECT 'services','is_active' UNION ALL
+  SELECT 'services','category' UNION ALL
+  SELECT 'services','description' UNION ALL
+  SELECT 'services','price' UNION ALL
+  SELECT 'services','icon' UNION ALL
+  SELECT 'services','form_schema' UNION ALL
+  SELECT 'services','parent_service_id' UNION ALL
+  SELECT 'services','service_type' UNION ALL
+  SELECT 'services','parent_form_id' UNION ALL
+  SELECT 'services','pricing_rules' UNION ALL
+  SELECT 'services','delivery_mode' UNION ALL
+  SELECT 'services','meta_title' UNION ALL
+  SELECT 'services','meta_description' UNION ALL
+  SELECT 'services','seo_keywords' UNION ALL
+  SELECT 'services','is_popular' UNION ALL
+  SELECT 'services','seo_content' UNION ALL
+  SELECT 'services','local_only' UNION ALL
+  SELECT 'services','identity_verification_required' UNION ALL
   SELECT 'services_announcements','id' UNION ALL
   SELECT 'services_announcements','title' UNION ALL
   SELECT 'services_announcements','type' UNION ALL
@@ -43,7 +85,10 @@ FROM (
   SELECT 'services_announcements','documents' UNION ALL
   SELECT 'services_announcements','is_extendable' UNION ALL
   SELECT 'services_announcements','is_active' UNION ALL
-  SELECT 'services_announcements','updated_at'
+  SELECT 'services_announcements','updated_at' UNION ALL
+  SELECT 'services_announcements','documents' UNION ALL
+  SELECT 'services_announcements','is_active' UNION ALL
+  SELECT 'services_announcements','is_extendable'
 ) AS expected
 LEFT JOIN information_schema.COLUMNS actual
   ON actual.TABLE_SCHEMA = DATABASE()
