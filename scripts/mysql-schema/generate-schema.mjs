@@ -142,18 +142,19 @@ for (const table of manifest.tables) {
     return line;
   });
   if (table.primary_keys?.length) columns.push(`  PRIMARY KEY (${table.primary_keys.map(quote).join(", ")})`);
-  for (const fk of fkGroups.values()) {
-    const first = fk[0];
-    if (first.table_name !== tableName) continue;
-    const localCols = fk.sort((a,b)=>a.ordinal_position-b.ordinal_position).map(x=>quote(x.column_name));
-    const foreignCols = fk.map(x=>quote(x.foreign_column_name));
-    const target = first.foreign_table_name;
-    const deleteRule = first.delete_rule === "CASCADE" ? "CASCADE" : first.delete_rule === "SET NULL" ? "SET NULL" : "RESTRICT";
-    const updateRule = first.update_rule === "CASCADE" ? "CASCADE" : first.update_rule === "SET NULL" ? "SET NULL" : "RESTRICT";
-    columns.push(`  CONSTRAINT ${quote(first.constraint_name.slice(0,64))} FOREIGN KEY (${localCols.join(", ")}) REFERENCES ${quote(target)} (${foreignCols.join(", ")}) ON DELETE ${deleteRule} ON UPDATE ${updateRule}`);
-  }
   for (const index of indexStatements.filter(x=>x.table===tableName)) columns.push(index.sql);
   statements.push(`CREATE TABLE IF NOT EXISTS ${quote(tableName)} (\n${columns.join(",\n")}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+}
+
+for (const fk of fkGroups.values()) {
+  const first = fk[0];
+  const localCols = fk.sort((a,b)=>a.ordinal_position-b.ordinal_position).map(x=>quote(x.column_name));
+  const foreignCols = fk.map(x=>quote(x.foreign_column_name));
+  const source = first.table_name;
+  const target = first.foreign_table_name;
+  const deleteRule = first.delete_rule === "CASCADE" ? "CASCADE" : first.delete_rule === "SET NULL" ? "SET NULL" : "RESTRICT";
+  const updateRule = first.update_rule === "CASCADE" ? "CASCADE" : first.update_rule === "SET NULL" ? "SET NULL" : "RESTRICT";
+  statements.push(`ALTER TABLE ${quote(source)} ADD CONSTRAINT ${quote(first.constraint_name.slice(0,64))} FOREIGN KEY (${localCols.join(", ")}) REFERENCES ${quote(target)} (${foreignCols.join(", ")}) ON DELETE ${deleteRule} ON UPDATE ${updateRule};`);
 }
 statements.push("SET FOREIGN_KEY_CHECKS = 1;");
 statements.push("", "-- CHECK constraints and skipped PostgreSQL indexes are listed below for manual translation.");
