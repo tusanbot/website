@@ -42,7 +42,9 @@ async function insertRow(table: string, payload: Record<string, unknown>): Promi
   const columns = await tableColumns(table);
   const row = { ...payload };
   if (columns.has("id") && row.id === undefined) row.id = randomUUID();
-  const entries = Object.entries(row).filter(([key, value]) => value !== undefined && columns.has(key));
+  const entries = Object.entries(row).filter(([, value]) => value !== undefined);
+  const unknownColumns = entries.map(([key]) => key).filter((key) => !columns.has(key));
+  if (unknownColumns.length) throw new Error(`Unknown blog_posts columns: ${unknownColumns.join(", ")}`);
   if (!entries.length) throw new Error("No valid columns were supplied.");
   const names = entries.map(([key]) => identifier(key)).join(", ");
   const placeholders = entries.map(() => "?").join(", ");
@@ -59,7 +61,9 @@ async function insertRow(table: string, payload: Record<string, unknown>): Promi
 async function updateRow(table: string, id: string, payload: Record<string, unknown>): Promise<Record<string, unknown> | null> {
   const pool = getApplicationMySqlPool();
   const columns = await tableColumns(table);
-  const entries = Object.entries(payload).filter(([key, value]) => key !== "id" && value !== undefined && columns.has(key));
+  const entries = Object.entries(payload).filter(([key, value]) => key !== "id" && value !== undefined);
+  const unknownColumns = entries.map(([key]) => key).filter((key) => !columns.has(key));
+  if (unknownColumns.length) throw new Error(`Unknown blog_posts columns: ${unknownColumns.join(", ")}`);
   if (!entries.length) {
     const [rows] = await pool.execute<DbRow[]>(`SELECT * FROM ${identifier(table)} WHERE id = ? LIMIT 1`, [id]);
     return rows[0] || null;
@@ -70,7 +74,8 @@ async function updateRow(table: string, id: string, payload: Record<string, unkn
     id,
   ]);
   const [rows] = await pool.execute<DbRow[]>(`SELECT * FROM ${identifier(table)} WHERE id = ? LIMIT 1`, [id]);
-  return rows[0] || null;
+  if (!rows[0]) throw new Error("Blog post not found.");
+  return rows[0];
 }
 
 export function createMySqlBlogAdminRepository(): BlogAdminRepository {
@@ -235,16 +240,16 @@ export function createMySqlBlogAdminRepository(): BlogAdminRepository {
 
     async updateComment(id, status, updatedAt) {
       try {
-        const [result] = await pool.execute<ResultSetHeader>(
+        await pool.execute<ResultSetHeader>(
           "UPDATE blog_comments SET status = ?, updated_at = ? WHERE id = ?",
           [status, updatedAt, id],
         );
-        if (result.affectedRows === 0) return { data: null, error: { message: "Comment not found." } };
         const [rows] = await pool.execute<DbRow[]>(
           "SELECT id, status, updated_at FROM blog_comments WHERE id = ? LIMIT 1",
           [id],
         );
-        return { data: (rows[0] as Record<string, unknown> | undefined) || null, error: null };
+        if (!rows[0]) return { data: null, error: { message: "Comment not found." } };
+        return { data: rows[0] as Record<string, unknown>, error: null };
       } catch (error) {
         return failure(error);
       }
