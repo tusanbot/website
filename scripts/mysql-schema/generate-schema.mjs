@@ -28,6 +28,16 @@ for (const col of manifest.columns_detail || []) {
 }
 const identityColumns = new Set((manifest.identity_columns || []).map((column) => `${column.table_name}.${column.column_name}`));
 const indexedTextColumns = new Map();
+for (const check of manifest.check_constraints || []) {
+  const table = manifest.tables.find((item) => item.name.split(".").at(-1) === check.table_name);
+  if (!table) continue;
+  const names = new Set((check.check_clause.match(/[a-z_][a-z0-9_]*/gi) || []).map((name) => name.toLowerCase()));
+  for (const column of table.columns || []) {
+    if ((column.format || column.data_type) === "text" && names.has(column.name.toLowerCase())) {
+      indexedTextColumns.set(`${check.table_name}.${column.name}`, true);
+    }
+  }
+}
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
   const table = index.tablename;
@@ -73,6 +83,16 @@ function translateCheck(expression) {
     return `${column} IN (${values.join(", ")})`;
   });
   if (/::|\bANY\b|\bARRAY\b|TRIM\(BOTH FROM/i.test(value)) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === "'" && value[i - 1] !== "\\") inString = !inString;
+    if (inString) continue;
+    if (value[i] === "(") depth++;
+    if (value[i] === ")") depth--;
+  }
+  if (depth < 0) return null;
+  if (depth > 0) value += ")".repeat(depth);
   return value;
 }
 function mysqlType(table, col) {
