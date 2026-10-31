@@ -232,7 +232,7 @@ function validateEvent(event: SyncEvent): void {
     throw new Error("Invalid sync event ID.");
   }
   if (event.source_database !== "supabase") throw new Error("Unexpected source database.");
-  if (event.schema_name !== "public" || !TABLE_ALLOWLIST.has(event.table_name)) throw new Error("Schema/table is not allowlisted.");
+  if (!((event.schema_name === "public" && TABLE_ALLOWLIST.has(event.table_name)) || (event.schema_name === "private" && PRIVATE_TABLE_ALLOWLIST.has(event.table_name)))) throw new Error("Schema/table is not allowlisted.");
   if (!["insert", "update", "delete"].includes(event.operation)) throw new Error("Invalid operation.");
   if (!isPlainObject(event.record_key) || !Object.keys(event.record_key).length) throw new Error("Invalid record key.");
   if (!Number.isSafeInteger(Number(event.id)) || Number(event.id) < 1) throw new Error("Invalid outbox ID.");
@@ -275,7 +275,7 @@ export async function applyMariaDbSyncEvent(event: SyncEvent): Promise<{ event_i
       }
     }
 
-    const recordKeyHash = hashKey({ schema_name: "public", table_name: event.table_name, record_key: event.record_key });
+    const recordKeyHash = hashKey({ schema_name: event.schema_name, table_name: event.table_name, record_key: event.record_key });
     const [versionRows] = await connection.execute<RowDataPacket[]>(
       "SELECT source_outbox_id FROM data_sync_record_versions WHERE record_key_hash = ? FOR UPDATE",
       [recordKeyHash],
@@ -309,14 +309,14 @@ export async function applyMariaDbSyncEvent(event: SyncEvent): Promise<{ event_i
       }
 
       await connection.execute(
-        "INSERT INTO data_sync_record_versions (record_key_hash, schema_name, table_name, record_key_json, source_outbox_id, updated_at) VALUES (?, 'public', ?, ?, ?, CURRENT_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE record_key_json = VALUES(record_key_json), source_outbox_id = VALUES(source_outbox_id), updated_at = VALUES(updated_at)",
-        [recordKeyHash, event.table_name, JSON.stringify(event.record_key), String(incomingVersion)],
+        "INSERT INTO data_sync_record_versions (record_key_hash, schema_name, table_name, record_key_json, source_outbox_id, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3)) ON DUPLICATE KEY UPDATE record_key_json = VALUES(record_key_json), source_outbox_id = VALUES(source_outbox_id), updated_at = VALUES(updated_at)",
+        [recordKeyHash, event.schema_name, event.table_name, JSON.stringify(event.record_key), String(incomingVersion)],
       );
     }
 
     await connection.execute(
-      "INSERT INTO data_sync_event_receipts (event_id, source_outbox_id, schema_name, table_name, record_key_hash, operation, applied_at) VALUES (?, ?, 'public', ?, ?, ?, CURRENT_TIMESTAMP(3))",
-      [event.event_id, String(event.id), event.table_name, recordKeyHash, event.operation],
+      "INSERT INTO data_sync_event_receipts (event_id, source_outbox_id, schema_name, table_name, record_key_hash, operation, applied_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP(3))",
+      [event.event_id, String(event.id), event.schema_name, event.table_name, recordKeyHash, event.operation],
     );
     await connection.commit();
     return { event_id: event.event_id, duplicate: false, stale: incomingVersion <= lastVersion };
