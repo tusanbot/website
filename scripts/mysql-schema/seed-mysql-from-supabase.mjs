@@ -16,8 +16,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { createClient } from "@supabase/supabase-js";
-import mysql from "mysql2/promise";
 import { convertValue } from "../mysql-sync-bridge/value-mapping.mjs";
 
 const args = new Set(process.argv.slice(2));
@@ -31,6 +29,10 @@ if (showHelp) {
   console.log("Dry-run is default. Writes are restricted to tusancni_test.");
   process.exit(0);
 }
+
+// Load runtime database clients only after CLI help so --help works in a clean checkout.
+const { createClient } = await import("@supabase/supabase-js");
+const mysql = (await import("mysql2/promise")).default;
 
 const required = ["NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "MYSQL_HOST", "MYSQL_USER", "MYSQL_PASSWORD", "MYSQL_DATABASE"];
 for (const key of required) {
