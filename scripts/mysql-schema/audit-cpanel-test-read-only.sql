@@ -15,7 +15,8 @@ SELECT '2026-10-31' AS source_snapshot,
        661 AS source_column_metadata_including_views,
        237 AS source_indexes,
        94 AS source_foreign_key_columns,
-       300 AS structurally_auditable_indexes,
+       207 AS structurally_auditable_index_definitions,
+       300 AS structurally_auditable_index_columns,
        30 AS indexes_for_manual_review;
 
 CREATE TEMPORARY TABLE tmp_tusan_expected_tables (table_name VARCHAR(128) PRIMARY KEY);
