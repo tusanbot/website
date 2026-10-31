@@ -6,6 +6,7 @@ import { getApplicationMySqlPool } from "@/lib/data-access/mysql-pool";
 import type { BlogAdminRepository, RepositoryResult } from "@/lib/data-access/blog-admin";
 
 type DbRow = RowDataPacket & Record<string, unknown>;
+type SqlValue = string | number | bigint | boolean | Date | Buffer | null;
 type DbError = { code?: string; message: string };
 
 function failure<T>(error: unknown): RepositoryResult<T> {
@@ -13,12 +14,13 @@ function failure<T>(error: unknown): RepositoryResult<T> {
   return { data: null, error: { code: value.code, message: value.message || "MySQL query failed." } };
 }
 
-function serializeValue(value: unknown): unknown {
+function serializeValue(value: unknown): SqlValue {
   if (value === undefined) return null;
   if (Array.isArray(value) || (value !== null && typeof value === "object" && !(value instanceof Date) && !Buffer.isBuffer(value))) {
     return JSON.stringify(value);
   }
-  return value;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "bigint" || typeof value === "boolean" || value instanceof Date || Buffer.isBuffer(value)) return value;
+  throw new Error("Unsupported SQL parameter value.");
 }
 
 function identifier(value: string): string {
@@ -46,7 +48,7 @@ async function insertRow(table: string, payload: Record<string, unknown>): Promi
   const placeholders = entries.map(() => "?").join(", ");
   const values = entries.map(([, value]) => serializeValue(value));
   await pool.execute(`INSERT INTO ${identifier(table)} (${names}) VALUES (${placeholders})`, values);
-  const id = row.id;
+  const id = row.id as SqlValue | undefined;
   if (id !== undefined) {
     const [saved] = await pool.execute<DbRow[]>(`SELECT * FROM ${identifier(table)} WHERE id = ? LIMIT 1`, [id]);
     if (saved[0]) return saved[0];
@@ -188,7 +190,7 @@ export function createMySqlBlogAdminRepository(): BlogAdminRepository {
     async listComments(status, search) {
       try {
         const where: string[] = [];
-        const values: unknown[] = [];
+        const values: SqlValue[] = [];
         if (["pending", "approved", "rejected"].includes(status)) {
           where.push("bc.status = ?");
           values.push(status);
