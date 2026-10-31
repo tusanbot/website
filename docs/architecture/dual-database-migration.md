@@ -146,3 +146,17 @@ The first bounded repository seam is now implemented for blog administration:
 - Authentication and role checks remain on the existing Supabase Auth/server-client path. The repository is server-only and does not expose service-role credentials to browser code.
 
 This is an incremental boundary, not a database switch: only these two server API routes have been moved behind the interface. Public blog reads, browser-side reactions/ratings/comments, announcement management, analytics RPCs, and other application domains still have direct Supabase paths. There is not yet a MariaDB implementation of this interface, so Supabase remains the only implementation and authority.
+
+## Announcement domain repository boundary
+
+The announcement domain now has its own server-only data-access contract:
+
+- `lib/data-access/announcements.ts` defines the repository interface and the current Supabase implementation.
+- `app/api/admin/announcements/route.ts` provides authenticated admin list/create operations and supplies active service options for the form.
+- `app/api/admin/announcements/[id]/route.ts` provides authenticated read/update/activate/deactivate/delete operations.
+- Admin announcement list, create, and edit pages now call these APIs. The announcement form also loads its service choices through the API; browser components no longer query `services_announcements` or `services` directly for this workflow.
+- The public announcement API and the home/registration announcement sliders now use the same repository. Display modes preserve the prior component-specific rules: current window, all active announcements, and started/unexpired registrations.
+
+The repository uses the existing server-side Supabase service client and is marked server-only. Admin APIs independently verify the signed-in user's profile role before performing operations. No Supabase Auth behavior or database authority has changed.
+
+This completes the initial application-layer separation for announcement management and its public display consumers. It does not add a MariaDB repository, enable dual reads/writes, or expand the seven-table outbox allowlist. Supabase remains the sole data source until a MariaDB adapter is separately implemented and validated.
