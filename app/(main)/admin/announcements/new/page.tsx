@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "../../../../../lib/supabase";
 import AnnouncementForm from "../../../../../components/admin/AnnouncementForm";
 
 export default function NewAnnouncementPage() {
@@ -15,26 +14,11 @@ export default function NewAnnouncementPage() {
         setSubmitting(true);
         setError("");
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.push("/login");
-                return;
-            }
-
-            const { data: profile } = await supabase
-                .from("profiles")
-                .select("role")
-                .eq("id", user.id)
-                .single();
-
-            if (profile?.role !== "admin") throw new Error("دسترسی غیرمجاز");
-
             const payload = {
                 title: data.title,
                 type: data.type,
                 summary: data.summary,
                 content: data.content,
-                // Optional dates must be sent as SQL NULL, never as an empty string.
                 start_at: data.start_at || null,
                 end_at: data.end_at || null,
                 documents: data.documents || [],
@@ -46,11 +30,15 @@ export default function NewAnnouncementPage() {
                 priority: Number(data.priority || 0),
             };
 
-            const { error: insertError } = await supabase
-                .from("services_announcements")
-                .insert(payload);
+            const response = await fetch("/api/admin/announcements", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const result = await response.json().catch(() => ({}));
+            if (response.status === 401) { router.push("/login"); return; }
+            if (!response.ok) throw new Error(result.error || "ذخیره اطلاعیه انجام نشد.");
 
-            if (insertError) throw new Error(insertError.message);
             router.push("/admin/announcements");
         } catch (err: any) {
             console.error(err);
