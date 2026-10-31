@@ -148,46 +148,46 @@ const indexStatements = [];
 const partialUniqueMappings = {
   ai_profiles_anonymous_key_hash_unique_idx: {
     table: "ai_profiles",
-    generated: { name: "__anonymous_key_hash", type: "VARCHAR(191)", expression: "CASE WHEN user_id IS NULL THEN TRIM(key_hash) ELSE NULL END" },
+    generated: { name: "__anonymous_key_hash", type: "VARCHAR(191)", expression: "IF(user_id IS NULL, key_hash, NULL)" },
     columns: ["__anonymous_key_hash"],
   },
   idx_custom_forms_one_parent_per_service: {
     table: "custom_forms",
-    generated: { name: "__parent_service_unique", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN form_type = 'parent' AND parent_form_id IS NULL THEN TRIM(service_id) ELSE NULL END" },
+    generated: { name: "__parent_service_unique", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "IF(form_type = 'parent' AND parent_form_id IS NULL, service_id, NULL)" },
     columns: ["__parent_service_unique"],
   },
   custom_forms_one_active_version: {
     table: "form_versions",
-    generated: { name: "__active_form_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN is_active = 1 THEN TRIM(form_id) ELSE NULL END" },
+    generated: { name: "__active_form_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "IF(is_active = 1, form_id, NULL)" },
     columns: ["__active_form_id"],
   },
   payments_one_active_per_order_uq: {
     table: "payments",
-    generated: { name: "__active_order_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('pending', 'redirected') THEN TRIM(order_id) ELSE NULL END" },
+    generated: { name: "__active_order_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "IF(status IN ('pending', 'redirected'), order_id, NULL)" },
     columns: ["__active_order_id"],
   },
   services_slug_unique: {
     table: "services",
-    generated: { name: "__nonempty_slug", type: "VARCHAR(191)", expression: "CASE WHEN slug IS NOT NULL AND slug <> '' THEN slug ELSE NULL END" },
+    generated: { name: "__nonempty_slug", type: "VARCHAR(191)", expression: "IF(slug IS NOT NULL AND slug <> '', slug, NULL)" },
     columns: ["__nonempty_slug"],
   },
   staff_settlements_one_open_per_staff: {
     table: "staff_settlements",
-    generated: { name: "__open_staff_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status IN ('requested', 'approved', 'processing') THEN TRIM(staff_id) ELSE NULL END" },
+    generated: { name: "__open_staff_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "IF(status IN ('requested', 'approved', 'processing'), staff_id, NULL)" },
     columns: ["__open_staff_id"],
   },
   support_conversations_one_open_general_per_user: {
     table: "support_conversations",
-    generated: { name: "__open_general_user_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' AND order_id IS NULL THEN TRIM(user_id) ELSE NULL END" },
+    generated: { name: "__open_general_user_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "IF(status = 'open' AND order_id IS NULL, user_id, NULL)" },
     columns: ["__open_general_user_id"],
   },
   support_conversations_one_open_per_user_idx: {
     table: "support_conversations",
-    generated: { name: "__open_user_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "CASE WHEN status = 'open' THEN TRIM(user_id) ELSE NULL END" },
+    generated: { name: "__open_user_id", type: "VARCHAR(36) CHARACTER SET ascii COLLATE ascii_bin", expression: "IF(status = 'open', user_id, NULL)" },
     columns: ["__open_user_id"],
   },
 };
-const generatedColumnsByTable = new Map();
+const helperColumnsByTable = new Map();
 for (const index of manifest.indexes || []) {
   const def = index.indexdef || "";
   const table = index.tablename;
@@ -215,8 +215,8 @@ for (const index of manifest.indexes || []) {
   if (whereMatch && unique) {
     const mapping = partialUniqueMappings[index.indexname];
     if (mapping) {
-      if (!generatedColumnsByTable.has(table)) generatedColumnsByTable.set(table, []);
-      generatedColumnsByTable.get(table).push(mapping.generated);
+      if (!helperColumnsByTable.has(table)) helperColumnsByTable.set(table, []);
+      helperColumnsByTable.get(table).push(mapping.generated);
       columns = mapping.columns;
     } else if (!/^\(?\s*[a-zA-Z_][a-zA-Z0-9_]*\s+IS\s+NOT\s+NULL\s*\)?$/i.test(predicate)) {
       warnings.push(`Skipped partial unique index requiring manual translation ${index.indexname}: ${def}`);
@@ -249,14 +249,26 @@ for (const table of manifest.tables) {
     return line;
   });
   if (table.primary_keys?.length) columns.push(`  PRIMARY KEY (${table.primary_keys.map(quote).join(", ")})`);
-  for (const generated of generatedColumnsByTable.get(tableName) || []) {
-    columns.push(`  ${quote(generated.name)} ${generated.type} GENERATED ALWAYS AS (${generated.expression}) STORED`);
+  for (const helper of helperColumnsByTable.get(tableName) || []) {
+    columns.push(`  ${quote(helper.name)} ${helper.type} NULL`);
   }
   for (const index of indexStatements.filter(x=>x.table===tableName)) columns.push(index.sql);
   for (const check of (manifest.check_constraints || []).filter((item) => item.table_name === tableName)) {
     warnings.push(`CHECK requires manual MariaDB translation ${tableName}.${check.constraint_name}: ${check.check_clause}`);
   }
   statements.push(`CREATE TABLE IF NOT EXISTS ${quote(tableName)} (\n${columns.join(",\n")}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`);
+}
+
+for (const [tableName, helpers] of helperColumnsByTable.entries()) {
+  const assignments = helpers.map((helper) => \`SET NEW.\${quote(helper.name)} = \${helper.expression};\`);
+  for (const action of ["INSERT", "UPDATE"]) {
+    const suffix = action === "INSERT" ? "bi" : "bu";
+    const triggerName = \`trg_\${tableName}_sync_unique_\${suffix}\`.slice(0, 64);
+    statements.push("DELIMITER $");
+    statements.push(\`DROP TRIGGER IF EXISTS \${quote(triggerName)}$\`);
+    statements.push(\`CREATE TRIGGER \${quote(triggerName)} BEFORE \${action} ON \${quote(tableName)} FOR EACH ROW BEGIN \${assignments.join(" ")} END$\`);
+    statements.push("DELIMITER ;");
+  }
 }
 
 for (const fk of fkGroups.values()) {
