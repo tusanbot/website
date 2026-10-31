@@ -42,7 +42,9 @@ async function insertAnnouncement(payload: AnnouncementPayload): Promise<Record<
   const columns = await columnsFor("services_announcements");
   const row: Record<string, unknown> = { ...payload };
   if (columns.has("id")) row.id = randomUUID();
-  const entries = Object.entries(row).filter(([key, value]) => value !== undefined && columns.has(key));
+  const entries = Object.entries(row).filter(([, value]) => value !== undefined);
+  const unknownColumns = entries.map(([key]) => key).filter((key) => !columns.has(key));
+  if (unknownColumns.length) throw new Error(`Unknown services_announcements columns: ${unknownColumns.join(", ")}`);
   if (!entries.length) throw new Error("No valid announcement columns were supplied.");
   const names = entries.map(([key]) => sqlIdentifier(key)).join(", ");
   const placeholders = entries.map(() => "?").join(", ");
@@ -63,7 +65,9 @@ async function insertAnnouncement(payload: AnnouncementPayload): Promise<Record<
 async function updateAnnouncement(id: string, payload: Partial<AnnouncementPayload> & { updated_at?: string }): Promise<Record<string, unknown> | null> {
   const pool = getApplicationMySqlPool();
   const columns = await columnsFor("services_announcements");
-  const entries = Object.entries(payload).filter(([key, value]) => key !== "id" && value !== undefined && columns.has(key));
+  const entries = Object.entries(payload).filter(([key, value]) => key !== "id" && value !== undefined);
+  const unknownColumns = entries.map(([key]) => key).filter((key) => !columns.has(key));
+  if (unknownColumns.length) throw new Error(`Unknown services_announcements columns: ${unknownColumns.join(", ")}`);
   if (!entries.length) {
     const [rows] = await pool.execute<DbRow[]>("SELECT * FROM services_announcements WHERE id = ? LIMIT 1", [id]);
     return rows[0] || null;
@@ -137,12 +141,14 @@ export function createMySqlAnnouncementRepository(): AnnouncementRepository {
 
     async setActive(id, isActive) {
       try {
-        const [result] = await pool.execute(
+        await pool.execute(
           "UPDATE services_announcements SET is_active = ?, updated_at = ? WHERE id = ?",
           [isActive ? 1 : 0, new Date().toISOString(), id],
         );
-        void result;
-        return { error: null };
+        const [rows] = await pool.execute<DbRow[]>(
+          "SELECT id FROM services_announcements WHERE id = ? LIMIT 1", [id],
+        );
+        return rows[0] ? { error: null } : { error: { message: "Announcement not found." } };
       } catch (error) {
         return { error: dbError(error) };
       }
