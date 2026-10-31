@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import { motion, AnimatePresence } from "motion/react";
 
 
@@ -266,27 +265,22 @@ export default function ServiceAnnouncementsSlider({
     async function loadAnnouncements() {
         setLoading(true);
 
-        const now = new Date().toISOString();
-
-        const { data, error } = await supabase
-            .from("services_announcements")
-            .select(`
-            *,
-            services(
-                title,
-                icon
-            )
-        `)
-            .eq("is_active", true)
-            .lte("start_at", now)
-            .order("priority", { ascending: false })
-            .order("start_at", { ascending: false })
-            .limit(limit);
-
-        if (error) {
-            console.error("Supabase error:", JSON.stringify(error, null, 2));
+        try {
+            const response = await fetch("/api/home/announcements", { cache: "no-store" });
+            const result = await response.json();
+            if (!response.ok || !result.ok) throw new Error(result.error || "دریافت اطلاعیه‌ها انجام نشد.");
+            const validAnnouncements = (result.items || []).map((item: Announcement) => ({
+                ...item,
+                documents: Array.isArray(item.documents) ? item.documents : [],
+            })).slice(0, limit);
+            setAnnouncements(validAnnouncements);
+            setCurrentIndex(0);
+        } catch (error) {
+            console.error("[ServiceAnnouncementsSlider]", error);
             setAnnouncements([]);
-            setLoading(false);
+        }
+
+        setLoading(false);
             return;
         }
 
