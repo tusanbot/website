@@ -10,7 +10,7 @@ The application data layer can run with Supabase only, MySQL only, or both provi
 - TUSAN_DATA_MODE=mysql: reserved for the future full migration; currently rejected at runtime because several domains and authentication still depend on Supabase.
 - TUSAN_DATA_MODE=dual: both providers are available. Domains can be routed independently to either provider, while each individual domain still has exactly one authoritative writer. Dual mode does not automatically replicate records or perform two writes.
 
-The default remains supabase to preserve existing production behavior. Do not set mysql mode yet. In dual mode, only the two completed provider-selectable pilots can be routed; uncovered domains continue using their existing Supabase paths.
+The default remains supabase to preserve existing production behavior. Do not set mysql mode yet. In dual mode, the two current adapter pilots (blog administration and announcements) can be routed independently; the public blog and all other uncovered domains continue using their existing Supabase paths.
 
 ## Routing
 
