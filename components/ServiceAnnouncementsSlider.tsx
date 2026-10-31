@@ -264,7 +264,6 @@ export default function ServiceAnnouncementsSlider({
 
     async function loadAnnouncements() {
         setLoading(true);
-
         try {
             const response = await fetch("/api/home/announcements?mode=started", { cache: "no-store" });
             const result = await response.json();
@@ -278,28 +277,10 @@ export default function ServiceAnnouncementsSlider({
         } catch (error) {
             console.error("[ServiceAnnouncementsSlider]", error);
             setAnnouncements([]);
+        } finally {
+            setLoading(false);
         }
-
-        setLoading(false);
-            return;
-        }
-
-        const validAnnouncements = (data || [])
-            .map((item: any) => ({
-                ...item,
-                documents: Array.isArray(item.documents) ? item.documents : [],
-            }))
-            .filter(
-                (item: Announcement) =>
-                    getEffectiveEndDate(item).getTime() > Date.now()
-            );
-
-        setAnnouncements(validAnnouncements);
-        setCurrentIndex(0);
-        setLoading(false);
     }
-
-
 
     const currentAnnouncement =
         announcements[currentIndex];
