@@ -1,13 +1,6 @@
 name: MariaDB schema draft validation
 
 on:
-  push:
-    branches:
-      - integration/dual-database-runtime
-    paths:
-      - scripts/mysql-schema/**
-      - scripts/mysql-sync-bridge/schema-test-only.sql
-      - .github/workflows/mysql-schema-validation.yml
   pull_request:
     branches:
       - feat/dual-database-foundation
