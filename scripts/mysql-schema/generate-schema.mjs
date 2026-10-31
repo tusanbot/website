@@ -98,6 +98,7 @@ function translateCheck(expression) {
 const typeOverrides = new Map([
   ["custom_forms.form_type", "VARCHAR(32)"],
   ["custom_forms.title", "VARCHAR(191)"],
+  ["ai_profiles.key_hash", "VARCHAR(191)"],
   ["payments.status", "VARCHAR(32)"],
   ["services.slug", "VARCHAR(191)"],
   ["staff_settlements.status", "VARCHAR(32)"],
@@ -147,7 +148,7 @@ const indexStatements = [];
 const partialUniqueMappings = {
   ai_profiles_anonymous_key_hash_unique_idx: {
     table: "ai_profiles",
-    generated: { name: "__anonymous_key_hash", type: "VARCHAR(191)", expression: "IF(user_id IS NULL, key_hash, NULL)" },
+    generated: { name: "__anonymous_key_hash", type: "VARCHAR(191)", expression: "CASE WHEN user_id IS NULL THEN TRIM(key_hash) ELSE NULL END" },
     columns: ["__anonymous_key_hash"],
   },
   idx_custom_forms_one_parent_per_service: {
@@ -167,7 +168,7 @@ const partialUniqueMappings = {
   },
   services_slug_unique: {
     table: "services",
-    generated: { name: "__nonempty_slug", type: "VARCHAR(191)", expression: "IF(slug IS NOT NULL AND slug <> '', slug, NULL)" },
+    generated: { name: "__nonempty_slug", type: "VARCHAR(191)", expression: "CASE WHEN slug IS NOT NULL AND slug <> '' THEN slug ELSE NULL END" },
     columns: ["__nonempty_slug"],
   },
   staff_settlements_one_open_per_staff: {
