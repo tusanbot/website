@@ -39,11 +39,9 @@ function parseProvider(value: string | undefined, fallback: DataProvider): DataP
 export function resolveDataRuntime(env: RuntimeEnvironment = process.env): DataRuntime {
   const mode = parseMode(env.TUSAN_DATA_MODE);
   const defaultPrimary: DataProvider = mode === "mysql" ? "mysql" : "supabase";
-  const configuredPrimary = parseProvider(env.TUSAN_DATA_PRIMARY, defaultPrimary);
-
-  if (mode !== "dual" && configuredPrimary !== defaultPrimary) {
-    throw new Error("TUSAN_DATA_PRIMARY conflicts with TUSAN_DATA_MODE.");
-  }
+  const configuredPrimary = mode === "dual"
+    ? parseProvider(env.TUSAN_DATA_PRIMARY, defaultPrimary)
+    : defaultPrimary;
 
   // Dual mode makes both providers available for independent domain routing.
   // It does not turn on replication or unsafe dual writes.
